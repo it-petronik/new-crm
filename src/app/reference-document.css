@@ -1,0 +1,177 @@
+.reference-document {
+  margin: 20px auto;
+  background: #fff;
+  color: #1a1a1a;
+  max-width: 210mm;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  isolation: isolate;
+}
+.reference-document [data-print-document] {
+  min-width: 680px;
+}
+.reference-document .pdf-page-table > thead {
+  display: none;
+}
+.reference-document .pdf-page-table > tbody > tr > td {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.reference-document table {
+  margin: 0;
+  font-size: inherit;
+  line-height: inherit;
+}
+.reference-document th,
+.reference-document td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  letter-spacing: normal;
+  text-transform: none;
+}
+.reference-document .pdf-sheet-row--terms .pdf-terms-sign {
+  padding-top: 28px;
+}
+.reference-document .pdf-footer-band {
+  margin: 24px -14mm 0;
+}
+.reference-document .pdf-page-table > tbody > tr:hover {
+  background: transparent;
+}
+.reference-document h1,
+.reference-document h2,
+.reference-document h3 {
+  line-height: 1.4;
+}
+.reference-document .pdf-company-logo {
+  width: 150px;
+  height: 46px;
+  object-fit: contain;
+}
+.reference-document .pdf-company-logo[src*="istanergy"] {
+  object-fit: cover;
+}
+.reference-document [data-print-document] > div {
+  font-size: 11.5px !important;
+}
+.reference-document .pdf-commercial table td {
+  padding: 10px 12px;
+}
+.reference-document .pdf-commercial table th {
+  padding: 9px 12px;
+}
+.reference-document .pdf-commercial h1 {
+  font-size: 24px;
+  line-height: 1.25;
+}
+.reference-document .pdf-commercial > div:first-child {
+  padding-top: 16px;
+  padding-bottom: 16px;
+}
+.reference-document .pdf-commercial > .mt-7 {
+  margin-top: 18px;
+}
+@media screen {
+  .reference-document {
+    zoom: 0.82;
+    margin: 12px auto;
+  }
+}
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm 0;
+    @bottom-right {
+      content: "Page " counter(page) " of " counter(pages);
+      font: 10px sans-serif;
+      color: #64748b;
+      padding-right: 14mm;
+    }
+  }
+  @page:first {
+    margin-top: 0;
+  }
+  /* Radix portals the dialog beside the app, not inside it. Hiding only
+     the sidebar/main leaves the empty, viewport-height app on page one. */
+  body:has(.reference-document) .app-shell {
+    display: none !important;
+  }
+  body:has(.reference-document) {
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  body:has(.reference-document) .modal > *:not(.dialog-body),
+  body:has(.reference-document) .dialog-body > *:not(.reference-document) {
+    display: none !important;
+  }
+  body:has(.reference-document) .modal {
+    padding: 0 !important;
+    max-width: none !important;
+    width: 100% !important;
+    position: static !important;
+    transform: none !important;
+    animation: none !important;
+    filter: none !important;
+    box-shadow: none !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    min-height: 0 !important;
+    height: auto !important;
+    scrollbar-gutter: auto !important;
+    overflow: visible !important;
+    max-height: none !important;
+  }
+  .reference-document {
+    display: block !important;
+    border: 0;
+    border-radius: 0;
+    margin: 0;
+    max-width: none;
+    overflow: visible;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  .reference-document [data-print-document] {
+    min-width: 0;
+  }
+  /* The outer table is a layout wrapper, not the line-item table. Allow
+     ordinary document flow so long quotes can break at individual items. */
+  .reference-document .pdf-page-table,
+  .reference-document .pdf-page-table > tbody,
+  .reference-document .pdf-page-table > tbody > tr,
+  .reference-document .pdf-page-table > tbody > tr > td {
+    display: block;
+    width: 100%;
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+  .reference-document .pdf-commercial > .mt-7,
+  .reference-document .pdf-commercial > .mt-3 {
+    break-inside: avoid;
+  }
+  .reference-document .pdf-terms-sign {
+    display: block;
+    padding-top: 6mm !important;
+  }
+  .reference-document .pdf-terms-sign > * + * {
+    margin-top: 5mm;
+  }
+  .reference-document .pdf-terms h2 {
+    break-after: avoid;
+  }
+  .reference-document .pdf-footer-band {
+    display: none !important;
+  }
+}

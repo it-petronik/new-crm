@@ -1,0 +1,168 @@
+@media screen {
+  .modal.ui-dialog.delete-record-dialog:not(:has(.command-list)) { width: min(480px, calc(100vw - 32px)); }
+  .delete-record-name { font-size: 16px; font-weight: 600; margin: 0 0 6px; overflow-wrap: anywhere; }
+  .delete-record-dialog .dialog-body > p { line-height: 1.6; }
+  .ui-button.danger-button { background: #b42335; border: 1px solid #b42335; color: white; padding: 10px 16px; border-radius: 9px; }
+  .ui-button.delete-action { color: #b42335; }
+  .record-detail-dialog .dialog-footer .detail-actions { flex: 1; }
+  .access-editor-dialog .access-fieldset > .form-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .access-editor-dialog .section-caption {
+    margin: 18px 0 10px;
+  }
+  .access-editor-dialog .permission-grid {
+    gap: 12px;
+  }
+  .access-editor-dialog .choice-grid button {
+    padding: 10px 12px;
+    min-height: 60px;
+  }
+  .dialog-body .command-list {
+    max-height: none;
+    overflow: visible;
+    padding: 0;
+  }
+  .dialog-body .command-search {
+    margin: 0 0 10px;
+  }
+  .dialog-body .command-tabs {
+    padding: 0 0 12px;
+  }
+  .modal.ui-dialog.record-detail-dialog:not(:has(.reference-document)) {
+    width: min(820px, calc(100vw - 32px));
+  }
+  .record-context {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  .record-kind {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  .record-context .company-label {
+    font-size: 11px;
+  }
+  .record-context .badge {
+    margin-left: auto;
+  }
+  .record-detail-dialog .detail-grid {
+    margin: 0;
+    padding: 16px 0 8px;
+    gap: 14px 22px;
+    border: 0;
+  }
+  .record-detail-dialog .detail-grid-small {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .record-detail-dialog .detail-grid > div {
+    padding: 0 0 10px;
+  }
+  .record-detail-dialog .detail-grid span {
+    display: block;
+    font-size: 11px;
+    line-height: 1.4;
+    margin-bottom: 5px;
+  }
+  .record-detail-dialog .detail-grid strong {
+    display: block;
+    font-size: 13px;
+    line-height: 1.45;
+    font-weight: 550;
+  }
+  .missing-record-fields {
+    color: var(--muted);
+    font-size: 11px;
+    margin: 2px 0 12px;
+  }
+  .missing-record-fields summary {
+    cursor: pointer;
+    padding: 5px 0;
+  }
+  .missing-record-fields p {
+    font-size: 11px;
+    line-height: 1.6;
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: var(--bg);
+  }
+  .record-detail-dialog .detail-notes {
+    margin: 12px 0;
+    padding: 12px 14px;
+    background: var(--bg);
+    border: 0;
+    border-radius: 8px;
+  }
+  .record-detail-dialog .detail-notes h3,
+  .record-detail-dialog .activity-heading h3 {
+    font-size: 12px;
+    line-height: 1.4;
+    margin: 0 0 5px;
+  }
+  .record-detail-dialog .detail-notes p {
+    font-size: 12px;
+    line-height: 1.6;
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .record-detail-dialog .record-activity {
+    margin: 12px 0 0;
+    padding: 12px 0 0;
+  }
+  .record-detail-dialog .record-activity form {
+    margin-top: 12px;
+  }
+  .record-detail-dialog .record-activity .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .record-detail-dialog .record-activity .balance {
+    padding: 12px 14px;
+    margin: 12px 0;
+  }
+  .record-timestamps {
+    margin: 14px 0 0;
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.5;
+  }
+  .record-detail-dialog .dialog-footer {
+    min-height: 62px;
+  }
+  @media (max-width: 600px) {
+    .access-editor-dialog .access-fieldset > .form-grid {
+      grid-template-columns: 1fr;
+    }
+    .record-detail-dialog .dialog-footer {
+      align-items: flex-end;
+    }
+    .record-context {
+      gap: 8px;
+    }
+    .record-context .record-kind {
+      width: 100%;
+    }
+    .record-detail-dialog .detail-grid {
+      gap: 12px;
+    }
+    .record-detail-dialog .dialog-footer .detail-actions {
+      flex-direction: row;
+    }
+    .record-detail-dialog .dialog-footer .detail-actions .ui-field {
+      display: flex;
+      flex-direction: row;
+      gap: 8px;
+    }
+    .record-detail-dialog .dialog-footer .ui-select-trigger {
+      width: 145px;
+    }
+    .record-detail-dialog .record-activity .form-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+}

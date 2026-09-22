@@ -1,0 +1,311 @@
+.country-sales {
+  grid-column: 1/-1;
+}
+.country-sales-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  padding: 0 24px 24px;
+}
+.country-sales-grid > section {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 18px;
+}
+.country-sales-grid header,
+.country-sales-grid li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.country-sales-grid h3 {
+  margin: 0;
+}
+.country-sales-grid p {
+  font-size: 12px;
+  color: var(--muted);
+}
+.country-sales-grid ol {
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.country-sales-grid li {
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+.line-editor-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 2fr) minmax(90px, 1fr) minmax(
+      130px,
+      1fr
+    ) minmax(100px, 1fr) auto;
+}
+.quotation-document {
+  background: white;
+  color: #192533;
+  border: 1px solid #dce4eb;
+  border-radius: 12px;
+  overflow: hidden;
+  margin: 24px 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.quote-letterhead {
+  background: #f1f5f9;
+  padding: 32px;
+}
+.quote-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  border-bottom: 1px solid #ccd8e3;
+  padding-bottom: 24px;
+}
+.quote-title h2 {
+  font-size: 30px !important;
+  margin: 8px 0 !important;
+  color: #17232c !important;
+}
+.quote-reference {
+  color: #098ca9;
+  border: 1px solid #65cbdc;
+  border-radius: 5px;
+  padding: 5px 10px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.quote-title .brand-logo {
+  width: 180px;
+  height: 72px;
+  background: transparent;
+}
+.quote-parties,
+.quote-signatures,
+.quote-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+}
+.quote-parties {
+  margin-top: 24px;
+}
+.quotation-document h3 {
+  font-size: 15px;
+  color: #17232c;
+  margin: 8px 0;
+}
+.quotation-document p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 5px 0;
+}
+.quote-parties span,
+.quote-meta dt {
+  color: #657a91;
+}
+.quote-body {
+  padding: 28px 32px;
+}
+.quote-meta {
+  margin: 0 0 24px;
+  gap: 12px 28px;
+}
+.quote-meta dd {
+  font-weight: 600;
+  margin: 3px 0 0;
+}
+.quote-table-wrap {
+  overflow-x: auto;
+}
+.quotation-document table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.quotation-document th {
+  background: #536875;
+  color: white;
+  padding: 12px 9px;
+  white-space: normal;
+}
+.quotation-document td {
+  padding: 16px 9px;
+  border-bottom: 1px solid #dce4eb;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  color: #192533;
+}
+.quotation-document th:nth-child(n + 4),
+.quotation-document td:nth-child(n + 4) {
+  text-align: right;
+}
+.quote-totals {
+  margin: 24px 0 24px auto;
+  width: 55%;
+}
+.quote-totals > p {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 0;
+  gap: 12px;
+}
+.quote-totals > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  background: #087f96;
+  color: white;
+  padding: 15px;
+  border-radius: 6px;
+  font-size: 17px;
+}
+.quote-totals .quote-words {
+  font-size: 12px;
+  color: #657a91;
+  display: block;
+  text-align: right;
+}
+.quote-terms {
+  border-top: 1px solid #dce4eb;
+  padding-top: 14px;
+  margin-bottom: 24px;
+}
+.quote-sign-heading {
+  color: #078da6 !important;
+  letter-spacing: 0.06em;
+}
+.quote-signatures {
+  margin-top: 12px;
+}
+.signature-line {
+  width: 65%;
+  height: 44px;
+  border-bottom: 1px solid #9aafc1;
+}
+.quote-disclaimer {
+  margin-top: 26px !important;
+  color: #667d90;
+  font-size: 11px;
+}
+.quotation-document footer {
+  background: #f1f5f9;
+  padding: 15px 32px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: #667d90;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.quote-form-section {
+  grid-column: 1/-1;
+  border-bottom: 1px solid var(--line);
+  padding: 18px 0 10px;
+  margin: 0;
+  font-size: 15px;
+}
+@media (max-width: 900px) {
+  .country-sales-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .line-editor-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 600px) {
+  .country-sales-grid {
+    grid-template-columns: 1fr;
+  }
+  .quote-letterhead,
+  .quote-body {
+    padding: 20px;
+  }
+  .quote-parties,
+  .quote-meta,
+  .quote-signatures {
+    grid-template-columns: 1fr;
+  }
+  .quote-title .brand-logo {
+    width: 110px;
+    height: 50px;
+  }
+  .quote-title h2 {
+    font-size: 22px !important;
+  }
+  .quote-totals {
+    width: 100%;
+  }
+  .quotation-document table {
+    min-width: 610px;
+  }
+}
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+  body:has(.quotation-document) .modal > *:not(.quotation-document) {
+    display: none !important;
+  }
+  body:has(.quotation-document) .modal {
+    width: 100% !important;
+    max-width: none !important;
+    padding: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+    max-height: none !important;
+    position: static !important;
+    transform: none !important;
+  }
+  .quotation-document {
+    display: block !important;
+    border: 0;
+    border-radius: 0;
+    margin: 0;
+    font-size: 10pt;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  .quote-letterhead {
+    padding: 20px;
+  }
+  .quote-body {
+    padding: 20px;
+  }
+  .quote-parties,
+  .quote-meta,
+  .quote-signatures {
+    grid-template-columns: 1fr 1fr;
+  }
+  .quote-totals {
+    width: 55%;
+  }
+  .quote-table-wrap {
+    overflow: visible;
+  }
+  .quotation-document table {
+    min-width: 0;
+    table-layout: fixed;
+  }
+  .quotation-document th:nth-child(2) {
+    width: 25%;
+  }
+  .quotation-document tr,
+  .quote-totals,
+  .quote-signatures {
+    break-inside: avoid;
+  }
+  .quotation-document thead {
+    display: table-header-group;
+  }
+  .quotation-document footer {
+    padding: 12px 20px;
+  }
+  .quote-title .brand-logo {
+    width: 160px;
+    height: 64px;
+  }
+}

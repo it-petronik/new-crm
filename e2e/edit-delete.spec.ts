@@ -1,0 +1,40 @@
+import { test, expect } from "@playwright/test";
+import { makePreview } from "../src/lib/fixtures";
+test("edit existing customer, cancel deletion and confirm deletion", async ({ page }, info) => {
+  await page.goto("/?module=customers");
+  await page.getByRole("button", { name: /Gulf Industrial Trading/ }).first().click();
+  await page.getByRole("button", { name: "Edit record", exact: true }).click();
+  const name = page.getByRole("textbox", { name: "Customer / Business name", exact: true });
+  await expect(name).toHaveValue("Gulf Industrial Trading");
+  await name.fill("Edited customer QA");
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveAttribute("aria-labelledby", /.+/);
+  await expect(page.getByRole("heading", { name: "Edited customer QA", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Delete record?", exact: true })).toBeVisible();
+  await page.screenshot({ path: info.outputPath("delete-confirmation.png"), animations: "disabled" });
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Edited customer QA", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await page.getByRole("button", { name: "Delete record", exact: true }).click();
+  await expect(page.getByRole("dialog")).toBeHidden();
+  await expect(page.getByRole("button", { name: /Edited customer QA/ })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("button", { name: /Edited customer QA/ })).toHaveCount(0);
+});
+
+test("order editor protects commercial values and explains blocked deletion", async ({ page }, info) => {
+  const order = makePreview().records.find(r => r.kind === "orders")!;
+  await page.goto("/?module=orders");
+  await page.getByRole("button", { name: new RegExp(order.title) }).first().click();
+  await page.getByRole("button", { name: "Edit record", exact: true }).click();
+  await expect(page.getByText("Commercial values and links are protected.", { exact: false })).toBeVisible();
+  await expect(page.getByRole("spinbutton")).toHaveCount(0);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: info.outputPath("edit-order-mobile.png"), animations: "disabled" });
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(page.getByRole("heading", { name: order.title, exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(page.getByText(/must be cancelled through their workflow/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Delete record", exact: true })).toHaveCount(0);
+});

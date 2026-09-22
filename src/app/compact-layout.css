@@ -1,0 +1,180 @@
+/* Shared density rules: less dead space, without shrinking touch targets. */
+@media screen {
+  .main-content {
+    padding-top: 24px;
+  }
+  .page-heading {
+    margin-bottom: 20px;
+    gap: 16px;
+  }
+  .panel-heading {
+    padding: 18px 20px;
+  }
+  .insight-grid {
+    align-items: start;
+  }
+  .insight-ranking li {
+    padding: 10px 0;
+  }
+  .insight-chart {
+    margin-top: 6px;
+    margin-bottom: 12px;
+  }
+  .insight-ranking .panel-heading p {
+    font-size: 11px;
+  }
+  .commercial-scorecard > div {
+    padding: 16px 20px;
+  }
+  .business-insights {
+    margin-top: 24px;
+  }
+  .insight-summary {
+    padding: 14px 18px;
+  }
+  .modal.ui-dialog.dialog-compact {
+    width: min(920px, calc(100vw - 32px));
+  }
+  .modal.ui-dialog:has(.reference-document) {
+    width: min(860px, calc(100vw - 32px));
+  }
+  .dialog-heading {
+    padding: 13px 20px;
+  }
+  .dialog-heading h2 {
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+  .dialog-body {
+    padding: 16px 20px;
+    scrollbar-gutter: stable;
+  }
+  .dialog-footer {
+    padding: 10px 20px;
+    align-items: center;
+  }
+  .dialog-footer-actions:not(:empty),
+  .dialog-footer .detail-actions {
+    align-items: center;
+  }
+  .dialog-footer .detail-actions .ui-field {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    font-size: 11px;
+    max-width: none;
+    flex: 0 0 auto;
+  }
+  .dialog-footer .detail-actions .ui-field > label {
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin: 0;
+  }
+  .dialog-footer .print-button {
+    margin: 0;
+  }
+  .dialog-footer .detail-actions .ui-select-trigger {
+    min-width: 170px;
+  }
+  .dialog-footer .form-footer > span {
+    max-width: 45%;
+    line-height: 1.4;
+  }
+  .modal .form-grid {
+    gap: 12px 14px;
+    margin-top: 10px;
+  }
+  .dialog-body > .eyebrow {
+    margin-bottom: 8px;
+  }
+  .dialog-body > .badge {
+    margin-bottom: 10px;
+  }
+  .modal .detail-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding: 10px 0;
+    gap: 14px 20px;
+  }
+  .modal .detail-grid > div {
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 10px;
+  }
+  .modal .detail-notes {
+    padding: 12px;
+    margin: 10px 0;
+  }
+  .modal .record-activity {
+    margin-top: 12px;
+    padding-top: 12px;
+  }
+  .modal .line-editor {
+    margin: 10px 0;
+    padding: 12px;
+  }
+  .dialog-body:has(.reference-document) {
+    background: var(--bg);
+  }
+  .dialog-body:has(.reference-document) > .eyebrow {
+    display: inline-block;
+    margin: 0 12px 8px 0;
+  }
+  .dialog-body:has(.reference-document) > p.small {
+    font-size: 10px;
+    margin: 8px 0 0;
+  }
+  .reference-document {
+    zoom: 0.72;
+    margin: 8px auto;
+    box-shadow: 0 2px 12px #102a4310;
+  }
+  @media (max-height: 800px) and (min-width: 700px) {
+    .reference-document {
+      zoom: 0.6;
+    }
+  }
+  @media (max-width: 600px) {
+    .dialog-heading,
+    .dialog-footer {
+      padding: 12px 14px;
+    }
+    .dialog-body {
+      padding: 12px 14px;
+    }
+    .modal .detail-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .dialog-footer .detail-actions .ui-field {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+    .dialog-footer .detail-actions .ui-select-trigger {
+      min-width: 0;
+      max-width: 190px;
+    }
+    .dialog-footer-actions:not(:empty) {
+      gap: 8px;
+    }
+    .reference-document {
+      zoom: 0.5;
+    }
+    .reference-document [data-print-document] {
+      min-width: 620px;
+    }
+    .modal .form-grid {
+      gap: 12px;
+    }
+  }
+  @media (max-width: 400px) {
+    .modal .form-grid {
+      grid-template-columns: 1fr;
+    }
+    .modal .form-grid .field-wide {
+      grid-column: auto;
+    }
+    .dialog-footer .detail-actions .ui-field {
+      font-size: 10px;
+    }
+  }
+}

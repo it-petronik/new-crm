@@ -1,0 +1,153 @@
+# Implementation status
+
+## Record-detail dialog correction
+
+- Rebuilt record-detail content with a compact company/type/status row, populated-value grid and a collapsible list of fields not provided. Empty notes blocks no longer consume space. No underlying values are removed.
+- Narrowed record dialogs to 820px, aligned status labels/controls without wrapping, preserved fixed header/footer and moved invoice printing into footer actions. Reviewed expanded follow-up/payment forms on mobile.
+- Corrected legacy MT display in leave/marketing details to days/leads and the invoice amount label. Reduced unused access-editor grid space and removed Quick actions' nested list scrollbar.
+- Verification: 32 browser checks passed covering all 11 non-quotation record types, quotation preview, access editor, quick actions, eight creation dialogs and module/workflow regressions. Final access/quick-actions check rerun after refinements. TypeScript and unit checks passed. No database changes.
+
+## Legal name and compact layout audit
+
+- Added a presentation-only company-name helper: PETRONIK FZCO appears in selectors, record labels, profile branding, notifications, access summaries and quotation sender/signatory text. Existing Petronik company/access keys remain unchanged, including legacy quotations whose sender name is Petronik.
+- Creation dialogs now adapt width to field count, with tighter spacing and aligned footer controls. Detail grids use three desktop columns and two mobile columns. Narrow phone forms use full-width fields for readable labels and controls; scrolling remains inside the body with actions available.
+- Quotation previews adapt to screen height, start at the top, and use a quieter document background. Print sizing is unaffected by screen-only preview scaling.
+- Tightened shared page/card spacing, removed single-category charts and the duplicate lowest-sales chart; exact ranking values remain visible.
+- Verification: 41 unit tests, TypeScript and 25 browser checks passed. Coverage includes 15 module pages at desktop/mobile widths, all eight creation dialogs, company filtering, employee/lead submission, quotation acceptance and five company/long-document PDF cases. Visually checked the updated legal-name PDFs and representative dialog screenshots. No database modifications.
+
+## Compact shared dialogs, HR fields and charts
+
+- All dialogs now use the shared header, independently scrolling body, and fixed footer. Record-form and access-editor submit buttons target their forms explicitly; quotation print and record actions live in the shared footer. Mobile employee creation and fixed header/footer positions are covered by browser tests.
+- HR departments no longer offer Leadership (Management replaces it). Employee role is a separate profile field with Employee, Manager, Assistant and MD; it does not grant application permissions. Added On-site/Remote, monthly salary and salary currency, stored as existing record attributes without database/schema changes.
+- Added accessible SVG donut charts for product/employee sales share and column charts for demand, retaining exact figures and scope/currency filtering. Chart percentages explicitly describe the displayed records, not the entire business.
+- Reduced quotation preview scale, typography and item padding. Company website and page number now share the reserved bottom margin on every A4 sheet; the in-flow website band is preview-only. Each company uses its own logo, with consistent sizing and Istanergy whitespace handling. Default signatory is Peiman Hussain; an explicitly entered signatory remains respected.
+- Actual Chrome PDF checks passed for all four company logos: short quotations remain one page, and the 45-item fixture now uses three pages instead of four. Rendered pages were visually checked, including footer placement and repeated table headings. Existing records and database were not modified.
+- Final verification: TypeScript, 40 unit tests and all 15 browser tests passed, including employee submission, quotation acceptance, desktop/mobile dialogs, dashboard overflow and company PDF layouts.
+
+## Quotation print pagination fix
+
+- Removed the empty viewport-height application shell from quotation printing; it previously consumed a blank first page before the portalled dialog.
+- Removed forced commercial/terms page breaks and converted the outer layout table to normal print flow. Actual item tables retain repeated headers and row break protection.
+- Removed modal animation, shadow, scroll gutter and constrained dimensions during printing. The website band now follows the signature instead of overlapping document content; page numbers stay in the reserved A4 margin.
+- Verified actual PDFs in installed Chrome using isolated synthetic preview data: a one-item quotation is one page; 45 items flow across four pages. All five rendered pages were visually inspected. Added print regression tests; 40 existing unit tests and TypeScript also pass. No database changes.
+
+## Working first version
+
+### Compact dialogs and source quotation template
+
+- Read the user-specified `petronik-crm/src/components/pdf` and its print CSS/config/type dependencies without modifying that project. Adapted the actual DocumentTemplate components and company color defaults into new-crm, with a typed quotation-data adapter and scoped utility styles. Plain-text terms stay escaped; private activity notes, bank records and signature images are not imported. The source serverless Chromium engine is not installed/wired: export still uses browser Print / Save PDF, so server-generated PDF pagination parity is not claimed.
+- Shared dialogs now use compact four-column desktop/two-column mobile grids, wider address/name fields, tighter controls and sticky form actions. Quotations use Customer & delivery, Items & pricing, and Sender & terms sections. All fields remain mounted so switching sections retains entered values; validation opens and focuses the first invalid field's section.
+- Replaced the separate catalog select with an inline keyboard-accessible product combobox. Matches remain restricted to the existing permitted company/currency/unit catalog. Selection fills price and packaging while retaining quantity; custom text remains supported.
+- Removed blanket note-entry forms from master records, quotations, HR and finance. Sales, shipment, order and support updates now have contextual labels and an explicit open action. Previous notes remain in collapsible history; invoice payment recording is preserved.
+- Verification: 40 tests and production build passed. Browser checks covered compact desktop sections, inline product search with ArrowDown/Enter and automatic USD 800 pricing, hidden-section validation, actual source-template preview, and mobile sender form without dialog-level horizontal overflow. Actual saved PDFs/multipage footer output remain unverified. No database writes, original-project edits or live permission changes were made.
+
+### Country sales, suppliers and reference quotation (22 September)
+
+- Added per-country product rankings based on explicit destination country, confirmed order value, accessible company records, currency and creation-date filters. Country case/spacing is normalized; missing countries are counted and excluded, never guessed from ports. Existing records were not backfilled.
+- Added company-scoped supplier profiles, contact/address/tax details, supplied products, payment terms and lead time. Search, status filters, shared pagination, notes, audit history, quick creation and module restrictions use existing infrastructure. Default access follows leadership roles; no existing user permissions were changed. This is a supplier directory, not purchasing or accounts payable.
+- Quotation form and customer-facing print layout follow the supplied QT-0008 reference: sender/customer identity, issue/expiry dates, delivery terms/destination, item packaging, totals, calculated English amount in words and blank client-signature area. No sample customer or signed approval was copied. Saved customers prefill address/country/tax fields; previous accessible quotations in the same entity supply sender defaults. New fields use existing JSON payloads, without migration.
+- Fixed preservation of line items and prevented lead enquiry notes from being copied into customer-facing commercial terms. Added shared date/line/total validation. Country, packaging and document details survive quotation acceptance into operational records.
+- Verification: 37 unit tests, TypeScript and production build passed. Browser checks confirmed supplier form, quotation document layout and live 500 x USD 570 calculation/amount in words. Browser print CSS is implemented; actual saved PDF pagination has not been verified. No database writes, seed/import, permission changes or deployment performed.
+- Broader remaining gaps are recorded below. In particular, revision/edit workflows, structured purchase orders and supplier invoices, inventory costing, tax/accounting integration, HR policy engines and outbound automations are not implemented by this UI revision.
+
+The application has a connected interactive preview plus database-backed API/authentication code. The UI supports executive overview; leads; itemised quotations; orders; shipments; invoice receipt recording; customer/product records; basic HR, marketing and IT records; approvals; audit history; scoped user provisioning; and a separate employee self-service page. Preview records are fictional.
+
+Quotation acceptance creates one order, shipment and draft invoice in a single transaction in the database implementation, with deterministic IDs, an optimistic version check and audit history. Unit tests also cover repeated acceptance, self-approval, cross-company and branch restrictions, restricted assistant access, payment validation and follow-up notes.
+
+Employee self-service exposes only the current user's own leave requests and support tickets through a separate endpoint. Department module access remains unchanged. This is the narrower alternative to a broad HR/IT navigation expansion rejected during automatic approval review.
+
+## Latest functional refinement
+
+- My Requests is now a view within the persistent workspace shell; sidebar navigation updates browser history without replacing the shell. Direct authenticated loading of `/my-requests` remains supported.
+- Department forms/details have dedicated profiles: employee, leave, customer, product, ticket, campaign, quotation, shipment, order and invoice. People has a distinct Add employee action. Employee records do not create accounts or widen permissions.
+- Whitelisted optional attributes are stored in the existing record JSON payload; no migration was applied. Older records still render with empty optional attributes.
+- Phase 2 has started with quotation prefills: active saved customers and matching product catalog prices, restricted to the current company/branch and actor scope. Product prices must match the chosen currency and unit. These are copied values, not live pricing, credit approval, stock reservation or complete master-record linkage.
+- Existing database integration and external service limitations remain unchanged.
+- Latest checks: production build, type checking and 19 unit tests passed. Browser checks confirmed preserved company selection across self-service navigation, distinct employee/support dialogs, persisted support priority, and quotation customer/product prefills. Updated browser regression specs remain separate from the executed unit suite.
+
+## Remaining production scope
+
+| Area | Still required before full production use |
+| --- | --- |
+| Administration | Editable legal-entity profiles and departments; custom field-level permissions; granular delegated access; complete password reset/MFA and access review |
+| Sales | Full customer timelines and duplicate review, revisioned quotations, product-picker master linkage, discounts, margin/cost checks, tax/Incoterm rules, approval thresholds, saved-PDF multipage validation |
+| Purchasing | Supplier directory is implemented; purchase orders, goods receipts, supplier invoices, payment approvals and stock/cost linkage remain |
+| Logistics | Dedicated shipment/container/vessel fields, document checklists, proof of delivery, split shipments, stock reservations, carrier integrations |
+| Finance | Invoice numbering/legal templates, payment terms, credit limits/holds, ageing reports, cancellation/write-off approvals, FX snapshots, cost/margin ledger and accounting integration |
+| HR | Leave policies/balances and holiday calendars, manager delegation, document-expiry tracking, onboarding/offboarding, recruitment and attendance |
+| Marketing | Campaign attribution to actual orders, spend integrations and validated ROI calculations |
+| IT | Hardware/software/SIM asset register, warranties, assignment history, licence expiry and full permission editing |
+| Documents | Authenticated private uploads/downloads, retention and malware-scanning workflow |
+| Automation | Durable jobs/outbox, retry policy, scheduled digests, email ingestion/sending, WhatsApp and escalation rules |
+| Reporting | Export permissions, CSV/Excel exports, team targets, aggregated multi-currency reporting |
+| Mobile | Install manifest is present; offline sync, push notifications, app-store wrappers and physical-device tests remain |
+| Operations | Staging MySQL integration tests, hosting capacity/security validation, backup/restore drill, monitoring and deployment |
+
+Do not represent any of these remaining features as completed or silently replace them with fixed demonstration charts. Existing overview values are calculated from visible records; dollar summaries include USD only.
+
+## Verification
+
+- Initial production build and TypeScript check passed; final checks are recorded in the task handoff.
+- 13 domain/workflow tests passed.
+- Browser observation confirmed rendered dashboard, saved fictional lead, company filtering, quote acceptance and generated sales order. Narrow-screen navigation and layout were also inspected; browser viewport tooling reported a 582 CSS-pixel effective width, so a physical 390-pixel device is not claimed as verified.
+- Playwright suite exists but its launch was blocked by an absent bundled Chromium executable. These are not counted as passed automated browser tests.
+- No MySQL database was available. Database-backed authentication, migrations and transactional behavior have not yet been integration-tested.
+- Dependency audit reported zero known vulnerabilities after pinning the transitive deepmerge-ts override. Re-check when updating dependencies.
+
+No production data, external accounts, company websites or deployed applications were modified.
+
+## Workspace tools and scoped access update
+
+### Supplied branding, profile and pagination
+
+- Removed the redundant Enercore Group / Team workspace sidebar box. Replaced placeholder sidebar/login branding with the supplied Enercore logo and added a personalized dashboard welcome.
+- Added the four supplied company logos under `public/brands` without modifying source artwork. Profile company cards and the selected-company control use these assets. Logos sit on light plates for legibility in both themes. Internal legacy company keys are unchanged.
+- Enercore uses navy, turquoise and gold accents. Company selection applies Petronik turquoise, Afrilube red/orange, Istanergy red/gold or Petronex teal/gold, including dialog controls through shared root variables.
+- Rebuilt profile with identity header, account details, company logos and structured module access summaries. Profile identity remains read-only.
+- Shared client-side pagination covers record tables/cards, users, notifications, activity history and personal request history. Options: 10/20/50 items, range/total, previous/next and page count. Filters and changed result sets reset the page; data access is still scoped before pagination. This is not database cursor pagination, and commercial document line items remain unpaginated for printing.
+- Validation: 26 unit tests, TypeScript and production build passed. Browser checks verified the welcome, loaded logos, notification page 2 and search reset, Afrilube color selection, and light/dark profile layouts. Profile had no horizontal overflow at 388 CSS pixels. No live records, migrations or user permissions were changed.
+
+### Design revision: company-only workspace
+
+The dedicated Company dashboards page was removed at the user's request. Company selection remains on the main dashboard and module pages; old company-page bookmarks resolve to the overview. All branch inputs, profile/settings branch summaries and record-detail branch fields are removed from the UI. Branch Manager is no longer offered for new role assignments. Legacy branch columns and checks remain internal for compatibility; no records, schema, migrations or access boundaries were changed in this revision.
+
+`studio.css` supplies a new neutral/blue visual system with white navigation in light mode, charcoal navigation in dark mode, compact grouped menus, colored metric accents, structured pipeline columns, shared form controls and mobile layouts. Design references reviewed: official Attio and folk product pages. No new libraries, external assets or integrations were added.
+
+Revision verification: 24 unit tests and the production build (including TypeScript) passed. Browser inspection covered the light/dark dashboard, desktop pipeline, branch-free lead form, mobile navigation and My requests. The dashboard had no page-level horizontal overflow at 388 CSS pixels. Database data was not touched.
+
+- Added visible Profile and Appearance pages, persistent light/dark selection, company dashboard cards and company-specific URLs that retain scope during navigation.
+- Added searchable notifications with action/activity filters, company filters, record links and device-local read state. Items are derived from permitted records and audit events; this is not an email or push delivery service.
+- Added a keyboard command menu (Cmd/Ctrl+K or /), permitted quick-create actions, scoped record search and a shortcut guide. Existing customer/product prefills and linked quotation workflow remain in place.
+- Added dedicated access administration: role, company, branch and module restrictions, review-before-save, server scope checks, self-edit prevention, IT leadership limits, audit entries and target session revocation.
+- Prepared migration `202609220002_module_access` for the nullable User.moduleAccess JSON column. It was NOT applied. Apply it through an approved staging/release process before database-backed use of this code. Production authentication and access updates remain unverified against MySQL.
+- Profile identity is read-only. Preview account changes and notification read state are browser-local; cross-device preferences, email/WhatsApp automation, scheduled jobs and profile editing remain future work.
+
+### Record editing and delete confirmation
+
+### Accounts cashbook and motion polish
+
+- Added shared search, status/date filters and name/date/amount sorting to paginated business lists, with reset and pagination recalculation. Date filters use record creation date (activity timestamp or due date when no creation timestamp exists); amount sorts do not convert currencies.
+- Dashboard has All time, Today, 7/30/90 days, 12 months and custom dates. Metrics and charts use the selected creation-date scope; daily focus stays current. Removed the redundant nested insights period selector.
+- Salary form now has Basic salary and Allowance with a derived monthly total validated on server and preview. Legacy monthly salary is prefilled as basic salary when editing. Chart keyboard focus uses segment emphasis instead of the rectangular outline; card hover belongs to the whole card.
+- Verified 49 unit tests, TypeScript and 13 browser checks covering salary persistence, record filters/sorts, custom dashboard dates and desktop/mobile layouts. No live database operations.
+
+- Added company-scoped manual Income/Expense entries within Accounts, separate from invoice records and collections. Includes amount/currency, transaction date, category, department, counterparty, payment method and reference. Currency-specific income, expense and net movement totals exclude cancelled entries; this is a manual cashbook, not a general ledger, bank reconciliation or profit report.
+- Cashbook entries use Accounts permissions and audited create/edit/status workflows. Cancellation retains history; deletion is blocked. Server validation rejects non-positive amounts, excess decimal precision and invoice links/items/payments. No database schema migration required or executed; database-backed operation has not been tested.
+- Charts use distinct blue/amber series and multicolour ranking charts. Shared hover/focus transitions respect reduced-motion preferences. Verified desktop/mobile page and form layouts, cash entry persistence and cancellation; 46 unit tests and TypeScript pass. Tests used fictional preview data only.
+
+- Follow-up UI polish: permission-aware Edit/Delete icons on table rows, collection cards and pipeline cards; grouped dialog footer controls; consistent two-column form fields (single-column mobile); smaller screen-only quotation preview. Added Company colours, Ocean, Forest, Violet, Rose and Slate palettes, independently persisted alongside light/dark mode. Logos and document branding are unchanged.
+- Follow-up verification: 26 browser tests, 45 unit tests and TypeScript passed. Visually reviewed lead detail, support-ticket form, quotation preview and dark Appearance. Preview data only; no database changes.
+
+- Writable record detail dialogs now expose Edit record and Delete. Editing uses the shared, prefilled module form with fixed header/footer, saving state and inline errors.
+- Edit/delete commands enforce company/module permissions, immutable identity/link fields and stale-record checks. Approved quotations and operational/financial records only permit contact, delivery and notes corrections; commercial values and payment history remain protected.
+- Delete requires a named-record confirmation. Eligible records are soft-deleted from the workspace with an audit event; linked and protected commercial records cannot be deleted. There is no user-facing restore action yet.
+- Verification: TypeScript, 45 unit tests and 34 browser tests passed, including edit/save, cancel/confirm delete, persistence after reload, protected order editing and desktop/mobile dialog regressions. Browser tests used fictional preview data only. Database-backed execution remains unverified; no database writes, migrations, deployment or push were performed.
+
+### Dashboard insights and navigation polish
+
+- Breadcrumbs now navigate within the workspace. Company logo plates have consistent dimensions with optical sizing for transparent padding. Quick Actions has a compact header, inline search, categorized navigation and a two-column creation grid that stacks on mobile.
+- Dashboard insights show best/lowest-selling products, open-enquiry demand, sales contribution by order owner, highest/lowest orders, win rate, lost opportunities and cancelled orders. Filters use one currency and an optional creation-date window; company/module/record permissions still apply.
+- Sales means confirmed, in-progress or completed order value, not profit or collected revenue. Product lines use quantity and price; older orders fall back to product and amount. Lowest-selling ranks products with recorded sales. Demand is not inventory need. Missing product information is disclosed and excluded from named-product rankings. Owner contribution is not an employee performance rating.
+- Verification: production build and all 31 tests passed; browser checks verified breadcrumb navigation, Quick Actions, desktop insights and a 388 CSS-pixel mobile layout without horizontal overflow. No browser errors were captured. No database writes, migrations, deployment or push performed.
+- Removed decorative footer/company-strip content. New screens use shared controls, spacing, themes and responsive layouts.
+- Verification: 23 unit tests, TypeScript, production build and diff whitespace checks passed. Browser checks covered company selection, profile, light/dark switching, notifications, permission editor and keyboard command selection. Profile and notifications had no horizontal overflow at an effective 388 CSS-pixel viewport. No browser console errors were captured in the final check. No live access changes or migrations were executed.
