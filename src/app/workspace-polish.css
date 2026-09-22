@@ -12,6 +12,25 @@
 .demo-accounts button:hover { background:var(--accent-soft,#edf5ef); border-color:var(--line,#dfe8e4); }
 .demo-accounts button:focus-visible { outline:2px solid var(--brand-action,#0f766e); outline-offset:1px; }
 .demo-accounts span { color:var(--muted,#6b8578); white-space:nowrap; }
+.visually-hidden { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+.avatar-editor { display:flex; flex-direction:column; align-items:center; gap:4px; flex-shrink:0; }
+.avatar-editor-photo { position:relative; display:inline-flex; }
+.avatar-editor-photo .entity-avatar { border:5px solid var(--surface,#fff); }
+.avatar-editor-camera { position:absolute; right:-1px; bottom:-1px; width:31px; height:31px; display:grid; place-items:center; border-radius:50%; border:2px solid var(--surface,#fff); background:var(--brand-action,#0f766e); color:#fff; cursor:pointer; padding:0; }
+.avatar-editor-camera:hover { background:var(--brand-hover,#0b5c55); }
+.avatar-editor-camera:focus-visible { outline:2px solid var(--brand-action,#0f766e); outline-offset:2px; }
+.profile-hero-body .avatar-editor { margin-top:-25px; }
+.crop-viewport { position:relative; overflow:hidden; border-radius:50%; margin:14px auto; background:#0d141a; cursor:grab; touch-action:none; max-width:100%; }
+.crop-viewport:active { cursor:grabbing; }
+.crop-viewport img { position:absolute; left:50%; top:50%; user-select:none; max-width:none; }
+.crop-zoom { display:flex; align-items:center; gap:12px; font-size:12px; }
+.crop-zoom span { display:flex; align-items:center; gap:6px; white-space:nowrap; }
+.crop-zoom input { flex:1; min-width:0; }
+.entity-avatar { display:inline-grid; place-items:center; flex-shrink:0; border-radius:50%; font-weight:650; letter-spacing:0.02em; line-height:1; overflow:hidden; }
+.entity-avatar img { width:100%; height:100%; object-fit:cover; display:block; }
+.record-link .entity-avatar, .avatar-name .entity-avatar { margin-right:10px; }
+.avatar-name { display:flex; align-items:center; gap:10px; min-width:0; }
+.avatar-name > span { min-width:0; }
 @media screen {
   /* Filters, list and pagination are rendered in this order in the markup, so
      visual order and tab order agree without any CSS reordering. */
@@ -23,6 +42,14 @@
   [data-theme="dark"] .workflow-note > svg { color:#e0a955; }
   .error { background:transparent !important; border:0 !important; border-left:3px solid #c5263d !important; border-radius:0 !important; padding:6px 0 6px 13px !important; color:#a3202f !important; align-items:flex-start; }
   [data-theme="dark"] .error { border-left-color:#ff8799 !important; color:#ff9aa8 !important; }
+  /* A role without the commercial panel would otherwise leave half the row
+     blank, so a single remaining panel takes the full width. */
+  .overview-grid:has(> .panel:only-child), .overview-lower:has(> .panel:only-child) { grid-template-columns:minmax(0,1fr); }
+  /* Roles show a different number of cards, so the row always fills its width
+     rather than leaving the columns another role would have used. */
+  .stats-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .stats-grid:has(> :nth-child(3)) { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .stats-grid:has(> :nth-child(4)) { grid-template-columns:repeat(4,minmax(0,1fr)); }
   .list-empty { display:flex; flex-direction:column; align-items:center; gap:10px; padding:44px 20px; color:var(--muted); text-align:center; }
   .list-empty p { margin:0; }
   .list-query-message { flex-basis:100%; margin:0; font-size:11px; line-height:1.5; color:var(--muted); }

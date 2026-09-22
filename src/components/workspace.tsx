@@ -87,6 +87,7 @@ import { Dialog, DialogPresence, DialogActions } from "./ui/controls";
 import ThemeToggle from "./theme-toggle";
 import MyRequests from "./my-requests";
 import { storedPreviewActor, previewActorKey } from "@/lib/fixtures";
+import { Avatar } from "./avatar";
 import RecordForm from "./record-form";
 import { recordProfiles, detailFields } from "@/lib/record-profiles";
 import UserAdmin from "./user-admin";
@@ -1499,8 +1500,12 @@ function RecordCards({
               onClick={() => onSelect(r)}
             >
               <div className="collection-top">
-                <span className="collection-icon">
-                  <Icon size={20} />
+                <span className="collection-icon" title={r.kind}>
+                  {["customers", "suppliers", "hr"].includes(r.kind) ? (
+                    <Avatar name={r.title} size={38} />
+                  ) : (
+                    <Icon size={20} />
+                  )}
                 </span>
                 <Badge status={r.status} />
               </div>
@@ -1572,11 +1577,14 @@ function RecordTable({
             {pagination.items.map((r) => (
               <tr key={r.id}>
                 <td>
-                  <Button className="record-link" onClick={() => onSelect(r)}>
-                    {r.title}
-                    <small>
-                      {r.id} · {r.contact || r.owner}
-                    </small>
+                  <Button className="record-link avatar-name" onClick={() => onSelect(r)}>
+                    <Avatar name={r.title} size={32} />
+                    <span>
+                      {r.title}
+                      <small>
+                        {r.id} · {r.contact || r.owner}
+                      </small>
+                    </span>
                   </Button>
                 </td>
                 <td>
@@ -1680,47 +1688,130 @@ function Overview({
   // Order value and demand rankings are only shown to roles that work with
   // that data; HR or IT sign-ins get their own modules instead.
   const commercial = ["leads", "orders", "quotations"].some((m) => allowed.includes(m as Module));
-  const metrics = [
-    {
+  const kind = (k: Kind) => records.filter((r) => r.kind === k);
+  const people = kind("hr");
+  const leave = kind("leave");
+  const tickets = kind("it");
+  const campaigns = kind("marketing");
+  const quotes = kind("quotations");
+  const customers = kind("customers");
+  const suppliers = kind("suppliers");
+  const catalogue = kind("products");
+  const pad = (n: number) => String(n).padStart(2, "0");
+  // Each module contributes its own cards, so a role never lands on a
+  // dashboard with gaps where another role's cards would have been.
+  const cards: Partial<Record<Module, {
+    label: string; value: string; sub: string; icon: typeof Target; to: Module; accent: string;
+  }[]>> = {
+    leads: [{
       label: "Open pipeline",
       value: shortMoney(pipeline),
       sub: `${leads.filter((r) => !["Won", "Lost"].includes(r.status)).length} active opportunities · USD value only`,
-      icon: Target,
-      to: "leads" as Module,
-      accent: "mint",
-    },
-    {
+      icon: Target, to: "leads", accent: "mint",
+    }],
+    orders: [{
       label: "Confirmed orders",
       value: shortMoney(usd(orders)),
       sub: `${orders.length} orders in your workspace · USD value only`,
-      icon: Package,
-      to: "orders" as Module,
-      accent: "blue",
-    },
-    {
+      icon: Package, to: "orders", accent: "blue",
+    }],
+    logistics: [{
       label: "Active shipments",
-      value: String(shipments.length).padStart(2, "0"),
+      value: pad(shipments.length),
       sub: `${shipments.filter((r) => r.status === "Delayed").length} need your attention`,
-      icon: Truck,
-      to: "logistics" as Module,
-      accent: "purple",
-    },
-    {
-      label: "Invoices awaiting payment",
-      value: shortMoney(
-        invoices
-          .filter(
-            (r) =>
-              r.currency === "USD" && !["Paid", "Cancelled"].includes(r.status),
-          )
-          .reduce((sum, r) => sum + outstanding(r), 0),
-      ),
-      sub: `${invoices.filter((r) => r.status === "Overdue").length} overdue invoices · USD value only`,
-      icon: Wallet,
-      to: "accounts" as Module,
-      accent: "gold",
-    },
-  ].filter((m) => allowed.includes(m.to));
+      icon: Truck, to: "logistics", accent: "purple",
+    }],
+    accounts: [
+      {
+        label: "Invoices awaiting payment",
+        value: shortMoney(
+          invoices
+            .filter((r) => r.currency === "USD" && !["Paid", "Cancelled"].includes(r.status))
+            .reduce((sum, r) => sum + outstanding(r), 0),
+        ),
+        sub: `${invoices.filter((r) => r.status === "Overdue").length} overdue invoices · USD value only`,
+        icon: Wallet, to: "accounts", accent: "gold",
+      },
+      {
+        label: "Invoices raised",
+        value: pad(invoices.length),
+        sub: `${invoices.filter((r) => r.status === "Paid").length} settled in this period`,
+        icon: FileText, to: "accounts", accent: "blue",
+      },
+    ],
+    hr: [
+      {
+        label: "People",
+        value: pad(people.length),
+        sub: `${people.filter((r) => r.status === "Active").length} active · ${people.filter((r) => r.status === "On Leave").length} on leave`,
+        icon: Users, to: "hr", accent: "mint",
+      },
+      {
+        label: "Leave requests",
+        value: pad(leave.filter((r) => r.status === "Pending Approval").length),
+        sub: `${leave.length} requests in this period`,
+        icon: CalendarDays, to: "hr", accent: "gold",
+      },
+    ],
+    it: [
+      {
+        label: "Open tickets",
+        value: pad(tickets.filter((r) => r.status !== "Resolved").length),
+        sub: `${tickets.filter((r) => r.status === "In Progress").length} in progress`,
+        icon: Monitor, to: "it", accent: "purple",
+      },
+      {
+        label: "Resolved tickets",
+        value: pad(tickets.filter((r) => r.status === "Resolved").length),
+        sub: `${tickets.length} raised in this period`,
+        icon: ShieldCheck, to: "it", accent: "mint",
+      },
+    ],
+    marketing: [
+      {
+        label: "Campaigns",
+        value: pad(campaigns.length),
+        sub: `${campaigns.filter((r) => r.status === "Active").length} running now`,
+        icon: Globe2, to: "marketing", accent: "gold",
+      },
+      {
+        label: "Leads recorded",
+        value: pad(campaigns.reduce((sum, r) => sum + (r.quantity || 0), 0)),
+        sub: "Captured against campaigns, not attributed revenue",
+        icon: Target, to: "marketing", accent: "blue",
+      },
+    ],
+    quotations: [{
+      label: "Open quotations",
+      value: pad(quotes.filter((r) => !["Accepted", "Rejected", "Expired"].includes(r.status)).length),
+      sub: `${quotes.filter((r) => r.status === "Accepted").length} accepted in this period`,
+      icon: FileText, to: "quotations", accent: "blue",
+    }],
+    customers: [{
+      label: "Customers",
+      value: pad(customers.length),
+      sub: `${customers.filter((r) => r.status === "Active").length} active accounts`,
+      icon: Users, to: "customers", accent: "mint",
+    }],
+    suppliers: [{
+      label: "Suppliers",
+      value: pad(suppliers.length),
+      sub: `${suppliers.filter((r) => r.status === "Active").length} active suppliers`,
+      icon: Building2, to: "suppliers", accent: "purple",
+    }],
+    products: [{
+      label: "Products",
+      value: pad(catalogue.length),
+      sub: `${catalogue.filter((r) => r.status === "Low Stock").length} marked low stock`,
+      icon: Box, to: "products", accent: "gold",
+    }],
+  };
+  // Most specific modules first, so a role's own work leads its dashboard.
+  const cardOrder: Module[] = ["hr", "it", "marketing", "leads", "orders", "logistics", "accounts", "quotations", "customers", "suppliers", "products"];
+  const metrics = cardOrder
+    .filter((m) => allowed.includes(m))
+    .flatMap((m) => cards[m] || [])
+    .slice(0, 4);
   return (
     <>
       <p className="dashboard-scope">
@@ -1736,8 +1827,8 @@ function Overview({
           <p>
             {approvals.length || attention.length ? (
               <>
-                {approvals.length} approvals and {attention.length} items need
-                attention.
+                {approvals.length} {approvals.length === 1 ? "approval" : "approvals"} and{" "}
+                {attention.length} {attention.length === 1 ? "item needs" : "items need"} attention.
               </>
             ) : (
               "No outstanding actions."
@@ -2060,9 +2151,12 @@ function ActivityList({
                 return (
                   <tr key={a.id}>
                     <td>
-                      <Button className="record-link" onClick={() => setDetail(a)}>
-                        {a.actor}
-                        <small>{a.recordId}</small>
+                      <Button className="record-link avatar-name" onClick={() => setDetail(a)}>
+                        <Avatar name={a.actor} size={32} />
+                        <span>
+                          {a.actor}
+                          <small>{a.recordId}</small>
+                        </span>
                       </Button>
                     </td>
                     <td>

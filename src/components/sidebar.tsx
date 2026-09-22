@@ -37,6 +37,8 @@ import {
 } from "@/lib/domain";
 import { type WorkspaceView } from "./workspace-pages";
 import { Button, Tooltip } from "./ui/controls";
+import { Avatar } from "./avatar";
+import { useAvatar } from "@/lib/avatar-store";
 const icons: Record<Module, LucideIcon> = {
   overview: LayoutDashboard,
   leads: Target,
@@ -88,6 +90,7 @@ export default function Sidebar({
   onMyRequests?: () => void;
   onView: (view: WorkspaceView) => void;
 }) {
+  const photo = useAvatar(actor.id);
   const [closed, setClosed] = useState<string[]>([]);
   const permitted = allowedModules(actor);
   function contents(isMobile: boolean) {
@@ -254,13 +257,7 @@ export default function Sidebar({
             aria-label="Open my profile"
             onClick={() => onView("profile")}
           >
-            <span className="avatar">
-              {actor.name
-                .split(" ")
-                .map((s) => s[0])
-                .slice(0, 2)
-                .join("")}
-            </span>
+            <Avatar name={actor.name} image={photo} size={36} />
             <span className="profile-info">
               {actor.name}
               <small>{actor.role}</small>

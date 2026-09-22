@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { Button, Input, Select, Field } from "./ui/controls";
 import { previewActorKey } from "@/lib/fixtures";
+import { AvatarEditor } from "./avatar-editor";
 import { useTheme, setTheme, usePalette, setPalette, palettes } from "./theme-toggle";
 import {
   allowedModules,
@@ -74,13 +75,7 @@ export function ProfilePage({
           <ShieldCheck size={28} />
         </div>
         <div className="profile-hero-body">
-          <span className="profile-large-avatar">
-            {actor.name
-              .split(" ")
-              .map((n) => n[0])
-              .slice(0, 2)
-              .join("")}
-          </span>
+          <AvatarEditor id={actor.id} name={actor.name} size={92} />
           <div className="profile-heading">
             <h2>{actor.name}</h2>
             <p>{actor.email || "preview@example.invalid"}</p>

@@ -1,5 +1,6 @@
 "use client";
 import { companyName } from "@/lib/company-name";
+import { Avatar } from "./avatar";
 import { Pagination, ListFilters, ListEmpty, SortHeader, usePagination } from "./pagination";
 import { useEffect, useState } from "react";
 import { Plus, ShieldCheck, X } from "lucide-react";
@@ -103,7 +104,7 @@ export default function UserAdmin({
     <section className="panel filterable-table-panel">
       {profile ? <div className="access-profile">
         <Button className="secondary" onClick={() => setProfile(null)}>← Back to users</Button>
-        <div className="access-profile-heading"><span className="avatar">{profile.name.split(" ").map(n=>n[0]).slice(0,2).join("")}</span><div><h2>{profile.name}</h2><p>{profile.role}</p></div><span className={`badge ${profile.active ? "green" : "red"}`}>{profile.active ? "Active" : "Inactive"}</span></div>
+        <div className="access-profile-heading"><Avatar name={profile.name} size={44} /><div><h2>{profile.name}</h2><p>{profile.role}</p></div><span className={`badge ${profile.active ? "green" : "red"}`}>{profile.active ? "Active" : "Inactive"}</span></div>
         <dl className="access-profile-grid"><div><dt>Email</dt><dd>{profile.email}</dd></div><div><dt>Companies</dt><dd>{profile.companies.map(companyName).join(", ")}</dd></div><div><dt>Role</dt><dd>{profile.role}</dd></div></dl>
         <h3>Module access</h3><div className="access-profile-grid">{Object.entries(labels).filter(([m])=>roleModules(profile.role).includes(m as never)).map(([m,label])=><div key={m}><strong>{label}</strong><p>{profile.moduleAccess?.[m as keyof NonNullable<Actor["moduleAccess"]>] || "Role default"}</p></div>)}</div>
         <p className="muted">Account details and assigned access. Personal HR information is not included here.</p>
@@ -156,8 +157,10 @@ export default function UserAdmin({
             {pagination.items.map((u) => (
               <tr key={u.id}>
                 <td>
-                  <Button className="record-link" onClick={() => setProfile(u)}>{u.name}</Button>
-                  <small>{u.email}</small>
+                  <Button className="record-link avatar-name" onClick={() => setProfile(u)}>
+                    <Avatar name={u.name} size={32} />
+                    <span>{u.name}<small>{u.email}</small></span>
+                  </Button>
                 </td>
                 <td>{u.role}</td>
                 <td>{u.companies.map(companyName).join(", ")}</td>
