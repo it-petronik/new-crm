@@ -11,6 +11,48 @@ export const previewActor: Actor = {
   companies: [...companies],
   branches: [],
 };
+
+/**
+ * Preview-only sign-in accounts so each role's view can be tried without a
+ * database. These are fictional and are never used by the database auth path.
+ */
+export const demoPassword = "demo1234";
+export const demoAccounts: { email: string; actor: Actor }[] = [
+  { email: "md@enercore.test", actor: previewActor },
+  {
+    email: "sales@enercore.test",
+    actor: { id: "preview-sales", name: "Leila Ahmed", role: "Sales Manager", companies: [...companies], branches: [] },
+  },
+  {
+    email: "hr@enercore.test",
+    actor: { id: "preview-hr", name: "Priya Nair", role: "HR Manager", companies: [...companies], branches: [] },
+  },
+  {
+    email: "accounts@enercore.test",
+    actor: { id: "preview-accounts", name: "Daniel Banda", role: "Accounts Manager", companies: [...companies], branches: [] },
+  },
+  {
+    email: "logistics@enercore.test",
+    actor: { id: "preview-logistics", name: "Minh Tran", role: "Logistics Manager", companies: [...companies], branches: [] },
+  },
+  {
+    email: "it@enercore.test",
+    actor: { id: "preview-it", name: "Omar Hassan", role: "IT Administrator", companies: [...companies], branches: [] },
+  },
+];
+export const previewActorKey = "enercore-preview-actor";
+/** Reads the signed-in preview role, falling back to the default MD account. */
+export function storedPreviewActor(): Actor {
+  if (typeof window === "undefined") return previewActor;
+  try {
+    const saved = window.localStorage.getItem(previewActorKey);
+    if (!saved) return previewActor;
+    const parsed = JSON.parse(saved) as Actor;
+    return demoAccounts.some((a) => a.actor.id === parsed.id) ? parsed : previewActor;
+  } catch {
+    return previewActor;
+  }
+}
 export function makePreview(): Workspace {
   const now = new Date();
   const date = (days: number) =>

@@ -4,10 +4,25 @@
 :root[data-palette="violet"] { --brand-action:#6d28d9; --brand-hover:#5b21b6; --brand-soft:#f5f3ff; --brand-text:#5b21b6; --brand-highlight:#a78bfa; }
 :root[data-palette="rose"] { --brand-action:#be123c; --brand-hover:#9f1239; --brand-soft:#fff1f2; --brand-text:#9f1239; --brand-highlight:#fb7185; }
 :root[data-palette="slate"] { --brand-action:#475569; --brand-hover:#334155; --brand-soft:#f1f5f9; --brand-text:#334155; --brand-highlight:#cbd5e1; }
+.demo-accounts { margin-top:18px; padding:14px 16px; border:1px dashed var(--line,#dfe8e4); border-radius:10px; font-size:12px; }
+.demo-accounts strong { display:block; font-size:11px; letter-spacing:0.04em; text-transform:uppercase; }
+.demo-accounts p { margin:6px 0 10px; color:var(--muted,#6b8578); font-size:11px; line-height:1.6; }
+.demo-accounts ul { list-style:none; margin:0; padding:0; display:grid; gap:4px; }
+.demo-accounts button { display:flex; align-items:center; justify-content:space-between; gap:12px; width:100%; padding:7px 9px; border:1px solid transparent; border-radius:7px; background:transparent; color:inherit; font:inherit; font-size:11px; cursor:pointer; text-align:left; }
+.demo-accounts button:hover { background:var(--accent-soft,#edf5ef); border-color:var(--line,#dfe8e4); }
+.demo-accounts button:focus-visible { outline:2px solid var(--brand-action,#0f766e); outline-offset:1px; }
+.demo-accounts span { color:var(--muted,#6b8578); white-space:nowrap; }
 @media screen {
   /* Filters, list and pagination are rendered in this order in the markup, so
      visual order and tab order agree without any CSS reordering. */
   .records-panel, .filterable-table-panel, .cashbook-panel { display:flex; flex-direction:column; }
+  /* Notes and errors read as inline warnings instead of filled cards. */
+  .workflow-note { background:transparent !important; border:0 !important; border-left:3px solid #d08c2c !important; border-radius:0 !important; padding:6px 0 6px 13px !important; margin:16px 0 0 !important; align-items:flex-start; color:var(--muted) !important; }
+  .workflow-note > svg { color:#d08c2c; flex-shrink:0; margin-top:1px; }
+  [data-theme="dark"] .workflow-note { border-left-color:#e0a955 !important; }
+  [data-theme="dark"] .workflow-note > svg { color:#e0a955; }
+  .error { background:transparent !important; border:0 !important; border-left:3px solid #c5263d !important; border-radius:0 !important; padding:6px 0 6px 13px !important; color:#a3202f !important; align-items:flex-start; }
+  [data-theme="dark"] .error { border-left-color:#ff8799 !important; color:#ff9aa8 !important; }
   .list-empty { display:flex; flex-direction:column; align-items:center; gap:10px; padding:44px 20px; color:var(--muted); text-align:center; }
   .list-empty p { margin:0; }
   .list-query-message { flex-basis:100%; margin:0; font-size:11px; line-height:1.5; color:var(--muted); }
@@ -19,24 +34,39 @@
   .record-card-shell > .lead-card:hover, .record-card-shell > .collection-card:hover,
   .record-card-shell > .lead-card:active, .record-card-shell > .collection-card:active { transform:none; border:0 !important; box-shadow:none !important; background:transparent; border-radius:0; }
   .record-card-shell:focus-within { border-color:var(--brand-action); }
-  .list-query-controls, .dashboard-period { display:flex; flex-wrap:wrap; align-items:end; gap:10px 14px; padding:16px 20px; border-top:1px solid var(--line); }
-  .list-query-controls label { display:grid; gap:5px; font-size:11px; color:var(--muted); flex:1 1 150px; min-width:0; }
-  .list-query-controls label:first-child { flex:2 1 220px; }
-  .list-query-controls label input, .list-query-controls label .ui-date-trigger, .list-query-controls label .ui-select-trigger { width:100%; min-width:0; }
-  .list-query-reset { flex:0 0 auto; align-self:end; }
+  .list-query-controls { display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:14px 20px; border-top:1px solid var(--line); }
+  .list-query-search { flex:1 1 240px; min-width:0; max-width:420px; }
+  .list-query-toggle, .list-query-reset { flex:0 0 auto; gap:7px; }
+  .list-query-toggle.is-open { background:var(--accent-soft); border-color:var(--brand-action); color:var(--accent-ink); }
+  .list-query-count { display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; padding:0 5px; border-radius:9px; background:var(--brand-action); color:#fff; font-size:10px; font-weight:600; }
+  /* Full-width row so opening the panel never reflows the bar above it. */
+  .list-query-panel { flex-basis:100%; display:flex; flex-wrap:wrap; align-items:end; gap:10px 14px; margin-top:4px; }
+  .list-query-panel[hidden] { display:none; }
+  .list-query-panel label { display:grid; gap:5px; font-size:11px; color:var(--muted); flex:0 1 190px; min-width:0; }
+  .list-query-panel label .ui-select-trigger { width:100%; min-width:0; }
+  /* Sortable column headings */
+  .table-scroll th[aria-sort] { padding:0; }
+  .column-sort { display:flex; align-items:center; gap:6px; width:100%; padding:12px 14px; border:0; background:transparent; color:inherit; font:inherit; font-weight:inherit; text-align:left; cursor:pointer; }
+  .column-sort:hover { color:var(--accent-ink); background:var(--accent-soft); }
+  .column-sort:focus-visible { outline:2px solid var(--brand-action); outline-offset:-2px; }
+  /* Faintly visible at rest so it is discoverable that columns sort. */
+  .column-sort-idle { opacity:0.3; transition:opacity 140ms ease; }
+  th:hover .column-sort-idle, .column-sort:focus-visible .column-sort-idle { opacity:0.75; }
+  th[aria-sort="ascending"] .column-sort, th[aria-sort="descending"] .column-sort { color:var(--accent-ink); }
   /* "10 per page" was clipped to "10 per pa…" at the default trigger width. */
   .pagination-controls .ui-select-trigger { width:auto; min-width:128px; }
-  .dashboard-period .ui-date-trigger { width:170px; }
-  .dashboard-period { border:1px solid var(--line); background:var(--surface); border-radius:12px; margin-bottom:18px; align-items:center; }
-  .dashboard-period > div { margin-right:auto; }
-  .dashboard-period small { display:block; color:var(--muted); font-size:11px; margin-top:5px; }
-  .dashboard-period-note { flex-basis:100%; margin:0; font-size:11px; line-height:1.5; color:var(--muted); }
+  /* The period control sits inline beside the company filter, not in a card. */
+  .period-switch .ui-select-trigger { min-width:118px; }
+  .heading-actions .ui-date-trigger { min-height:42px; width:150px; }
+  .dashboard-scope { display:flex; flex-wrap:wrap; gap:4px 10px; margin:0 0 16px; font-size:11px; line-height:1.5; color:var(--muted); }
+  .dashboard-period-note { color:var(--ink); }
   .dashboard-period-note[role="alert"] { color:#c5263d; }
   [data-theme="dark"] .dashboard-period-note[role="alert"] { color:#ff8799; }
-  .dashboard-period input, .dashboard-period .ui-select-trigger { width:170px; }
   .performance .bar[role="button"] { cursor:pointer; }
   .performance .bar[role="button"]:hover, .performance .bar[role="button"]:focus-visible { filter:brightness(1.12); outline:2px solid var(--ink); outline-offset:3px; }
   .records-panel table th:last-child, .records-panel table td:last-child { width:1%; white-space:nowrap; padding-right:20px; }
+  /* The activity page is a table now, so it fills the panel width. */
+  .activity-table td small { display:block; color:var(--muted); font-size:11px; margin-top:4px; }
   .table-record-actions { justify-content:flex-end; }
   .ui-button.delete-action, .ui-button.delete-action svg, .ui-button.delete-action:hover, .ui-button.delete-action:focus-visible { color:#c5263d !important; }
   [data-theme="dark"] .ui-button.delete-action, [data-theme="dark"] .ui-button.delete-action svg { color:#ff8799 !important; }
@@ -79,7 +109,16 @@
     .insight-stack .chart-donut { grid-template-columns:1fr; gap:4px; }
     .insight-stack .chart-donut svg { width:170px; justify-self:center; }
   }
+  .insight-tabs { display:flex; gap:4px; margin:18px 0 0; padding:4px; background:var(--bg); border:1px solid var(--line); border-radius:11px; width:fit-content; max-width:100%; overflow-x:auto; }
+  .insight-tabs button { flex:0 0 auto; padding:8px 18px; border:0; border-radius:8px; background:transparent; color:var(--muted); font:inherit; font-size:13px; font-weight:550; cursor:pointer; white-space:nowrap; }
+  .insight-tabs button:hover { color:var(--ink); }
+  .insight-tabs button.selected { background:var(--surface); color:var(--accent-ink); box-shadow:0 1px 3px #10203014; }
+  .insight-tabs button:focus-visible { outline:2px solid var(--brand-action); outline-offset:2px; }
+  .insight-panel { margin-top:18px; }
+  .insight-panel:focus { outline:none; }
+  .insight-single > .panel { margin:0; }
   .business-insights .insight-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; align-items:start; }
+  .business-insights .insight-grid > .panel { margin:0; }
   .insight-stack { display:flex; flex-direction:column; gap:20px; min-width:0; }
   .insight-stack > .panel { width:100%; min-width:0; margin:0; }
   .insight-stack .order-extremes { grid-column:auto; }

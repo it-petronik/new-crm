@@ -58,8 +58,8 @@ test("an incomplete or reversed custom range is explained, not silently ignored"
 
 test("operational alerts stay current and are labelled as such", async ({ page }) => {
   await page.goto("/workspace/all-companies/overview");
-  await page.locator(".dashboard-period").waitFor();
-  await expect(page.locator(".dashboard-period")).toContainText("Daily focus remains current");
+  await page.locator(".dashboard-scope").waitFor();
+  await expect(page.locator(".dashboard-scope")).toContainText("Daily focus remains current");
   await expect(page.locator(".insight-banner")).toBeVisible();
 });
 

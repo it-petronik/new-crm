@@ -1,9 +1,7 @@
-export type ListQuery = { search:string; status:string; sort:string; from:string; to:string };
-export const emptyQuery: ListQuery = { search:"",status:"all",sort:"default",from:"",to:"" };
-export type DateOf = (item: object) => string;
+export type ListQuery = { search:string; status:string; sort:string };
+export const emptyQuery: ListQuery = { search:"",status:"all",sort:"default" };
+/** The date a record is ordered by when a list sorts newest or oldest first. */
 export function listDate(item: object) { const r = item as Record<string,unknown>; return String(r.createdAt || r.at || r.due || "").slice(0,10); }
-/** Lets a list filter on the date it actually shows, e.g. a cashbook transaction date. */
-export function dateField(key: string): DateOf { return item => String((item as Record<string,unknown>)[key] || "").slice(0,10); }
 export function listStatus(item: object) { const r = item as Record<string,unknown>; return String(r.status || (typeof r.active === "boolean" ? r.active ? "Active":"Inactive" : "")); }
 
 /** Bookkeeping fields that carry no meaning for a person searching a list. */
@@ -27,29 +25,65 @@ export function searchText(item: object): string {
   return parts.join(" ").toLowerCase();
 }
 
-/** A reversed range selects nothing rather than silently ignoring a bound. */
-export function rangeReversed(query: Pick<ListQuery,"from"|"to">) {
-  return Boolean(query.from && query.to && query.from > query.to);
+export function queryList<T extends object>(items:T[], query:ListQuery):T[] {
+  const term = query.search.trim().toLowerCase();
+  const result = items.filter(item =>
+    (!term || searchText(item).includes(term)) && (query.status === "all" || listStatus(item) === query.status));
+  const comparator = sortComparator(query.sort);
+  if (comparator) result.sort(comparator);
+  return result;
 }
 
-export function queryList<T extends object>(items:T[], query:ListQuery, dateOf:DateOf = listDate):T[] {
-  if (rangeReversed(query)) return [];
-  const term = query.search.trim().toLowerCase();
-  const result = items.filter(item => {
-    const date = dateOf(item);
-    return (!term || searchText(item).includes(term)) && (query.status === "all" || listStatus(item) === query.status) && (!query.from || (!!date && date >= query.from)) && (!query.to || (!!date && date <= query.to));
-  });
-  const name = (r:T) => {const v=r as Record<string,unknown>;return String(v.title || v.name || v.actor || "");};
-  const amount = (r:T) => Number((r as Record<string,unknown>).amount || 0);
-  const currency = (r:T) => String((r as Record<string,unknown>).currency || "");
-  if(query.sort === "name") result.sort((a,b)=>name(a).localeCompare(name(b)));
-  if(query.sort === "name-desc") result.sort((a,b)=>name(b).localeCompare(name(a)));
-  if(query.sort === "newest") result.sort((a,b)=>dateOf(b).localeCompare(dateOf(a)));
-  if(query.sort === "oldest") result.sort((a,b)=>dateOf(a).localeCompare(dateOf(b)));
-  // Amounts in different currencies are not comparable, so each currency is
-  // ranked as its own block instead of being interleaved by raw number.
-  if(query.sort === "amount" || query.sort === "amount-desc") result.sort((a,b)=>currency(a) === currency(b) ? (amount(a)-amount(b))*(query.sort === "amount" ? 1:-1) : currency(a).localeCompare(currency(b)));
-  return result;
+export type SortDirection = "asc" | "desc";
+/** A column sort is stored as `col:<key>:<asc|desc>`. */
+export function columnSort(key: string, direction: SortDirection) { return `col:${key}:${direction}`; }
+/** Reads the active direction for one column, or "" when it is not the sorted column. */
+export function sortDirection(sort: string, key: string): SortDirection | "" {
+  const spec = parseSort(sort);
+  return spec && spec.key === key ? spec.direction : "";
+}
+/** Click order for a header: ascending, then descending, then back to default. */
+export function nextSort(sort: string, key: string) {
+  const current = sortDirection(sort, key);
+  return current === "" ? columnSort(key, "asc") : current === "asc" ? columnSort(key, "desc") : "default";
+}
+
+// The dropdown used by card views writes the same specs as a column header.
+const namedSorts: Record<string,string> = {
+  name: "col:name:asc", "name-desc": "col:name:desc",
+  newest: "col:date:desc", oldest: "col:date:asc",
+  amount: "col:amount:asc", "amount-desc": "col:amount:desc",
+};
+function parseSort(sort: string): { key: string; direction: SortDirection } | null {
+  const spec = namedSorts[sort] || sort;
+  if (!spec.startsWith("col:")) return null;
+  const [, key, direction] = spec.split(":");
+  return key && (direction === "asc" || direction === "desc") ? { key, direction } : null;
+}
+
+function sortValue(item: object, key: string): string | number {
+  const r = item as Record<string,unknown>;
+  if (key === "name") return String(r.title || r.name || r.actor || "");
+  if (key === "date") return listDate(item);
+  const value = r[key];
+  return typeof value === "number" ? value : String(value ?? "");
+}
+
+export function sortComparator<T extends object>(sort: string) {
+  const spec = parseSort(sort);
+  if (!spec) return null;
+  const sign = spec.direction === "asc" ? 1 : -1;
+  return (a: T, b: T) => {
+    // Amounts in different currencies are not comparable, so each currency is
+    // ranked as its own block instead of being interleaved by raw number.
+    if (spec.key === "amount") {
+      const ca = String((a as Record<string,unknown>).currency || ""), cb = String((b as Record<string,unknown>).currency || "");
+      if (ca !== cb) return ca.localeCompare(cb);
+    }
+    const va = sortValue(a, spec.key), vb = sortValue(b, spec.key);
+    if (typeof va === "number" && typeof vb === "number") return (va - vb) * sign;
+    return String(va).localeCompare(String(vb)) * sign;
+  };
 }
 
 /** True when more than one currency is present, so amount ordering needs explaining. */

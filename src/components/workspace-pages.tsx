@@ -13,8 +13,10 @@ import {
   Moon,
   Keyboard,
   ShieldCheck,
+  LogOut,
 } from "lucide-react";
 import { Button, Input, Select, Field } from "./ui/controls";
+import { previewActorKey } from "@/lib/fixtures";
 import { useTheme, setTheme, usePalette, setPalette, palettes } from "./theme-toggle";
 import {
   allowedModules,
@@ -52,9 +54,11 @@ export function PageTitle({
 }
 export function ProfilePage({
   actor,
+  preview,
   onAppearance,
 }: {
   actor: Actor;
+  preview: boolean;
   onAppearance: () => void;
 }) {
   const modules = allowedModules(actor);
@@ -85,6 +89,22 @@ export function ProfilePage({
           <Button className="secondary" onClick={onAppearance}>
             <Sun size={16} />
             Appearance preferences
+          </Button>
+          {/* Every role can reach its profile; Settings is MD and IT only. */}
+          <Button
+            className="secondary"
+            onClick={async () => {
+              if (preview) {
+                localStorage.removeItem(previewActorKey);
+                window.location.href = "/login";
+                return;
+              }
+              const response = await fetch("/api/auth", { method: "DELETE" });
+              if (response.ok) window.location.href = "/login";
+            }}
+          >
+            <LogOut size={16} />
+            {preview ? "Sign out / switch role" : "Sign out"}
           </Button>
         </div>
         <div className="profile-summary">

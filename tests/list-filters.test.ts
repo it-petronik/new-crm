@@ -4,9 +4,10 @@ import {
   queryList,
   emptyQuery,
   searchText,
-  rangeReversed,
   mixedCurrencies,
-  dateField,
+  columnSort,
+  sortDirection,
+  nextSort,
 } from "../src/lib/list-query";
 import { localISO, windowStart } from "../src/lib/domain";
 import { companyName } from "../src/lib/company-name";
@@ -47,24 +48,38 @@ test("amount ordering groups each currency instead of ranking across them", () =
   assert.equal(mixedCurrencies([rows[1], rows[2]]), false);
 });
 
-test("a reversed date range selects nothing rather than dropping a bound", () => {
-  assert.equal(rangeReversed({ from: "2026-09-03", to: "2026-09-01" }), true);
-  assert.equal(rangeReversed({ from: "", to: "2026-09-01" }), false);
-  assert.equal(queryList(rows, { ...emptyQuery, from: "2026-09-03", to: "2026-09-01" }).length, 0);
-  // Records with no date are excluded from a bounded range instead of leaking through.
-  assert.equal(queryList([{ id: "x", title: "no date" }], { ...emptyQuery, from: "2026-01-01" }).length, 0);
-});
-
-test("a list can filter on the date column it actually displays", () => {
-  const byTransaction = dateField("due");
-  const inJan = queryList(rows, { ...emptyQuery, from: "2026-01-01", to: "2026-01-31" }, byTransaction);
-  assert.deepEqual(inJan.map((r) => r.id), ["REC-2"]);
-  // The same range against the creation date matches nothing.
-  assert.equal(queryList(rows, { ...emptyQuery, from: "2026-01-01", to: "2026-01-31" }).length, 0);
+test("column sorting orders by the heading that was clicked", () => {
   assert.deepEqual(
-    queryList(rows, { ...emptyQuery, sort: "oldest" }, byTransaction).map((r) => r.id),
+    queryList(rows, { ...emptyQuery, sort: columnSort("due", "asc") }).map((r) => r.id),
     ["REC-2", "REC-3", "REC-1"],
   );
+  assert.deepEqual(
+    queryList(rows, { ...emptyQuery, sort: columnSort("due", "desc") }).map((r) => r.id),
+    ["REC-1", "REC-3", "REC-2"],
+  );
+  assert.deepEqual(
+    queryList(rows, { ...emptyQuery, sort: columnSort("status", "asc") }).map((r) => r.status),
+    ["Cancelled", "Confirmed", "Confirmed"],
+  );
+  // The creation date still drives newest/oldest for views without columns.
+  assert.deepEqual(
+    queryList(rows, { ...emptyQuery, sort: "newest" }).map((r) => r.id),
+    ["REC-3", "REC-2", "REC-1"],
+  );
+});
+
+test("a column heading cycles ascending, descending, then back to default", () => {
+  assert.equal(nextSort("default", "due"), "col:due:asc");
+  assert.equal(nextSort("col:due:asc", "due"), "col:due:desc");
+  assert.equal(nextSort("col:due:desc", "due"), "default");
+  // Clicking a different column starts that column at ascending.
+  assert.equal(nextSort("col:due:desc", "amount"), "col:amount:asc");
+  assert.equal(sortDirection("col:due:asc", "due"), "asc");
+  assert.equal(sortDirection("col:due:asc", "amount"), "");
+  // The card dropdown writes the same specs, so both stay in step.
+  assert.equal(sortDirection("name", "name"), "asc");
+  assert.equal(sortDirection("amount-desc", "amount"), "desc");
+  assert.equal(sortDirection("default", "name"), "");
 });
 
 test("chart segments are filtered before they are capped at four", () => {

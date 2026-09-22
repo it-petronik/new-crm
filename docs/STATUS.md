@@ -1,5 +1,72 @@
 # Implementation status
 
+## Roles, activity log and table polish (23 September)
+
+- **Preview sign-in with demo roles.** The login page now lists six fictional
+  accounts (MD, Sales, HR, Accounts, Logistics, IT), password `demo1234`, and
+  signs in as that role. This is preview only: the database auth path in
+  `/api/auth` is unchanged and still refuses credential login without a
+  database. Sign out moved from Settings to the profile page, because Settings
+  is reachable only by MD and IT, which left most roles unable to sign out.
+- **Role-scoped dashboard.** Order value, demand rankings and the business
+  performance chart are shown only to roles that work with that data, so an HR
+  or IT sign-in no longer sees the MD's commercial dashboard. The metric grid
+  is hidden entirely when a role has no metrics, instead of leaving a gap.
+- **Activity log is a table.** It filled a fraction of the panel before. It now
+  has Person, What changed, Company and When columns that sort, and each entry
+  opens a dialog with the person, area, change, company, record and full
+  timestamp. The dashboard widget keeps the compact timeline.
+- **Sorting is no longer counted as a filter.** Ordering a column used to make
+  the Filters badge claim an active filter and offer Reset. The badge now
+  counts filters only.
+- **Sort options are per list.** The generic Name A–Z / Z–A choices no longer
+  appear where they mean nothing, such as the audit trail. Tables expose no
+  sort dropdown at all and say to use the column headings.
+- **Created by column** added to the records and cashbook tables, reading the
+  existing record owner, and it sorts like any other column.
+- **Company filter hidden where it changes nothing**: on profile, appearance,
+  shortcuts, access control and self-service, and whenever the signed-in user
+  has only one company.
+- **Notes and errors read as warnings**, not filled cards: an inline amber or
+  red rule and text rather than a bordered panel.
+
+- Verified: TypeScript, 58 unit tests, 73 browser tests and a production build
+  pass. Six new browser checks cover role scoping and sign-out, the filter
+  badge ignoring sort, the Created by column, the activity table and its
+  dialog, and company-filter hiding. Screenshots reviewed for the login page,
+  the sales and HR roles, the activity table and dialog, and the warning style.
+- Preview fixtures only; no database was contacted.
+
+
+## List controls and dashboard period (23 September)
+
+- Table columns now sort. Every heading in the records, cashbook and user
+  tables is a button that cycles ascending, descending, then back to default
+  order, keeping `aria-sort` in step. Only one column is ever marked sorted.
+  Card and grid views have no columns, so they keep the sort dropdown; both
+  write the same sort spec, so the two controls cannot drift apart.
+- Secondary filters moved behind one "Filters" toggle beside the search box,
+  with a badge showing how many are active. The panel opens on its own full
+  width row, so opening it never reflows the bar above it. Reset appears only
+  when something is actually set.
+- The from/to date range was removed from every business list. The supporting
+  query code was removed with it rather than left as an unreachable path, so
+  `ListQuery` is now search, status and sort only.
+- The dashboard period control moved out of its card and sits inline beside the
+  company filter in the page header. Its scope and validation messages are now
+  a plain line above the metrics. Period behaviour itself is unchanged.
+- The dashboard insight panels were briefly grouped into tabs and then reverted
+  at the user's request; that section is unchanged from the previous revision.
+
+- Verified: TypeScript, 58 unit tests, 67 browser tests and a production build
+  pass. New browser coverage asserts that lists offer no date range, that a
+  column heading sorts ascending then descending then clears, that exactly one
+  column reports itself sorted, that the sort dropdown is absent on tables and
+  present on cards, and that the filter toggle is the next stop after search in
+  tab order. Screenshots reviewed in light and dark at 1440px and 390px.
+- Preview fixtures only; no database was contacted.
+
+
 ## Usability and correctness audit (22 September)
 
 Audited every module page, the shared list controls, the dashboard date scope,

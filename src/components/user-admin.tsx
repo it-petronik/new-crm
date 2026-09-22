@@ -1,6 +1,6 @@
 "use client";
 import { companyName } from "@/lib/company-name";
-import { Pagination, ListFilters, ListEmpty, usePagination } from "./pagination";
+import { Pagination, ListFilters, ListEmpty, SortHeader, usePagination } from "./pagination";
 import { useEffect, useState } from "react";
 import { Plus, ShieldCheck, X } from "lucide-react";
 import {
@@ -135,7 +135,7 @@ export default function UserAdmin({
           Add user
         </Button>
       </div>
-      <ListFilters {...pagination} label="users" />
+      <ListFilters {...pagination} label="users" sortable={false} />
       {error && !editor && (
         <p className="error" role="alert">
           {error}
@@ -145,10 +145,10 @@ export default function UserAdmin({
         <table>
           <thead>
             <tr>
-              <th>Person</th>
-              <th>Role</th>
+              <SortHeader sortKey="name" query={pagination.query} setQuery={pagination.setQuery}>Person</SortHeader>
+              <SortHeader sortKey="role" query={pagination.query} setQuery={pagination.setQuery}>Role</SortHeader>
               <th>Companies</th>
-              <th>Status</th>
+              <SortHeader sortKey="active" query={pagination.query} setQuery={pagination.setQuery}>Status</SortHeader>
               <th>Access</th>
             </tr>
           </thead>

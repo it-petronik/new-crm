@@ -8,7 +8,7 @@ import { mutateRecord, deletionReason } from "@/lib/record-mutations";
 import { BrandLogo } from "./brand";
 import DashboardInsights from "./dashboard-insights";
 import { QuotationDocument } from "./quotation-document";
-import { Pagination, ListFilters, ListEmpty, usePagination } from "./pagination";
+import { Pagination, ListFilters, ListEmpty, SortHeader, usePagination } from "./pagination";
 import {
   Button,
   Input,
@@ -54,6 +54,7 @@ import {
   X,
   Monitor,
   CalendarDays,
+  CalendarRange,
   LayoutGrid,
   Filter,
   type LucideIcon,
@@ -85,6 +86,7 @@ import Sidebar from "./sidebar";
 import { Dialog, DialogPresence, DialogActions } from "./ui/controls";
 import ThemeToggle from "./theme-toggle";
 import MyRequests from "./my-requests";
+import { storedPreviewActor, previewActorKey } from "@/lib/fixtures";
 import RecordForm from "./record-form";
 import { recordProfiles, detailFields } from "@/lib/record-profiles";
 import UserAdmin from "./user-admin";
@@ -245,6 +247,13 @@ export default function Workspace({
   preview: boolean;
   initialSelfService?: boolean;
 }) {
+  // Preview signs in through demo accounts, so the acting role comes from the
+  // browser. Read after mount to keep the server and first client render equal.
+  const [previewSignedIn, setPreviewSignedIn] = useState<Actor | null>(null);
+  useEffect(() => {
+    if (preview) setPreviewSignedIn(storedPreviewActor());
+  }, [preview]);
+  actor = preview && previewSignedIn ? previewSignedIn : actor;
   const [selfService, setSelfService] = useState(initialSelfService);
   const [view, setView] = useState<WorkspaceView | null>(null);
   const [commandOpen, setCommandOpen] = useState(false);
@@ -332,6 +341,10 @@ export default function Workspace({
   const [quoteSource, setQuoteSource] = useState<RecordItem | null>(null);
   const [selected, setSelected] = useState<RecordItem | null>(null);
   const [board, setBoard] = useState(true);
+  // Dashboard period lives here so its control can sit beside the company filter.
+  const [period, setPeriod] = useState("all");
+  const [periodFrom, setPeriodFrom] = useState("");
+  const [periodTo, setPeriodTo] = useState("");
   const [filter, setFilter] = useState("All statuses");
   const [notifications, setNotifications] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -847,6 +860,7 @@ export default function Workspace({
               {view === "profile" && (
                 <ProfilePage
                   actor={actor}
+                  preview={preview}
                   onAppearance={() => openView("appearance")}
                 />
               )}
@@ -911,6 +925,29 @@ export default function Workspace({
                   </p>
                 </div>
                 <div className="heading-actions">
+                  {module === "overview" && !selfService && !view && (
+                    <Field className="company-switch period-switch">
+                      <CalendarRange size={16} />
+                      <Select aria-label="Dashboard time range" value={period} onChange={(e) => setPeriod(e.target.value)}>
+                        <option value="all">All time</option>
+                        <option value="1">Today</option>
+                        <option value="7">Last 7 days</option>
+                        <option value="30">Last 30 days</option>
+                        <option value="90">Last 90 days</option>
+                        <option value="365">Last 12 months</option>
+                        <option value="custom">Custom dates</option>
+                      </Select>
+                    </Field>
+                  )}
+                  {module === "overview" && !selfService && !view && period === "custom" && (
+                    <>
+                      <Input type="date" aria-label="Dashboard start date" value={periodFrom} onChange={(e) => setPeriodFrom(e.target.value)} />
+                      <Input type="date" aria-label="Dashboard end date" value={periodTo} onChange={(e) => setPeriodTo(e.target.value)} />
+                    </>
+                  )}
+                  {/* Hidden where it changes nothing: on views that ignore the
+                      company scope, and when there is only one company. */}
+                  {!view && !selfService && actor.companies.length > 1 && (
                   <Field className="company-switch">
                     {company !== "All companies" ? (
                       <BrandLogo company={company} className="switch-logo" />
@@ -937,6 +974,7 @@ export default function Workspace({
                       ))}
                     </Select>
                   </Field>
+                  )}
                   {newLabels[module] &&
                     canWrite(actor, {
                       kind:
@@ -1000,6 +1038,9 @@ export default function Workspace({
                   onSelect={setSelected}
                   go={go}
                   company={company}
+                  period={period}
+                  from={periodFrom}
+                  to={periodTo}
                 />
               ) : module === "approvals" ? (
                 <section className="panel">
@@ -1512,17 +1553,18 @@ function RecordTable({
   const pagination = usePagination(records);
   return (
     <>
-      <ListFilters {...pagination} label="records" />
+      <ListFilters {...pagination} label="records" sortable={false} />
       {pagination.total > 0 && <div className="table-scroll">
         <table>
           <thead>
             <tr>
-              <th>Record / Customer</th>
-              <th>Company</th>
-              <th>Product / Details</th>
-              <th>Value</th>
-              <th>Status</th>
-              <th>Due date</th>
+              <SortHeader sortKey="name" query={pagination.query} setQuery={pagination.setQuery}>Record / Customer</SortHeader>
+              <SortHeader sortKey="company" query={pagination.query} setQuery={pagination.setQuery}>Company</SortHeader>
+              <SortHeader sortKey="product" query={pagination.query} setQuery={pagination.setQuery}>Product / Details</SortHeader>
+              <SortHeader sortKey="amount" query={pagination.query} setQuery={pagination.setQuery}>Value</SortHeader>
+              <SortHeader sortKey="status" query={pagination.query} setQuery={pagination.setQuery}>Status</SortHeader>
+              <SortHeader sortKey="due" query={pagination.query} setQuery={pagination.setQuery}>Due date</SortHeader>
+              <SortHeader sortKey="owner" query={pagination.query} setQuery={pagination.setQuery}>Created by</SortHeader>
               <th>Actions</th>
             </tr>
           </thead>
@@ -1557,6 +1599,7 @@ function RecordTable({
                   <Badge status={r.status} />
                 </td>
                 <td className="muted">{r.due}</td>
+                <td>{r.owner || "—"}</td>
                 <td>
                   <div className="table-record-actions">
                   <RecordIcons record={r} {...actions} />
@@ -1588,6 +1631,9 @@ function Overview({
   onSelect,
   go,
   company,
+  period,
+  from,
+  to,
 }: {
   records: RecordItem[];
   actor: Actor;
@@ -1597,10 +1643,10 @@ function Overview({
   onSelect: (r: RecordItem) => void;
   go: (m: Module, company?: string) => void;
   company: string;
+  period: string;
+  from: string;
+  to: string;
 }) {
-  const [period, setPeriod] = useState("all");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
   const custom = period === "custom";
   const reversed = custom && Boolean(from && to && from > to);
   const incomplete = custom && !(from && to);
@@ -1631,6 +1677,9 @@ function Overview({
     leads.filter((r) => !["Won", "Lost"].includes(r.status)),
   );
   const allowed = allowedModules(actor);
+  // Order value and demand rankings are only shown to roles that work with
+  // that data; HR or IT sign-ins get their own modules instead.
+  const commercial = ["leads", "orders", "quotations"].some((m) => allowed.includes(m as Module));
   const metrics = [
     {
       label: "Open pipeline",
@@ -1674,7 +1723,10 @@ function Overview({
   ].filter((m) => allowed.includes(m.to));
   return (
     <>
-      <div className="dashboard-period"><div><strong>Dashboard period</strong><small>Metrics and charts use record creation date. Daily focus remains current.</small></div><Select aria-label="Dashboard time range" value={period} onChange={e=>setPeriod(e.target.value)}><option value="all">All time</option><option value="1">Today</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last 12 months</option><option value="custom">Custom dates</option></Select>{custom && <><Input type="date" aria-label="Dashboard start date" value={from} onChange={e=>setFrom(e.target.value)}/><Input type="date" aria-label="Dashboard end date" value={to} onChange={e=>setTo(e.target.value)}/></>}{scopeNote && <p className="dashboard-period-note" role={reversed ? "alert" : "status"}>{scopeNote}</p>}</div>
+      <p className="dashboard-scope">
+        <span>Metrics and charts use record creation date. Daily focus remains current.</span>
+        {scopeNote && <span className="dashboard-period-note" role={reversed ? "alert" : "status"}>{scopeNote}</span>}
+      </p>
       <section className="insight-banner">
         <div className="insight-icon">
           <Sparkles size={21} />
@@ -1708,7 +1760,7 @@ function Overview({
           Review actions <ArrowRight size={16} />
         </Button>
       </section>
-      <div className="stats-grid">
+      {metrics.length > 0 && <div className="stats-grid">
         {metrics.map((m) => (
           <Button
             className={`stat-card metric-${m.accent}`}
@@ -1728,10 +1780,12 @@ function Overview({
             </div>
           </Button>
         ))}
-      </div>
-      <DashboardInsights actor={actor} records={records} onSelect={onSelect} />
+      </div>}
+      {commercial && (
+        <DashboardInsights actor={actor} records={records} onSelect={onSelect} />
+      )}
       <div className="overview-grid">
-        <section className="panel performance">
+        {commercial && <section className="panel performance">
           <div className="panel-heading">
             <div>
               <h2>Business performance</h2>
@@ -1821,7 +1875,7 @@ function Overview({
               Open pipeline
             </span>
           </div>
-        </section>
+        </section>}
         <section className="panel attention-panel">
           <div className="panel-heading">
             <div>
@@ -1939,6 +1993,17 @@ function Overview({
     </>
   );
 }
+/** Splits "leads: Quote Sent → Qualified" into a subject and a change. */
+function activityParts(action: string) {
+  const at = action.indexOf(":");
+  if (at < 0) return { area: "", change: action };
+  return { area: action.slice(0, at).trim(), change: action.slice(at + 1).trim() };
+}
+const activityWhen = (at: string) =>
+  new Date(at).toLocaleString("en-GB", {
+    month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+  });
+
 function ActivityList({
   events,
   paginated = true,
@@ -1946,38 +2011,124 @@ function ActivityList({
   events: Audit[];
   paginated?: boolean;
 }) {
-  const pagination = usePagination(events, "", { dateLabel: "event date" });
-  return events.length ? (
-    <>
-      {paginated && <ListFilters {...pagination} label="events" />}
+  const pagination = usePagination(events);
+  const [detail, setDetail] = useState<Audit | null>(null);
+  if (!events.length)
+    return (
+      <Empty
+        title="No activity yet"
+        detail="Authorised activity will appear here."
+      />
+    );
+  // The dashboard widget keeps the compact timeline; the full page uses the
+  // table, which fills the available width and opens each entry.
+  if (!paginated)
+    return (
       <div className="activity-list">
-        {(paginated ? pagination.items : events).map((a) => (
+        {events.map((a) => (
           <div className="activity-item" key={a.id}>
             <span className="activity-dot" />
             <div>
               <b>{a.actor}</b>
               <p>{a.action}</p>
               <small>
-                {companyName(a.company)} ·{" "}
-                {new Date(a.at).toLocaleString("en-GB", {
-                  month: "short",
-                  day: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
+                {companyName(a.company)} · {activityWhen(a.at)}
               </small>
             </div>
           </div>
         ))}
       </div>
-      {paginated && <ListEmpty {...pagination} label="events" />}
-      {paginated && <Pagination {...pagination} label="events" />}
+    );
+  return (
+    <>
+      <ListFilters {...pagination} label="events" sortable={false} />
+      {pagination.total > 0 && (
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <SortHeader sortKey="actor" query={pagination.query} setQuery={pagination.setQuery}>Person</SortHeader>
+                <SortHeader sortKey="action" query={pagination.query} setQuery={pagination.setQuery}>What changed</SortHeader>
+                <SortHeader sortKey="company" query={pagination.query} setQuery={pagination.setQuery}>Company</SortHeader>
+                <SortHeader sortKey="at" query={pagination.query} setQuery={pagination.setQuery}>When</SortHeader>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pagination.items.map((a) => {
+                const { area, change } = activityParts(a.action);
+                return (
+                  <tr key={a.id}>
+                    <td>
+                      <Button className="record-link" onClick={() => setDetail(a)}>
+                        {a.actor}
+                        <small>{a.recordId}</small>
+                      </Button>
+                    </td>
+                    <td>
+                      <span className="truncate">{change}</span>
+                      {area && <small>{labels[area as Module] || area}</small>}
+                    </td>
+                    <td>
+                      <Company name={a.company} />
+                    </td>
+                    <td className="muted">{activityWhen(a.at)}</td>
+                    <td>
+                      <div className="table-record-actions">
+                        <Button
+                          className="icon-button"
+                          aria-label={`Open activity by ${a.actor}`}
+                          onClick={() => setDetail(a)}
+                        >
+                          <ArrowUpRight size={16} />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <ListEmpty {...pagination} label="events" />
+      <Pagination {...pagination} label="events" />
+      <DialogPresence>
+        {detail && (
+          <Dialog
+            title="Activity detail"
+            className="record-detail-dialog"
+            onClose={() => setDetail(null)}
+          >
+            <p className="detail-summary">
+              <strong>{detail.actor}</strong> {activityParts(detail.action).change}
+            </p>
+            <dl className="detail-grid">
+              {([
+                ["Person", detail.actor],
+                // Only present when the action names an area, e.g. "leads: …".
+                ...(activityParts(detail.action).area
+                  ? [["Area", labels[activityParts(detail.action).area as Module] || activityParts(detail.action).area]]
+                  : []),
+                ["Change", activityParts(detail.action).change],
+                ["Company", companyName(detail.company)],
+                ["Record", detail.recordId || "—"],
+                ["When", new Date(detail.at).toLocaleString("en-GB", { dateStyle: "full", timeStyle: "short" })],
+              ] as [string, string][]).map(([term, value]) => (
+                <div key={term}>
+                  <dt>{term}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+            <p className="muted small">
+              Audit entries are a record of what changed. They cannot be edited
+              or removed.
+            </p>
+          </Dialog>
+        )}
+      </DialogPresence>
     </>
-  ) : (
-    <Empty
-      title="No activity yet"
-      detail="Authorised activity will appear here."
-    />
   );
 }
 function Detail({
@@ -2201,18 +2352,6 @@ function Settings({ actor, preview }: { actor: Actor; preview: boolean }) {
             <dt>Environment</dt>
             <dd>{preview ? "Fictional preview" : "MySQL workspace"}</dd>
           </dl>
-          {!preview && (
-            <Button
-              className="secondary"
-              onClick={async () => {
-                const response = await fetch("/api/auth", { method: "DELETE" });
-                if (response.ok) window.location.href = "/login";
-              }}
-            >
-              <LogOut size={16} />
-              Sign out
-            </Button>
-          )}
           <p className="small muted">
             MD and IT can provision accounts above. Leadership access requires
             the MD. Deactivation revokes active sessions.

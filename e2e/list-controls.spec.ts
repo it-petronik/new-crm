@@ -23,14 +23,10 @@ test("filters, list and pagination share one visual and keyboard order", async (
   expect(filters.y).toBeLessThan(table.y);
   expect(table.y).toBeLessThan(pager.y);
 
-  // Tabbing forward from the search box reaches the sort control before the table.
+  // Tabbing forward from the search box reaches the filter toggle before the table.
   await page.getByRole("textbox", { name: "Search records", exact: true }).focus();
-  const reached: string[] = [];
-  for (let i = 0; i < 6; i++) {
-    await page.keyboard.press("Tab");
-    reached.push(await page.evaluate(() => document.activeElement?.getAttribute("aria-label") || ""));
-  }
-  expect(reached).toContain("Sort records");
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: /^Filters/ })).toBeFocused();
   await page.screenshot({ path: info.outputPath("list-controls.png"), animations: "disabled" });
 });
 
@@ -47,31 +43,51 @@ test("a filtered-out list explains itself and resets", async ({ page }) => {
   await expect(page.locator(".list-empty")).toBeHidden();
 });
 
-test("a reversed date range is reported instead of silently returning nothing", async ({ page }) => {
+test("business lists offer no date range and sort from column headings", async ({ page }) => {
   await page.goto("/workspace/all-companies/sales-orders");
   await page.locator(".records-panel .table-scroll").waitFor();
-  await page.getByRole("button", { name: "records from record date", exact: true }).click();
-  await page.getByRole("button", { name: "Today", exact: true }).click();
-  await page.getByRole("button", { name: "records to record date", exact: true }).click();
-  // Pick the 15th of last month, which always precedes today.
-  const popover = page.locator(".ui-calendar-popover").last();
-  await popover.getByRole("button", { name: "Go to the Previous Month" }).click();
-  const last = new Date();
-  last.setDate(1);
-  last.setMonth(last.getMonth() - 1);
-  const day = `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, "0")}-15`;
-  await popover.locator(`td[data-day="${day}"] button`).click();
-  await expect(page.locator(".list-query-controls p[role='alert']")).toContainText("before the start record date");
-  await expect(page.locator(".list-empty")).toBeVisible();
+  // Date range inputs were removed from business lists.
+  await expect(page.getByRole("button", { name: /record date/ })).toHaveCount(0);
+  await page.getByRole("button", { name: /^Filters/ }).click();
+  await expect(page.getByRole("combobox", { name: "Sort records", exact: true })).toHaveCount(0);
+  await expect(page.locator(".list-query-panel")).toContainText("Select a column heading to sort");
+
+  const header = page.getByRole("columnheader", { name: /Value/ });
+  await expect(header).toHaveAttribute("aria-sort", "none");
+  await header.getByRole("button").click();
+  await expect(header).toHaveAttribute("aria-sort", "ascending");
+  const asc = await page.locator(".records-panel td.amount").allInnerTexts();
+  const ascNumbers = asc.map((a) => Number(a.replace(/[^0-9.]/g, "")));
+  expect(ascNumbers).toEqual([...ascNumbers].sort((a, b) => a - b));
+
+  await header.getByRole("button").click();
+  await expect(header).toHaveAttribute("aria-sort", "descending");
+  const desc = await page.locator(".records-panel td.amount").allInnerTexts();
+  const descNumbers = desc.map((a) => Number(a.replace(/[^0-9.]/g, "")));
+  expect(descNumbers).toEqual([...descNumbers].sort((a, b) => b - a));
+
+  // A third click returns the table to its default order.
+  await header.getByRole("button").click();
+  await expect(header).toHaveAttribute("aria-sort", "none");
+});
+
+test("only one column reports itself as sorted", async ({ page }) => {
+  await page.goto("/workspace/all-companies/sales-orders");
+  await page.locator(".records-panel .table-scroll").waitFor();
+  await page.getByRole("columnheader", { name: /Value/ }).getByRole("button").click();
+  await page.getByRole("columnheader", { name: /Company/ }).getByRole("button").click();
+  await expect(page.getByRole("columnheader", { name: /Value/ })).toHaveAttribute("aria-sort", "none");
+  await expect(page.getByRole("columnheader", { name: /Company/ })).toHaveAttribute("aria-sort", "ascending");
+  expect(await page.locator('th[aria-sort="ascending"], th[aria-sort="descending"]').count()).toBe(1);
 });
 
 test("single-currency data is sorted without a misleading currency note", async ({ page }) => {
   // Preview records are all USD, so the cross-currency caveat must stay hidden.
   await page.goto("/workspace/all-companies/sales-orders");
   await page.locator(".records-panel .table-scroll").waitFor();
-  await page.getByRole("combobox", { name: "Sort records", exact: true }).click();
-  await page.getByRole("option", { name: "Amount high–low", exact: true }).click();
-  await expect(page.locator(".list-query-message")).toHaveCount(0);
+  await page.getByRole("columnheader", { name: /Value/ }).getByRole("button").click();
+  await page.getByRole("columnheader", { name: /Value/ }).getByRole("button").click();
+  await expect(page.locator(".list-query-message[role='status']")).toHaveCount(0);
   const amounts = await page.locator(".records-panel td.amount").allInnerTexts();
   const numeric = amounts.map((a) => Number(a.replace(/[^0-9.]/g, ""))).filter((n) => n > 0);
   expect(numeric).toEqual([...numeric].sort((a, b) => b - a));
@@ -86,7 +102,7 @@ test("the cashbook filters on the transaction date it displays", async ({ page }
   await page.getByRole("button", { name: "Save record", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeHidden();
   await expect(page.locator(".cashbook-panel thead")).toContainText("Transaction date");
-  await expect(page.getByRole("button", { name: "entries from transaction date", exact: true })).toBeVisible();
+  await expect(page.locator(".cashbook-panel").getByRole("columnheader", { name: /Transaction date/ })).toHaveAttribute("aria-sort", "none");
   // The cashbook must not offer a second search box beside the shared one.
   await expect(page.locator(".cashbook-panel").getByRole("textbox", { name: /Search/ })).toHaveCount(1);
 });
@@ -140,6 +156,7 @@ test("a list offers exactly one status filter", async ({ page }) => {
   await page.locator(".records-panel .table-scroll").waitFor();
   // The toolbar control used to sit alongside the shared filter row.
   await expect(page.getByRole("combobox", { name: "Filter by status" })).toHaveCount(0);
+  await page.getByRole("button", { name: /^Filters/ }).click();
   await expect(page.getByRole("combobox", { name: "records status", exact: true })).toHaveCount(1);
   await expect(page.locator(".records-panel").getByRole("textbox", { name: /Search records/ })).toHaveCount(1);
 });

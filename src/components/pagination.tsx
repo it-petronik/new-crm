@@ -1,21 +1,19 @@
 "use client";
-import { useState } from "react";
-import { ChevronLeft, ChevronRight, SearchX } from "lucide-react";
+import { useState, useId, type ReactNode } from "react";
+import { ChevronLeft, ChevronRight, SearchX, SlidersHorizontal, ArrowUp, ArrowDown, ChevronsUpDown } from "lucide-react";
 import { Button, Select, Input } from "./ui/controls";
-import { emptyQuery, queryList, listStatus, listDate, rangeReversed, mixedCurrencies, type DateOf } from "@/lib/list-query";
+import { emptyQuery, queryList, listStatus, mixedCurrencies, sortDirection, nextSort, type ListQuery } from "@/lib/list-query";
 import { pageWindow } from "@/lib/pagination";
 
 export function usePagination<T extends { id: string }>(
   items: T[],
   filterKey = "",
-  options: { dateOf?: DateOf; dateLabel?: string } = {},
 ) {
-  const dateOf = options.dateOf || listDate;
   const [size, setSize] = useState(10);
   const [query, setQuery] = useState(emptyQuery);
   const source = items;
   // The complete permitted set is filtered and sorted before any page is cut.
-  items = queryList(items, query, dateOf);
+  items = queryList(items, query);
   const [state, setState] = useState({ key: "", page: 1 });
   // Changing a filter, sort or scope restarts at page one; a changed result
   // count is clamped by pageWindow so editing a record does not lose your page.
@@ -28,8 +26,6 @@ export function usePagination<T extends { id: string }>(
   return {
     query, setQuery,
     statuses: [...new Set(source.map(listStatus).filter(Boolean))].sort(),
-    dated: source.some(item => Boolean(dateOf(item))),
-    dateLabel: options.dateLabel || "record date",
     valued: source.some(item => "amount" in item),
     mixedCurrency: mixedCurrencies(source),
     sourceTotal: source.length,
@@ -48,34 +44,81 @@ type ListControls = ReturnType<typeof usePagination> & { label?: string };
 
 /**
  * Rendered directly above its list so the visual and keyboard order match.
- * These belong to business lists only, never to printable document line items.
+ * Secondary filters sit behind one toggle to keep the bar compact; tables sort
+ * from their column headers instead of a dropdown. These belong to business
+ * lists only, never to printable document line items.
  */
+export const sortChoices = {
+  name: { value: "name", label: "Name A\u2013Z" },
+  nameDesc: { value: "name-desc", label: "Name Z\u2013A" },
+  newest: { value: "col:date:desc", label: "Newest first" },
+  oldest: { value: "col:date:asc", label: "Oldest first" },
+  amountDesc: { value: "amount-desc", label: "Amount high\u2013low" },
+  amountAsc: { value: "amount", label: "Amount low\u2013high" },
+} as const;
+type SortChoice = { value: string; label: string };
+
 export function ListFilters({
-  query, setQuery, statuses, dated, valued, mixedCurrency, dateLabel, label = "results",
-}: ListControls) {
-  const reversed = rangeReversed(query);
-  const dateField = dateLabel;
+  query, setQuery, statuses, valued, mixedCurrency, label = "results", sortable = true,
+  sortOptions,
+}: ListControls & { sortable?: boolean; sortOptions?: SortChoice[] }) {
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
+  // Sorting is an ordering, not a filter, so it never counts towards the badge.
+  const active = query.status !== "all" ? 1 : 0;
+  const sorts: SortChoice[] = sortOptions || [
+    sortChoices.name, sortChoices.nameDesc, sortChoices.newest, sortChoices.oldest,
+    ...(valued ? [sortChoices.amountDesc, sortChoices.amountAsc] : []),
+  ];
   return (
     <div className="list-query-controls" role="search" aria-label={`Filter and sort ${label}`}>
-      <label>Search
-        <Input aria-label={`Search ${label}`} placeholder={`Search ${label}…`} value={query.search} onChange={e=>setQuery({...query,search:e.target.value})}/>
-      </label>
-      {statuses.length > 0 && <label>Status
-        <Select aria-label={`${label} status`} value={query.status} onChange={e=>setQuery({...query,status:e.target.value})}><option value="all">All statuses</option>{statuses.map(s=><option key={s}>{s}</option>)}</Select>
-      </label>}
-      <label>Sort by
-        <Select aria-label={`Sort ${label}`} value={query.sort} onChange={e=>setQuery({...query,sort:e.target.value})}><option value="default">Default order</option><option value="name">Name A–Z</option><option value="name-desc">Name Z–A</option>{dated && <option value="newest">Newest first</option>}{dated && <option value="oldest">Oldest first</option>}{valued && <option value="amount-desc">Amount high–low</option>}{valued && <option value="amount">Amount low–high</option>}</Select>
-      </label>
-      {dated && <label>{`From (${dateField})`}
-        <Input type="date" aria-label={`${label} from ${dateField}`} value={query.from} onChange={e=>setQuery({...query,from:e.target.value})}/>
-      </label>}
-      {dated && <label>{`To (${dateField})`}
-        <Input type="date" aria-label={`${label} to ${dateField}`} value={query.to} onChange={e=>setQuery({...query,to:e.target.value})}/>
-      </label>}
-      <Button className="secondary list-query-reset" onClick={()=>setQuery(emptyQuery)}>Reset filters</Button>
-      {reversed && <p className="list-query-message" role="alert">The end {dateField} is before the start {dateField}, so no {label} can match. Adjust either date or reset the filters.</p>}
-      {!reversed && mixedCurrency && query.sort.startsWith("amount") && <p className="list-query-message" role="status">Amounts are grouped by currency; values in different currencies are not converted or ranked against each other.</p>}
+      <Input className="list-query-search" aria-label={`Search ${label}`} placeholder={`Search ${label}…`} value={query.search} onChange={e=>setQuery({...query,search:e.target.value})}/>
+      <Button
+        className={`secondary list-query-toggle${open ? " is-open" : ""}`}
+        aria-expanded={open}
+        aria-controls={panelId}
+        onClick={()=>setOpen(!open)}
+      >
+        <SlidersHorizontal size={15} aria-hidden="true" />
+        Filters
+        {active > 0 && <span className="list-query-count" aria-label={`${active} active`}>{active}</span>}
+      </Button>
+      {(active > 0 || query.search) && <Button className="secondary list-query-reset" onClick={()=>{setQuery(emptyQuery);}}>Reset</Button>}
+      <div id={panelId} className="list-query-panel" hidden={!open}>
+        {statuses.length > 0 && <label>Status
+          <Select aria-label={`${label} status`} value={query.status} onChange={e=>setQuery({...query,status:e.target.value})}><option value="all">All statuses</option>{statuses.map(s=><option key={s}>{s}</option>)}</Select>
+        </label>}
+        {sortable && sorts.length > 0 && <label>Sort by
+          <Select aria-label={`Sort ${label}`} value={query.sort} onChange={e=>setQuery({...query,sort:e.target.value})}>
+            <option value="default">Default order</option>
+            {sorts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </Select>
+        </label>}
+        {!sortable && <p className="list-query-message">Select a column heading to sort this table.</p>}
+        {mixedCurrency && query.sort.includes("amount") && <p className="list-query-message" role="status">Amounts are grouped by currency; values in different currencies are not converted or ranked against each other.</p>}
+      </div>
     </div>
+  );
+}
+
+/** A table heading that sorts its column. Keeps aria-sort in step with the query. */
+export function SortHeader({
+  children, sortKey, query, setQuery, className,
+}: {
+  children: ReactNode;
+  sortKey: string;
+  query: ListQuery;
+  setQuery: (q: ListQuery) => void;
+  className?: string;
+}) {
+  const direction = sortDirection(query.sort, sortKey);
+  return (
+    <th className={className} aria-sort={direction === "asc" ? "ascending" : direction === "desc" ? "descending" : "none"}>
+      <button type="button" className="column-sort" onClick={() => setQuery({ ...query, sort: nextSort(query.sort, sortKey) })}>
+        {children}
+        {direction === "asc" ? <ArrowUp size={13} aria-hidden="true" /> : direction === "desc" ? <ArrowDown size={13} aria-hidden="true" /> : <ChevronsUpDown size={13} className="column-sort-idle" aria-hidden="true" />}
+      </button>
+    </th>
   );
 }
 
