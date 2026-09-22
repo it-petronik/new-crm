@@ -2,6 +2,7 @@
 
 import React, {
   Children,
+  Fragment,
   cloneElement,
   forwardRef,
   isValidElement,
@@ -103,22 +104,30 @@ export function Select({
   id,
   ...props
 }: React.SelectHTMLAttributes<HTMLSelectElement>) {
-  const options: Option[] = Children.toArray(children)
-    .filter(isValidElement)
-    .map((child) => {
+  // Options may arrive wrapped in fragments or nested arrays when a caller
+  // builds them conditionally, so the tree is flattened before it is read.
+  const collect = (nodes: ReactNode, into: Option[]) => {
+    Children.toArray(nodes).forEach((child) => {
+      if (!isValidElement(child)) return;
       const p = (
         child as React.ReactElement<{
           value?: string;
-          children: ReactNode;
+          children?: ReactNode;
           disabled?: boolean;
         }>
       ).props;
-      return {
-        value: String(p.value ?? p.children),
-        label: p.children,
-        disabled: p.disabled,
-      };
+      if (child.type === Fragment) {
+        collect(p.children, into);
+        return;
+      }
+      const value = String(p.value ?? p.children ?? "");
+      // Radix rejects an empty item value; such an option cannot be selected.
+      if (!value) return;
+      into.push({ value, label: p.children, disabled: p.disabled });
     });
+  };
+  const options: Option[] = [];
+  collect(children, options);
   const initial = String(defaultValue ?? options[0]?.value ?? "");
   const [internal, setInternal] = useState(initial);
   const trigger = useRef<HTMLButtonElement>(null);

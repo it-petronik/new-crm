@@ -26,6 +26,7 @@ import { recordProfiles, recordFieldValue } from "@/lib/record-profiles";
 import { amountInWords, quotationError } from "@/lib/quotation";
 import { fieldWidth, quoteSection, quoteSections } from "@/lib/form-layout";
 import { cashEntryProfile } from "@/lib/record-profiles";
+import { salaryAttributes } from "@/lib/salary";
 import { isCashEntry } from "@/lib/cashbook";
 export default function RecordForm({
   initial,
@@ -180,7 +181,9 @@ export default function RecordForm({
               .filter((f) => f.name.startsWith("attributes."))
               .map((f) => [f.name.slice(11), str(f.name)]),
           );
-          if (kind === "hr") attributes.monthlySalary = String((Math.round(Number(attributes.basicSalary || 0) * 100) + Math.round(Number(attributes.allowance || 0) * 100)) / 100);
+          // Preview shares the server's derivation and validation rather than
+          // repeating the arithmetic with no checks.
+          if (kind === "hr") Object.assign(attributes, salaryAttributes(attributes));
           const error =
             quoteEditor
               ? quotationError(lines, attributes.issuedDate, str("due"))

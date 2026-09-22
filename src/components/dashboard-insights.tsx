@@ -1,7 +1,7 @@
 "use client";
 import { companyName } from "@/lib/company-name";
 import { useState } from "react";
-import { InsightChart } from "./insight-chart";
+import { InsightChart, chartSegments } from "./insight-chart";
 import {
   BarChart3,
   ArrowUpRight,
@@ -47,7 +47,7 @@ function RankingPanel({
               variant={demand ? "columns" : "donut"}
             />
           )}
-          {(!chart || rows.slice(0,4).filter(r => (demand ? r.count : r.value) > 0).length < 2) && <ol>
+          {(!chart || !chartSegments(rows, demand ? "count" : "value").length) && <ol>
             {rows.slice(0, 4).map((r, i) => (
               <li key={r.name}>
                 <span className="rank-number">{i + 1}</span>
@@ -197,12 +197,14 @@ export default function DashboardInsights({
             </div>
           ) : (
             <p className="insight-empty">
-              No destination countries recorded for these orders yet. Add the
-              destination country when preparing a quotation; it carries through
-              to the sales order.
+              {data.missingCountry > 0
+                ? `${data.missingCountry} ${data.missingCountry === 1 ? "order has" : "orders have"} no destination country, so nothing can be ranked here. `
+                : "There is nothing to rank by destination country yet. "}
+              Add the destination country when preparing a quotation; it carries
+              through to the sales order. Port names are not guessed.
             </p>
           )}
-          {data.missingCountry > 0 && (
+          {data.missingCountry > 0 && data.countries.length > 0 && (
             <p className="insight-empty">
               {data.missingCountry}{" "}
               {data.missingCountry === 1 ? "order is" : "orders are"} excluded
@@ -236,7 +238,7 @@ export default function DashboardInsights({
           {data.people.length ? (
             <>
               <InsightChart rows={data.people} currency={currency} />
-              <ol>
+              {!chartSegments(data.people).length && <ol>
                 {data.people.slice(0, 4).map((p, i) => (
                   <li key={p.name + i}>
                     <span className="rank-number">{i + 1}</span>
@@ -251,7 +253,7 @@ export default function DashboardInsights({
                     </div>
                   </li>
                 ))}
-              </ol>
+              </ol>}
             </>
           ) : (
             <p className="insight-empty">No attributed orders yet.</p>

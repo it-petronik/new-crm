@@ -1,6 +1,6 @@
 "use client";
 import { companyName } from "@/lib/company-name";
-import { Pagination, usePagination } from "./pagination";
+import { Pagination, ListFilters, ListEmpty, usePagination } from "./pagination";
 import {
   Button,
   Input,
@@ -242,6 +242,7 @@ export default function MyRequests({
             <h2>Your request history</h2>
             <span className="count">{records.length}</span>
           </div>
+          {records.length > 0 && <ListFilters {...pagination} label="requests" />}
           {records.length ? (
             pagination.items.map((r) => (
               <div className="settings-row" key={r.id}>
@@ -265,6 +266,7 @@ export default function MyRequests({
               <p>Your submitted requests and decisions will appear here.</p>
             </div>
           )}
+          {records.length > 0 && <ListEmpty {...pagination} label="requests" />}
           <Pagination {...pagination} label="requests" />
         </section>
       </div>

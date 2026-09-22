@@ -8,7 +8,7 @@ import { mutateRecord, deletionReason } from "@/lib/record-mutations";
 import { BrandLogo } from "./brand";
 import DashboardInsights from "./dashboard-insights";
 import { QuotationDocument } from "./quotation-document";
-import { Pagination, usePagination } from "./pagination";
+import { Pagination, ListFilters, ListEmpty, usePagination } from "./pagination";
 import {
   Button,
   Input,
@@ -65,10 +65,12 @@ import {
   canManageUsers,
   companies,
   labels,
+  localISO,
   money,
   outstanding,
   scopedWorkspace,
   stages,
+  windowStart,
   type Actor,
   type Audit,
   type Kind,
@@ -507,10 +509,13 @@ export default function Workspace({
   };
   const activeKind =
     module === "hr" ? (hrTab === "people" ? "hr" : "leave") : module;
+  // The kanban board has no shared filter row, so it keeps its own status
+  // control; every other view uses the filter row above its list instead.
+  const kanbanView = module === "leads" && board;
   const visible = records.filter(
     (r) =>
       r.kind === activeKind && !isCashEntry(r) &&
-      (filter === "All statuses" || r.status === filter) &&
+      (!kanbanView || filter === "All statuses" || r.status === filter) &&
       `${r.title} ${r.product} ${r.contact} ${r.id} ${r.owner}`
         .toLowerCase()
         .includes(search.toLowerCase()),
@@ -1136,6 +1141,7 @@ export default function Workspace({
                         )}
                       </div>
                       <div className="toolbar-actions">
+                        {kanbanView && (
                         <Field className="status-filter">
                           <Filter size={14} />
                           <Select
@@ -1149,6 +1155,7 @@ export default function Workspace({
                             ))}
                           </Select>
                         </Field>
+                        )}
                         {(module === "leads" ||
                           cardModules.includes(module)) && (
                           <div className="segmented">
@@ -1421,6 +1428,7 @@ function RecordCards({
   const pagination = usePagination(records);
   return (
     <>
+      <ListFilters {...pagination} label="records" />
       <div className="record-grid">
         {pagination.items.map((r) => {
           const Icon =
@@ -1488,6 +1496,7 @@ function RecordCards({
           );
         })}
       </div>
+      <ListEmpty {...pagination} label="records" />
       <Pagination {...pagination} label="records" />
     </>
   );
@@ -1503,7 +1512,8 @@ function RecordTable({
   const pagination = usePagination(records);
   return (
     <>
-      <div className="table-scroll">
+      <ListFilters {...pagination} label="records" />
+      {pagination.total > 0 && <div className="table-scroll">
         <table>
           <thead>
             <tr>
@@ -1563,7 +1573,8 @@ function RecordTable({
             ))}
           </tbody>
         </table>
-      </div>
+      </div>}
+      <ListEmpty {...pagination} label="records" />
       <Pagination {...pagination} label="records" />
     </>
   );
@@ -1590,10 +1601,19 @@ function Overview({
   const [period, setPeriod] = useState("all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const today = new Date();
-  const lower = period === "custom" ? from : period === "all" ? "" : new Date(today.getTime() - (Number(period) - 1) * 86400000).toISOString().slice(0,10);
-  const upper = period === "custom" ? to : period === "all" ? "" : today.toISOString().slice(0,10);
-  const records = allRecords.filter(r => (!lower || r.createdAt.slice(0,10) >= lower) && (!upper || r.createdAt.slice(0,10) <= upper));
+  const custom = period === "custom";
+  const reversed = custom && Boolean(from && to && from > to);
+  const incomplete = custom && !(from && to);
+  const lower = custom ? from : period === "all" ? "" : windowStart(Number(period));
+  const upper = custom ? to : period === "all" ? "" : localISO(new Date());
+  const records = reversed ? [] : allRecords.filter(r => (!lower || r.createdAt.slice(0,10) >= lower) && (!upper || r.createdAt.slice(0,10) <= upper));
+  const scopeNote = reversed
+    ? "The end date is before the start date, so no records are in scope. Adjust either date."
+    : incomplete
+      ? `Choose both a start and an end date. Until then ${from || to ? "only one bound is applied" : "all dates are included"}.`
+      : records.length === 0
+        ? "No records were created in this period. Choose a wider range to see metrics and charts."
+        : "";
   const leads = records.filter((r) => r.kind === "leads");
   const orders = records.filter(
     (r) =>
@@ -1615,7 +1635,7 @@ function Overview({
     {
       label: "Open pipeline",
       value: shortMoney(pipeline),
-      sub: `${leads.filter((r) => !["Won", "Lost"].includes(r.status)).length} active opportunities`,
+      sub: `${leads.filter((r) => !["Won", "Lost"].includes(r.status)).length} active opportunities · USD value only`,
       icon: Target,
       to: "leads" as Module,
       accent: "mint",
@@ -1623,7 +1643,7 @@ function Overview({
     {
       label: "Confirmed orders",
       value: shortMoney(usd(orders)),
-      sub: `${orders.length} orders in your workspace`,
+      sub: `${orders.length} orders in your workspace · USD value only`,
       icon: Package,
       to: "orders" as Module,
       accent: "blue",
@@ -1646,7 +1666,7 @@ function Overview({
           )
           .reduce((sum, r) => sum + outstanding(r), 0),
       ),
-      sub: `${invoices.filter((r) => r.status === "Overdue").length} overdue invoices`,
+      sub: `${invoices.filter((r) => r.status === "Overdue").length} overdue invoices · USD value only`,
       icon: Wallet,
       to: "accounts" as Module,
       accent: "gold",
@@ -1654,7 +1674,7 @@ function Overview({
   ].filter((m) => allowed.includes(m.to));
   return (
     <>
-      <div className="dashboard-period"><div><strong>Dashboard period</strong><small>Metrics and charts use record creation date. Daily focus remains current.</small></div><Select aria-label="Dashboard time range" value={period} onChange={e=>setPeriod(e.target.value)}><option value="all">All time</option><option value="1">Today</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last 12 months</option><option value="custom">Custom dates</option></Select>{period === "custom" && <><Input type="date" aria-label="Dashboard start date" value={from} onChange={e=>setFrom(e.target.value)}/><Input type="date" aria-label="Dashboard end date" min={from} value={to} onChange={e=>setTo(e.target.value)}/></>}{from && to && from > to && period === "custom" && <span role="alert">Start date must be before end date.</span>}</div>
+      <div className="dashboard-period"><div><strong>Dashboard period</strong><small>Metrics and charts use record creation date. Daily focus remains current.</small></div><Select aria-label="Dashboard time range" value={period} onChange={e=>setPeriod(e.target.value)}><option value="all">All time</option><option value="1">Today</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last 12 months</option><option value="custom">Custom dates</option></Select>{custom && <><Input type="date" aria-label="Dashboard start date" value={from} onChange={e=>setFrom(e.target.value)}/><Input type="date" aria-label="Dashboard end date" value={to} onChange={e=>setTo(e.target.value)}/></>}{scopeNote && <p className="dashboard-period-note" role={reversed ? "alert" : "status"}>{scopeNote}</p>}</div>
       <section className="insight-banner">
         <div className="insight-icon">
           <Sparkles size={21} />
@@ -1926,9 +1946,10 @@ function ActivityList({
   events: Audit[];
   paginated?: boolean;
 }) {
-  const pagination = usePagination(events);
+  const pagination = usePagination(events, "", { dateLabel: "event date" });
   return events.length ? (
     <>
+      {paginated && <ListFilters {...pagination} label="events" />}
       <div className="activity-list">
         {(paginated ? pagination.items : events).map((a) => (
           <div className="activity-item" key={a.id}>
@@ -1949,6 +1970,7 @@ function ActivityList({
           </div>
         ))}
       </div>
+      {paginated && <ListEmpty {...pagination} label="events" />}
       {paginated && <Pagination {...pagination} label="events" />}
     </>
   ) : (

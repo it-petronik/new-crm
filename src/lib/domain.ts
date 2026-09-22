@@ -274,6 +274,19 @@ export function canApprove(actor: Actor, r: RecordItem) {
           )))
   );
 }
+/**
+ * Local calendar date. toISOString() reports the UTC day, which shifted every
+ * dashboard range by one day for anyone east or west of UTC.
+ */
+export const localISO = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+/** First day of a window of `days` ending today, counted on the local calendar. */
+export function windowStart(days: number) {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - (days - 1));
+  return localISO(start);
+}
 export const money = (n: number, currency = "USD") =>
   new Intl.NumberFormat("en-US", {
     style: "currency",

@@ -1,6 +1,6 @@
 "use client";
 import { companyName } from "@/lib/company-name";
-import { Pagination, usePagination } from "./pagination";
+import { Pagination, ListFilters, ListEmpty, usePagination } from "./pagination";
 import { useEffect, useState } from "react";
 import { Plus, ShieldCheck, X } from "lucide-react";
 import {
@@ -35,7 +35,6 @@ export default function UserAdmin({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
-  const [query, setQuery] = useState("");
   const [review, setReview] = useState(false);
   const key = `enercore-user-preview-${actor.id}`;
   async function load() {
@@ -93,14 +92,7 @@ export default function UserAdmin({
   const editable = (user: User) =>
     user.id !== actor.id &&
     (actor.role === "MD" || !leadership.includes(user.role));
-  const pagination = usePagination(
-    users.filter((u) =>
-      `${u.name} ${u.email} ${u.role} ${u.companies.join(" ")}`
-        .toLowerCase()
-        .includes(query.toLowerCase()),
-    ),
-    query,
-  );
+  const pagination = usePagination(users);
   if (!canManageUsers(actor))
     return (
       <div className="error">
@@ -143,14 +135,7 @@ export default function UserAdmin({
           Add user
         </Button>
       </div>
-      <div className="access-search">
-        <Input
-          aria-label="Search users"
-          placeholder="Find a person, role or company…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-      </div>
+      <ListFilters {...pagination} label="users" />
       {error && !editor && (
         <p className="error" role="alert">
           {error}
@@ -243,6 +228,7 @@ export default function UserAdmin({
           </tbody>
         </table>
       </div>
+      <ListEmpty {...pagination} label="users" />
       <Pagination {...pagination} label="users" />
       </>}
       <DialogPresence>

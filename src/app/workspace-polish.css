@@ -5,26 +5,34 @@
 :root[data-palette="rose"] { --brand-action:#be123c; --brand-hover:#9f1239; --brand-soft:#fff1f2; --brand-text:#9f1239; --brand-highlight:#fb7185; }
 :root[data-palette="slate"] { --brand-action:#475569; --brand-hover:#334155; --brand-soft:#f1f5f9; --brand-text:#334155; --brand-highlight:#cbd5e1; }
 @media screen {
+  /* Filters, list and pagination are rendered in this order in the markup, so
+     visual order and tab order agree without any CSS reordering. */
   .records-panel, .filterable-table-panel, .cashbook-panel { display:flex; flex-direction:column; }
-  :is(.records-panel,.filterable-table-panel,.cashbook-panel) > .collection-controls { display:contents; }
-  :is(.records-panel,.filterable-table-panel,.cashbook-panel) > .collection-controls > .list-query-controls { order:1; }
-  :is(.records-panel,.filterable-table-panel,.cashbook-panel) > :is(.table-scroll,.record-grid,.kanban) { order:2; }
-  :is(.records-panel,.filterable-table-panel,.cashbook-panel) > .collection-controls > .pagination { order:3; }
+  .list-empty { display:flex; flex-direction:column; align-items:center; gap:10px; padding:44px 20px; color:var(--muted); text-align:center; }
+  .list-empty p { margin:0; }
+  .list-query-message { flex-basis:100%; margin:0; font-size:11px; line-height:1.5; color:var(--muted); }
+  .list-query-controls p[role="alert"] { color:#c5263d; }
+  [data-theme="dark"] .list-query-controls p[role="alert"] { color:#ff8799; }
   .chart-segment:focus, .chart-segment:focus-visible { outline:none; }
   .chart-segment:focus-visible { stroke-width:29; filter:drop-shadow(0 0 2px var(--ink)); }
   .chart-donut svg:focus { outline:none; }
   .record-card-shell > .lead-card:hover, .record-card-shell > .collection-card:hover,
   .record-card-shell > .lead-card:active, .record-card-shell > .collection-card:active { transform:none; border:0 !important; box-shadow:none !important; background:transparent; border-radius:0; }
   .record-card-shell:focus-within { border-color:var(--brand-action); }
-  .list-query-controls, .dashboard-period { display:flex; flex-wrap:wrap; align-items:end; gap:10px; padding:16px 20px; border-top:1px solid var(--line); }
-  .list-query-controls > input { flex:1 1 150px; min-width:120px; width:160px; }
-  .list-query-controls .ui-select-trigger { width:150px; }
-  .list-query-controls label { display:grid; gap:4px; font-size:11px; color:var(--muted); flex:1 1 140px; }
-  .list-query-controls label input, .list-query-controls label .ui-date-trigger { width:100%; min-width:0; }
+  .list-query-controls, .dashboard-period { display:flex; flex-wrap:wrap; align-items:end; gap:10px 14px; padding:16px 20px; border-top:1px solid var(--line); }
+  .list-query-controls label { display:grid; gap:5px; font-size:11px; color:var(--muted); flex:1 1 150px; min-width:0; }
+  .list-query-controls label:first-child { flex:2 1 220px; }
+  .list-query-controls label input, .list-query-controls label .ui-date-trigger, .list-query-controls label .ui-select-trigger { width:100%; min-width:0; }
+  .list-query-reset { flex:0 0 auto; align-self:end; }
+  /* "10 per page" was clipped to "10 per pa…" at the default trigger width. */
+  .pagination-controls .ui-select-trigger { width:auto; min-width:128px; }
   .dashboard-period .ui-date-trigger { width:170px; }
   .dashboard-period { border:1px solid var(--line); background:var(--surface); border-radius:12px; margin-bottom:18px; align-items:center; }
   .dashboard-period > div { margin-right:auto; }
   .dashboard-period small { display:block; color:var(--muted); font-size:11px; margin-top:5px; }
+  .dashboard-period-note { flex-basis:100%; margin:0; font-size:11px; line-height:1.5; color:var(--muted); }
+  .dashboard-period-note[role="alert"] { color:#c5263d; }
+  [data-theme="dark"] .dashboard-period-note[role="alert"] { color:#ff8799; }
   .dashboard-period input, .dashboard-period .ui-select-trigger { width:170px; }
   .performance .bar[role="button"] { cursor:pointer; }
   .performance .bar[role="button"]:hover, .performance .bar[role="button"]:focus-visible { filter:brightness(1.12); outline:2px solid var(--ink); outline-offset:3px; }
@@ -44,7 +52,10 @@
   .chart-interactive:focus-visible { outline:2px solid var(--brand-action); outline-offset:3px; }
   .chart-segment { cursor:pointer; transition:stroke-width 160ms ease,opacity 160ms ease; }
   .chart-segment:hover, .chart-segment[aria-pressed="true"] { stroke-width:29; }
-  .chart-selection { position:relative; padding:12px 26px 12px 12px; background:var(--accent-soft); border:1px solid var(--line); border-radius:8px; font-size:12px; margin-top:12px; }
+  /* Always present so selecting or clearing a segment never shifts the layout. */
+  .chart-selection { position:relative; padding:12px 26px 12px 12px; background:var(--accent-soft); border:1px solid var(--line); border-radius:8px; font-size:12px; margin-top:12px; min-height:62px; }
+  .chart-selection[data-empty] { background:transparent; border-style:dashed; color:var(--muted); }
+  .chart-selection[data-empty] strong { font-weight:500; }
   .chart-selection span { display:block; margin-top:6px; line-height:1.5; }
   .chart-selection button { position:absolute; right:6px; top:6px; background:none; border:0; color:inherit; cursor:pointer; }
   .insight-stack .chart-donut { display:grid; grid-template-columns:minmax(150px,190px) minmax(0,1fr); align-items:center; gap:24px; margin:0; padding:12px 20px 24px; }

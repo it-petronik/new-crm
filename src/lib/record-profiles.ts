@@ -1,4 +1,5 @@
 import { type Kind, type RecordItem, money } from "./domain";
+import { salaryTotal } from "./salary";
 export type FieldSpec = {
   name: string;
   label: string;
@@ -446,7 +447,7 @@ export function recordFieldValue(record: RecordItem, name: string): string {
 }
 export function detailFields(record: RecordItem): [string, string][] {
   const profile = record.kind === "accounts" && record.attributes?.entryType ? cashEntryProfile : recordProfiles[record.kind];
-  return [
+  const rows: [string, string][] = [
     ...profile.fields
       .filter((f) => f.name !== "currency" && f.name !== "unit")
       .map(
@@ -460,8 +461,21 @@ export function detailFields(record: RecordItem): [string, string][] {
                 : recordFieldValue(record, f.name) || "—",
           ] as [string, string],
       ),
-    ["Record owner", record.owner],
   ];
+  if (record.kind === "hr") {
+    // The monthly total is derived, never entered, so it is shown beside its parts.
+    const total = salaryTotal(record.attributes);
+    if (total) {
+      const currencyLabel = record.attributes?.salaryCurrency || "";
+      const after = rows.findIndex(([label]) => label === "Salary currency");
+      rows.splice(after < 0 ? rows.length : after + 1, 0, [
+        "Monthly total",
+        `${total}${currencyLabel ? ` ${currencyLabel}` : ""}`,
+      ]);
+    }
+  }
+  rows.push(["Record owner", record.owner]);
+  return rows;
 }
 export const cashEntryProfile: Profile = {
   title: "Add income or expense", noun: "Cashbook entry", description: "Record money received or spent. Do not re-enter invoice payments here.", nameLabel: "Description", notes: "Notes", unit: "entry",

@@ -8,3 +8,12 @@ export function salaryAttributes(attributes: Record<string,string> = {}) {
   };
   return {...attributes, monthlySalary:String((read(attributes.basicSalary) + read(attributes.allowance)) / 100)};
 }
+
+/**
+ * Total for display, derived from the components so a stale stored value is
+ * never shown. Legacy records that predate the split keep their own total.
+ */
+export function salaryTotal(attributes: Record<string,string> = {}) {
+  if (attributes.basicSalary === undefined && attributes.allowance === undefined) return attributes.monthlySalary || "";
+  try { return salaryAttributes(attributes).monthlySalary; } catch { return attributes.monthlySalary || ""; }
+}

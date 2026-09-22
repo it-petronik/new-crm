@@ -1,5 +1,115 @@
 # Implementation status
 
+## Usability and correctness audit (22 September)
+
+Audited every module page, the shared list controls, the dashboard date scope,
+HR salary, the accounts cashbook, navigation and the quotation documents, then
+fixed the defects found. No database was contacted; all testing used the
+synthetic preview fixtures.
+
+### Filtering, sorting and pagination
+
+- List search matched `JSON.stringify(record)`, so it matched **field names and
+  internal identifiers**: searching "status" or "company" returned every row.
+  Search now walks stored values only, skipping booleans and bookkeeping keys.
+- Amount sorting interleaved currencies as though they were comparable. Each
+  currency is now ranked as its own block, and a caption explains this whenever
+  a list actually holds more than one currency. Values are never converted.
+- The filter row, list and pagination were reordered visually with
+  `display:contents` and `order`, so the keyboard order was list → filters →
+  pagination. `Pagination` was split into `ListFilters`, `ListEmpty` and
+  `Pagination`, rendered in real document order; the CSS reordering is gone.
+- The reversed-date warning inherited no `order` and rendered above the filter
+  row, detached from its controls. It now sits inside the filter row, and a
+  reversed range selects nothing deliberately instead of dropping a bound.
+- Filtering a list to nothing left a blank table. A shared empty state now
+  explains whether the list is filtered or genuinely empty and offers Reset.
+- Duplicate controls removed: business lists carried both a toolbar status
+  filter and the shared one; user administration and the cashbook each had a
+  second search box. The kanban board keeps its own status control because it
+  has no filter row. Document line items remain unfiltered and unpaginated.
+- Date filters now name the field they use. The cashbook filters and sorts on
+  the transaction date it displays, not the record creation time.
+- Pagination resets on a filter, sort or scope change and clamps when results
+  shrink, so editing a record no longer throws you back to page one.
+
+### Dashboard date scope
+
+- `toISOString()` was applied to a local date, so every preset was computed on
+  the **UTC** day. In any non-UTC timezone "Today" could select yesterday and
+  exclude today's records. Ranges now use a DST-safe local calendar.
+- Choosing Custom with one or no date silently behaved like All time. The
+  incomplete, reversed and empty-result cases are now stated in the period row.
+- Metric cards showed a USD-only total beside a count of records in every
+  currency. The cards now say "USD value only". Counts remain complete.
+- Daily focus remains intentionally current and is still labelled as such.
+
+### Charts
+
+- Segments were capped at four **before** zero-value rows were filtered out, so
+  a chart could silently lose a segment. Filtering now happens first, and one
+  exported `chartSegments` helper decides this for both the chart and callers.
+- The selection panel appeared only once a segment was chosen, shifting the
+  layout. It is always present with the same two-line shape; verified that the
+  panel and document heights are byte-identical before and after selecting.
+- Keyboard focus keeps segment emphasis with no rectangular outline.
+- "1 orders" is now "1 order"; the sales-contribution panel no longer repeats
+  the donut legend as a ranked list; the country panel no longer prints two
+  overlapping "no destination country" messages.
+
+### HR salary
+
+- The derived monthly total was calculated and stored but **never displayed**.
+  Employee details now show "Monthly total" beside Basic salary and Allowance,
+  derived on read so a stale stored value is never shown.
+- The preview path recomputed the total inline with no validation. Preview and
+  server now share `salaryAttributes`, so both validate identically.
+- Legacy records that predate the split still show their stored total and
+  prefill it as basic salary when edited. No payroll or tax logic was added.
+
+### Other fixes
+
+- The unidentified 404 was `/favicon.ico`: no `<link rel="icon">` was emitted,
+  so browsers probed the default path. An explicit icon now points at
+  `/icon.svg`. A browser test asserts no failed requests and no console errors.
+- The shared `Select` read only direct `<option>` children, so options wrapped
+  in a fragment were read as `[object Object]`. It now flattens fragments and
+  nested arrays and skips empty values, which Radix rejects.
+- The internal company key `Istanegry` was shown to users verbatim. The
+  presentation-only label map now renders it "Istanergy". **Persisted company
+  and access keys are unchanged**, including `Istanegry` itself.
+- The page-size control clipped "10 per page" to "10 per pa…".
+
+### Verified
+
+- TypeScript, 58 unit tests (9 new), 66 Playwright browser tests (17 new) and a
+  production build all pass.
+- Browser coverage added for: document/visual/tab order of list controls, the
+  filtered-empty state and Reset, reversed date ranges, single-currency sort
+  order, cashbook transaction-date filtering, one status filter per list, the
+  kanban exception, page-size labelling, chart selection stability and
+  pluralisation, every dashboard preset, incomplete and reversed custom ranges,
+  delete-control colour in both themes, salary create/edit/reload, friendly URL
+  reload and back/forward, company switching, legacy query-string bookmarks and
+  My Requests scope.
+- Screenshots reviewed in light and dark at 1440px and 390px; no horizontal
+  overflow at either width.
+
+### Remaining limitations
+
+- **No database was used.** Every check ran against browser-local preview
+  fixtures. Preview and localStorage state is not production persistence.
+- Preview fixtures are entirely USD and contain no cashbook entries, so the
+  mixed-currency ordering and its caption are covered by unit tests only.
+- The quotation document for `Istanegry` still carries the website
+  `www.istanegry.com` in `src/lib/pdf/quotation-data.ts`. Every other reference
+  spells it "istanergy", so this looks like the same typo, but it is a
+  customer-facing contact detail and was **left unchanged pending confirmation**.
+- `next-env.d.ts` differs only because `next build` rewrites its generated
+  paths; `next dev` flips it back.
+- Everything in "Remaining production scope" below still stands.
+
+
 ## Record-detail dialog correction
 
 - Rebuilt record-detail content with a compact company/type/status row, populated-value grid and a collapsible list of fields not provided. Empty notes blocks no longer consume space. No underlying values are removed.

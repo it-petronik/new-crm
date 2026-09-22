@@ -1,18 +1,30 @@
 "use client";
 import { useState } from "react";
 const colors = ["#2563eb", "#f59e0b", "#8b5cf6", "#14b8a6"];
+/** Single source of truth for which rows a chart can draw, so callers and the
+ *  chart never disagree about whether a chart will appear. */
+export function chartSegments(rows: { name: string; value: number; count: number }[], metric: "value" | "count" = "value") {
+  const visible = rows.filter(row => row[metric] > 0).slice(0, 4);
+  return visible.reduce((sum, row) => sum + row[metric], 0) > 0 && visible.length >= 2 ? visible : [];
+}
 export function InsightChart({ rows, metric = "value", variant = "donut", currency = "USD" }: {
   rows: { name: string; value: number; count: number }[];
   metric?: "value" | "count"; variant?: "donut" | "columns"; currency?: string;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
-  const visible = rows.slice(0, 4).filter(row => row[metric] > 0);
+  const visible = chartSegments(rows, metric);
   const total = visible.reduce((sum, row) => sum + row[metric], 0);
-  if (!total || visible.length < 2) return null;
+  if (!visible.length) return null;
   const format = (value: number, compact = false) => new Intl.NumberFormat("en-US", { style:"currency", currency, maximumFractionDigits:compact ? 1 : 0, notation:compact ? "compact" : "standard" }).format(value);
   const maximum = Math.max(...visible.map(row => row[metric]));
   const active = visible.find(row => row.name === selected);
-  const detail = active && <div className="chart-selection" role="status"><strong>{active.name}</strong><span>{format(active.value)} · {active.count} {metric === "count" ? "enquiries" : "orders"} · {Math.round(active[metric] / total * 100)}% of displayed total</span><button aria-label="Clear chart selection" onClick={() => setSelected(null)}>×</button></div>;
+  // Both states keep the same two-line shape so selecting or clearing a segment
+  // never changes the height of the panel.
+  const detail = <div className="chart-selection" data-empty={active ? undefined : "true"} role="status">
+    <strong>{active ? active.name : "No segment selected"}</strong>
+    <span>{active ? `${format(active.value)} · ${active.count} ${metric === "count" ? (active.count === 1 ? "enquiry" : "enquiries") : (active.count === 1 ? "order" : "orders")} · ${Math.round(active[metric] / total * 100)}% of displayed total` : "Choose a segment to see its value, volume and share."}</span>
+    {active && <button type="button" aria-label="Clear chart selection" onClick={() => setSelected(null)}>×</button>}
+  </div>;
   const select = (name:string) => setSelected(old => old === name ? null : name);
   if (variant === "columns") return <div className="insight-chart chart-horizontal" role="group" aria-label="Product enquiry comparison">
     {visible.map((row, i) => <button type="button" className="horizontal-chart-row chart-interactive" aria-pressed={selected === row.name} title={`${row.name}: ${row.count} enquiries · ${format(row.value)}`} onClick={() => select(row.name)} key={row.name}>
