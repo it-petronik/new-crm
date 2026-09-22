@@ -157,10 +157,15 @@ export default function UserAdmin({
             {pagination.items.map((u) => (
               <tr key={u.id}>
                 <td>
-                  <Button className="record-link avatar-name" onClick={() => setProfile(u)}>
+                  {/* The email stays outside the button so its accessible
+                      name remains just the person's name. */}
+                  <div className="avatar-name">
                     <Avatar name={u.name} size={32} />
-                    <span>{u.name}<small>{u.email}</small></span>
-                  </Button>
+                    <span>
+                      <Button className="record-link" onClick={() => setProfile(u)}>{u.name}</Button>
+                      <small>{u.email}</small>
+                    </span>
+                  </div>
                 </td>
                 <td>{u.role}</td>
                 <td>{u.companies.map(companyName).join(", ")}</td>

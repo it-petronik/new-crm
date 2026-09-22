@@ -1806,8 +1806,9 @@ function Overview({
       icon: Box, to: "products", accent: "gold",
     }],
   };
-  // Most specific modules first, so a role's own work leads its dashboard.
-  const cardOrder: Module[] = ["hr", "it", "marketing", "leads", "orders", "logistics", "accounts", "quotations", "customers", "suppliers", "products"];
+  // Business importance order. A role only ever sees cards for the modules it
+  // has, so a narrow role still fills the row from its own modules.
+  const cardOrder: Module[] = ["leads", "orders", "logistics", "accounts", "hr", "it", "marketing", "quotations", "customers", "suppliers", "products"];
   const metrics = cardOrder
     .filter((m) => allowed.includes(m))
     .flatMap((m) => cards[m] || [])
