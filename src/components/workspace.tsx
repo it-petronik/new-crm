@@ -239,14 +239,43 @@ function shortMoney(value: number) {
       ? `$${(value / 1000).toFixed(1)}k`
       : money(value);
 }
+/** Resolves a URL to the page it names, honouring the actor's access. */
+function routeFromUrl(actor: Actor, path: string, search: string) {
+  const params = workspaceParams(path, search);
+  const selfService = path === "/my-requests" || params.get("module") === "my-requests";
+  const requestedView = params.get("view") as WorkspaceView;
+  const requestedCompany = params.get("company");
+  const requestedModule = params.get("module");
+  return {
+    selfService,
+    view:
+      requestedView in viewLabels &&
+      (requestedView !== "access" || canManageUsers(actor))
+        ? requestedView
+        : null,
+    company:
+      requestedCompany && actor.companies.includes(requestedCompany)
+        ? requestedCompany
+        : "All companies",
+    module:
+      requestedModule && allowedModules(actor).includes(requestedModule as Module)
+        ? (requestedModule as Module)
+        : allowedModules(actor)[0] || "overview",
+  };
+}
+
 export default function Workspace({
   actor,
   preview,
   initialSelfService = false,
+  initialPath = "/",
+  initialSearch = "",
 }: {
   actor: Actor;
   preview: boolean;
   initialSelfService?: boolean;
+  initialPath?: string;
+  initialSearch?: string;
 }) {
   // Preview signs in through demo accounts, so the acting role comes from the
   // browser. Read after mount to keep the server and first client render equal.
@@ -255,12 +284,15 @@ export default function Workspace({
     if (preview) setPreviewSignedIn(storedPreviewActor());
   }, [preview]);
   actor = preview && previewSignedIn ? previewSignedIn : actor;
-  const [selfService, setSelfService] = useState(initialSelfService);
-  const [view, setView] = useState<WorkspaceView | null>(null);
+  // Derived from the server-supplied URL so a reload paints the requested page
+  // immediately instead of flashing the overview first.
+  const initial = routeFromUrl(actor, initialPath, initialSearch);
+  const [selfService, setSelfService] = useState(initialSelfService || initial.selfService);
+  const [view, setView] = useState<WorkspaceView | null>(initial.view);
   const [commandOpen, setCommandOpen] = useState(false);
   const [readNotifications, setReadNotifications] = useState<string[]>([]);
-  const [module, setModule] = useState<Module>("overview");
-  const [company, setCompany] = useState("All companies");
+  const [module, setModule] = useState<Module>(initial.module);
+  const [company, setCompany] = useState(initial.company);
   useEffect(() => {
     document.documentElement.dataset.company = company;
     return () => {
@@ -1500,22 +1532,21 @@ function RecordCards({
               onClick={() => onSelect(r)}
             >
               <div className="collection-top">
-                <span className="collection-icon" title={r.kind}>
-                  {["customers", "suppliers", "hr"].includes(r.kind) ? (
-                    <Avatar name={r.title} size={38} />
-                  ) : (
-                    <Icon size={20} />
-                  )}
+                <span className="collection-icon">
+                  <Icon size={20} />
                 </span>
                 <Badge status={r.status} />
               </div>
-              <div>
-                <h3>{r.title}</h3>
-                <p>
-                  {description ||
-                    (r.kind === "leave" && `${r.quantity} working days`) ||
-                    "Details available in record"}
-                </p>
+              <div className="collection-identity">
+                <Avatar name={r.title} size={36} />
+                <div>
+                  <h3>{r.title}</h3>
+                  <p>
+                    {description ||
+                      (r.kind === "leave" && `${r.quantity} working days`) ||
+                      "Details available in record"}
+                  </p>
+                </div>
               </div>
               <Company name={r.company} />
               <div className="collection-bottom">
@@ -1606,8 +1637,14 @@ function RecordTable({
                 <td>
                   <Badge status={r.status} />
                 </td>
-                <td className="muted">{r.due}</td>
-                <td>{r.owner || "—"}</td>
+                <td className="muted">
+                  {r.due ? <span className="cell-date"><CalendarDays size={14} aria-hidden="true" />{r.due}</span> : "—"}
+                </td>
+                <td>
+                  {r.owner ? (
+                    <span className="avatar-name"><Avatar name={r.owner} size={26} /><span>{r.owner}</span></span>
+                  ) : "—"}
+                </td>
                 <td>
                   <div className="table-record-actions">
                   <RecordIcons record={r} {...actions} />
@@ -2167,7 +2204,9 @@ function ActivityList({
                     <td>
                       <Company name={a.company} />
                     </td>
-                    <td className="muted">{activityWhen(a.at)}</td>
+                    <td className="muted">
+                      <span className="cell-date"><CalendarDays size={14} aria-hidden="true" />{activityWhen(a.at)}</span>
+                    </td>
                     <td>
                       <div className="table-record-actions">
                         <Button

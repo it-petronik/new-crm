@@ -28,13 +28,6 @@
   height: 52px;
   margin: 0;
 }
-.profile-company .logo-istanergy {
-  padding: 0;
-}
-.profile-company .logo-istanergy img {
-  width: 144px;
-  height: 144px;
-}
 .sidebar .logo-enercore {
   width: 128px;
   height: 76px;
@@ -47,11 +40,6 @@
   width: 78px;
   height: 32px;
   padding: 4px;
-}
-.switch-logo.logo-istanergy img {
-  width: 78px;
-  height: 78px;
-  flex-shrink: 0;
 }
 .modal:has(.command-list) {
   width: 800px;

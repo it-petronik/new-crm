@@ -26,6 +26,12 @@
 .crop-zoom { display:flex; align-items:center; gap:12px; font-size:12px; }
 .crop-zoom span { display:flex; align-items:center; gap:6px; white-space:nowrap; }
 .crop-zoom input { flex:1; min-width:0; }
+/* Every company plate is the same size and every logo is contained within it,
+   rather than each brand getting its own size override. */
+.brand-logo img { width:100%; height:100%; object-fit:contain; max-width:none; }
+/* Supplied artwork ranges from 1:1 to 3.35:1, so a taller plate keeps the
+   square marks from rendering much smaller than the wide ones. */
+.profile-company .brand-logo { width:100%; height:86px; padding:12px 18px; }
 .entity-avatar { display:inline-grid; place-items:center; flex-shrink:0; border-radius:50%; font-weight:650; letter-spacing:0.02em; line-height:1; overflow:hidden; }
 .entity-avatar img { width:100%; height:100%; object-fit:cover; display:block; }
 .record-link .entity-avatar, .avatar-name .entity-avatar { margin-right:10px; }
@@ -50,6 +56,14 @@
   .stats-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .stats-grid:has(> :nth-child(3)) { grid-template-columns:repeat(3,minmax(0,1fr)); }
   .stats-grid:has(> :nth-child(4)) { grid-template-columns:repeat(4,minmax(0,1fr)); }
+  .cell-date { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
+  .cell-date svg { opacity:0.55; flex-shrink:0; }
+  /* The avatar sits on the same line as the name, not above it. */
+  .collection-identity { display:flex; align-items:flex-start; gap:11px; min-width:0; }
+  .collection-identity > div { min-width:0; }
+  .collection-identity h3 { margin:0; }
+  td .avatar-name { gap:8px; }
+  td .avatar-name > span { overflow-wrap:anywhere; }
   .list-empty { display:flex; flex-direction:column; align-items:center; gap:10px; padding:44px 20px; color:var(--muted); text-align:center; }
   .list-empty p { margin:0; }
   .list-query-message { flex-basis:100%; margin:0; font-size:11px; line-height:1.5; color:var(--muted); }
@@ -213,6 +227,38 @@
   .palette-swatches { display:flex; gap:6px; }
   .palette-swatches i { width:24px; height:24px; border-radius:50%; border:1px solid #8899aa33; }
   @media (max-height:800px) and (min-width:700px) { .record-detail-dialog .reference-document { zoom:0.48; } }
+  /* Small laptop: trim the largest type and padding so more fits on screen. */
+  @media (max-width:1280px) {
+    .page-heading h1 { font-size:27px; }
+    .panel-heading { padding:16px 18px; }
+    .stat-card strong { font-size:26px; }
+    .stats-grid, .overview-grid, .overview-lower { gap:16px; }
+    .table-scroll td, .table-scroll th, .column-sort { padding-top:10px; padding-bottom:10px; }
+    .list-query-controls { padding:12px 18px; }
+  }
+  /* Tablet */
+  @media (max-width:1024px) {
+    .page-heading h1 { font-size:24px; }
+    .page-heading p, .panel-heading p { font-size:12px; }
+    .panel-heading h2 { font-size:15px; }
+    .stat-card strong { font-size:23px; }
+    .stat-card span, .stat-bottom span { font-size:11px; }
+    .table-scroll { font-size:12px; }
+    .ui-button { font-size:12px; }
+    .insight-summary p, .commercial-scorecard strong { font-size:13px; }
+  }
+  /* Phone */
+  @media (max-width:640px) {
+    .page-heading h1 { font-size:21px; }
+    .panel-heading, .list-query-controls { padding:12px 14px; }
+    .stat-card strong { font-size:21px; }
+    .stats-grid, .overview-grid, .overview-lower { gap:12px; }
+    .table-scroll td, .table-scroll th, .column-sort { padding-left:10px; padding-right:10px; }
+    .entity-avatar { --avatar-shrink:1; }
+    .list-query-search { flex-basis:100%; max-width:none; }
+    .heading-actions { flex-wrap:wrap; }
+    .heading-actions .ui-date-trigger { width:100%; }
+  }
   @media (max-width:700px) {
     .cashbook-panel .panel-heading, .cashbook-filter { align-items:flex-start; flex-direction:column; }
     .cashbook-summary { grid-template-columns:1fr; }

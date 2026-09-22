@@ -294,16 +294,6 @@
   max-width: 100%;
   height: 60px;
 }
-.profile-company .logo-istanergy {
-  height: 60px;
-  padding: 0;
-}
-.profile-company .logo-istanergy img {
-  height: 136px;
-  width: 136px;
-  max-width: none;
-  flex-shrink: 0;
-}
 .profile-permissions {
   grid-column: 1 / -1;
 }

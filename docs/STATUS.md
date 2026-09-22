@@ -1,5 +1,46 @@
 # Implementation status
 
+## Role dashboards, avatars and responsive pass (23 September)
+
+- **Reload no longer flashes the overview.** Route state was derived in an
+  effect after mount, so every reload of a deep URL painted the dashboard
+  first. The server page now resolves the URL and passes it in, so the first
+  paint is the requested page. Verified the server HTML contains the right
+  heading and that the first painted heading is correct.
+- **Per-role dashboards.** Each module contributes its own metric cards, so a
+  role never sees gaps where another role's cards would sit. HR gets People and
+  Leave requests, IT gets Open and Resolved tickets, Accounts gets invoice and
+  customer cards, and the MD keeps the commercial set. The metric row and the
+  panel row both collapse to fill the width for roles with fewer cards.
+- **Initials avatars** on records, cashbook entries, activity entries, people
+  and the Created by column, coloured deterministically from the name. On cards
+  the avatar sits beside the name rather than on its own row. Avatars are
+  `aria-hidden`, so no accessible name changed.
+- **Profile pictures** can be added and replaced, with a drag-to-position and
+  zoom crop. Output is a 256px square shown in the profile, the sidebar and
+  anywhere else the person appears. **Stored in the browser only** — it is not
+  uploaded and does not follow the user to another device.
+- **Dates carry a calendar icon** in the records, cashbook and activity tables.
+- **Company plates are uniform.** Per-brand size overrides that enlarged the
+  Istanergy mark past its plate were removed; every plate is now the same box
+  with the logo contained inside it.
+- **Responsive scale** added for small laptop (≤1280px), tablet (≤1024px) and
+  phone (≤640px): smaller headings, tighter panel and table padding, and a
+  full-width search field on phones. No horizontal overflow at any width tested.
+
+- Verified: TypeScript, 58 unit tests, 77 browser tests and a production build
+  pass. Screenshots reviewed at 1440, 1180 and 390px.
+- Preview fixtures only; no database was contacted.
+
+### Not done
+
+- A full visual redesign was not attempted. The work above is targeted fixes
+  and polish on the existing design system.
+- The supplied logo artwork ranges from 1:1 to 3.35:1. Plates are now uniform
+  and nothing is cropped, but the ink inside them cannot be optically identical
+  without re-canvasing the source PNGs, which were left untouched.
+
+
 ## Roles, activity log and table polish (23 September)
 
 - **Preview sign-in with demo roles.** The login page now lists six fictional

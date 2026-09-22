@@ -60,13 +60,17 @@ test("records and people carry initials avatars", async ({ page }) => {
   await page.goto("/workspace/all-companies/sales-orders");
   await page.locator(".records-panel .table-scroll").waitFor();
   const first = page.locator(".records-panel tbody tr").first();
-  await expect(first.locator(".entity-avatar")).toBeVisible();
   // "Coastal Energy Partners" becomes first + last initial.
-  await expect(first.locator(".entity-avatar")).toHaveText("CP");
+  await expect(first.locator("td").first().locator(".entity-avatar")).toHaveText("CP");
+  // The Created by column carries the owner's avatar too.
+  const createdBy = page.getByRole("columnheader", { name: /Created by/ });
+  const index = await createdBy.evaluate((th) => [...th.parentElement!.children].indexOf(th));
+  await expect(first.locator("td").nth(index).locator(".entity-avatar")).toHaveText("LA");
+  await expect(first.locator(".cell-date")).toBeVisible();
 
   await page.goto("/workspace/all-companies/activity");
   await page.locator(".table-scroll").waitFor();
-  await expect(page.locator("tbody .entity-avatar").first()).toHaveText("LA");
+  await expect(page.locator("tbody td").first().locator(".entity-avatar")).toHaveText("LA");
 
   await page.goto("/workspace/all-companies/access-control");
   await expect(page.locator("tbody .entity-avatar").first()).toBeVisible();
