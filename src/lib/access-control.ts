@@ -25,6 +25,26 @@ export function inAdminScope(
         branches.every((b) => actor.branches.includes(b))))
   );
 }
+/**
+ * The branch scope a newly assigned role should carry.
+ *
+ * An MD is a group-level account, not a branch account. Scope checks compare a
+ * target's branches against the actor's, and a group-wide account (`branches:
+ * []`) sits inside no branch list at all — so giving a new MD a single branch
+ * silently makes it a subordinate that cannot administer, or issue a reset
+ * link for, the MD that created it. Mirroring the actor's own scope keeps two
+ * MDs peers.
+ *
+ * Every other role keeps the previous default. Note that an IT Administrator
+ * also administers users and is subject to the same asymmetry; it is left
+ * branch-scoped deliberately, because widening it would grant reach rather
+ * than preserve it.
+ */
+export function branchesForRole(actor: Actor, role: string) {
+  if (role === "MD") return actor.branches;
+  return actor.branches.length ? actor.branches : ["Main"];
+}
+
 export function mayAssign(
   actor: Actor,
   target: {

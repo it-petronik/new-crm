@@ -78,6 +78,33 @@ export const auditEvents = sqliteTable(
   (table) => [index("AuditEvent_company_at_idx").on(table.company, table.at)],
 );
 
+/**
+ * Administrator-issued password reset links.
+ *
+ * Only the SHA-256 of the token is stored, so a database leak yields nothing
+ * usable. Single use is enforced by deleting the row rather than by a flag, so
+ * replay is structurally impossible rather than dependent on a check.
+ */
+export const passwordResets = sqliteTable(
+  "PasswordReset",
+  {
+    // SHA-256 hex of the raw token. The raw token is never persisted.
+    id: text("id").primaryKey(),
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // Who issued it, for the audit trail. Never the token itself.
+    issuedBy: text("issuedBy").notNull(),
+    issuedByName: text("issuedByName").notNull(),
+    expiresAt: integer("expiresAt", { mode: "timestamp_ms" }).notNull(),
+    createdAt: integer("createdAt", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    index("PasswordReset_userId_idx").on(table.userId),
+    index("PasswordReset_expiresAt_idx").on(table.expiresAt),
+  ],
+);
+
 export const loginAttempts = sqliteTable("LoginAttempt", {
   key: text("key").primaryKey(),
   count: integer("count").notNull().default(0),
@@ -88,3 +115,4 @@ export type UserRow = typeof users.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;
 export type BusinessRecordRow = typeof businessRecords.$inferSelect;
 export type AuditEventRow = typeof auditEvents.$inferSelect;
+export type PasswordResetRow = typeof passwordResets.$inferSelect;

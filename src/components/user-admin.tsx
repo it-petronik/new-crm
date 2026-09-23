@@ -3,7 +3,7 @@ import { companyName } from "@/lib/company-name";
 import { Avatar } from "./avatar";
 import { Pagination, ListFilters, ListEmpty, SortHeader, usePagination } from "./pagination";
 import { useEffect, useState } from "react";
-import { Plus, ShieldCheck, X } from "lucide-react";
+import { Plus, ShieldCheck, X, KeyRound } from "lucide-react";
 import {
   Button,
   Input,
@@ -20,7 +20,7 @@ import {
   canManageUsers,
   type Actor,
 } from "@/lib/domain";
-import { leadership, mayAssign } from "@/lib/access-control";
+import { leadership, mayAssign, branchesForRole } from "@/lib/access-control";
 type User = Actor & { email: string; active: boolean };
 export default function UserAdmin({
   actor,
@@ -35,6 +35,9 @@ export default function UserAdmin({
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // Holds the generated link for exactly one viewing; never persisted.
+  const [resetLink, setResetLink] = useState<{ link: string; name: string; minutes: number } | null>(null);
+  const [copied, setCopied] = useState(false);
   const [ready, setReady] = useState(false);
   const [review, setReview] = useState(false);
   const key = `enercore-user-preview-${actor.id}`;
@@ -185,6 +188,32 @@ export default function UserAdmin({
                         Manage access
                       </Button>
                       <Button
+                        className="secondary"
+                        disabled={busy}
+                        onClick={async () => {
+                          setBusy(true);
+                          setError("");
+                          try {
+                            const response = await fetch("/api/users/reset-link", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ userId: u.id }),
+                            });
+                            const result = await response.json();
+                            if (!response.ok) throw new Error(result.error);
+                            setCopied(false);
+                            setResetLink({ link: result.link, name: result.user.name, minutes: result.expiresInMinutes });
+                          } catch (e) {
+                            setError(e instanceof Error ? e.message : "Unable to generate a reset link.");
+                          } finally {
+                            setBusy(false);
+                          }
+                        }}
+                      >
+                        <KeyRound size={15} />
+                        Reset password
+                      </Button>
+                      <Button
                         className="text-button"
                         disabled={busy}
                         onClick={async () => {
@@ -239,6 +268,40 @@ export default function UserAdmin({
       <ListEmpty {...pagination} label="users" />
       <Pagination {...pagination} label="users" />
       </>}
+      <DialogPresence>
+        {resetLink && (
+          <Dialog title="Password reset link" onClose={() => setResetLink(null)}>
+            <p>
+              Give this link to <strong>{resetLink.name}</strong> in person or
+              through a channel you trust. It works once and expires in{" "}
+              {resetLink.minutes} minutes.
+            </p>
+            <p className="error" role="alert">
+              This is shown once. It is not stored anywhere and cannot be shown
+              again — if you lose it, generate a new link.
+            </p>
+            <Input readOnly value={resetLink.link} aria-label="Reset link" onFocus={(e) => e.currentTarget.select()} />
+            <DialogActions>
+              <Button
+                className="primary"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(resetLink.link);
+                    setCopied(true);
+                  } catch {
+                    setCopied(false);
+                  }
+                }}
+              >
+                {copied ? "Copied" : "Copy link"}
+              </Button>
+            </DialogActions>
+            <p className="muted small">
+              Using it signs {resetLink.name} out of every device.
+            </p>
+          </Dialog>
+        )}
+      </DialogPresence>
       <DialogPresence>
         {editor && (
           <Dialog
@@ -362,6 +425,7 @@ export default function UserAdmin({
                         setEditor({
                           ...editor,
                           role: e.target.value as Actor["role"],
+                          branches: branchesForRole(actor, e.target.value),
                           moduleAccess: {},
                         })
                       }

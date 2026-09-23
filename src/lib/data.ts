@@ -1,6 +1,6 @@
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, lt, gt, sql, desc } from "drizzle-orm";
 import type { Database } from "./d1";
-import { users, sessions, businessRecords, auditEvents, loginAttempts } from "./schema";
+import { users, sessions, businessRecords, auditEvents, loginAttempts, passwordResets } from "./schema";
 import type { UserRow } from "./schema";
 
 /**
@@ -176,3 +176,122 @@ export async function updateRecordWithAudit(
   await db.batch(follow as unknown as [Batchable, ...Batchable[]]);
   return true;
 }
+
+// ------------------------------------------------------ password resets
+
+/** Minutes a reset link stays valid. */
+export const RESET_TTL_MS = 30 * 60_000;
+
+/**
+ * Issues a reset link for one user.
+ *
+ * Any outstanding links for that user are deleted in the same batch, so
+ * generating a new link always invalidates the previous one. Only the hash of
+ * the token is written; the caller holds the raw token and shows it once.
+ */
+export function issuePasswordReset(
+  db: Database,
+  tokenHash: string,
+  userId: string,
+  issuedBy: { id: string; name: string },
+  audit: NewAudit,
+) {
+  const now = new Date();
+  return db.batch([
+    db.delete(passwordResets).where(eq(passwordResets.userId, userId)),
+    db.insert(passwordResets).values({
+      id: tokenHash,
+      userId,
+      issuedBy: issuedBy.id,
+      issuedByName: issuedBy.name,
+      expiresAt: new Date(now.getTime() + RESET_TTL_MS),
+      createdAt: now,
+    }),
+    insertAudit(db, audit),
+  ]);
+}
+
+/** Looks up a reset by token hash, together with its user. */
+export async function findPasswordReset(db: Database, tokenHash: string) {
+  const row = await db
+    .select({ reset: passwordResets, user: users })
+    .from(passwordResets)
+    .innerJoin(users, eq(passwordResets.userId, users.id))
+    .where(eq(passwordResets.id, tokenHash))
+    .get();
+  return row ?? null;
+}
+
+/**
+ * Completes a reset atomically: set the new password, drop every session for
+ * that user (including the device performing the reset), drop every
+ * outstanding reset token, and record the event.
+ *
+ * D1 has no interactive transactions, but batch() is all-or-nothing, so there
+ * is no state where the password changed while sessions survived.
+ */
+/**
+ * Redeems a reset token. Returns true only for the request that consumed it.
+ *
+ * D1 has no interactive transactions, so the claim is a single statement:
+ * `DELETE … WHERE id = ? AND expiresAt > ? RETURNING userId`. SQLite applies
+ * that atomically, so of any number of simultaneous requests exactly one gets
+ * a row back and the rest get nothing. Deleting the token *is* the claim,
+ * which is what makes single use strict rather than best effort.
+ *
+ * The dependent writes then run as one `batch()`, which D1 documents as a SQL
+ * transaction executed sequentially and rolled back entirely on failure, so
+ * the password change, session revocation and audit entry cannot partially
+ * apply.
+ *
+ * Residual behaviour, deliberately fail-closed: if the batch fails after the
+ * claim succeeded, the token is already spent and the password is unchanged.
+ * The user asks for a new link. The alternative — claiming after the writes —
+ * would allow two winners, which is worse.
+ */
+/**
+ * Raised when the token was successfully claimed but its consequences did not
+ * commit. Distinct from an ordinary failure because the operational meaning
+ * differs: the link is already spent, so the user must be issued a new one.
+ * Carries the underlying error as `cause` for logging; it never carries the
+ * token, the password or any hash.
+ */
+export class PasswordResetConsequenceError extends Error {
+  constructor(cause: unknown) {
+    super("Password reset consequences failed after the token was claimed");
+    this.name = "PasswordResetConsequenceError";
+    this.cause = cause;
+  }
+}
+
+export async function redeemPasswordReset(
+  db: Database,
+  tokenHash: string,
+  passwordHash: string,
+  event: NewAudit,
+): Promise<boolean> {
+  const claimed = await db
+    .delete(passwordResets)
+    .where(and(eq(passwordResets.id, tokenHash), gt(passwordResets.expiresAt, new Date())))
+    .returning({ userId: passwordResets.userId });
+
+  const userId = claimed?.[0]?.userId;
+  if (!userId) return false; // expired, already spent, or lost the race
+
+  try {
+    await db.batch([
+      db.update(users).set({ passwordHash }).where(eq(users.id, userId)),
+      db.delete(sessions).where(eq(sessions.userId, userId)),
+      insertAudit(db, event),
+    ]);
+  } catch (cause) {
+    // The claim already committed, so this is the fail-closed window rather
+    // than a generic error. Tagging it lets the route say so in its log.
+    throw new PasswordResetConsequenceError(cause);
+  }
+  return true;
+}
+
+/** Removes expired rows opportunistically; no scheduled job is needed. */
+export const purgeExpiredResets = (db: Database) =>
+  db.delete(passwordResets).where(lt(passwordResets.expiresAt, new Date())).run();
