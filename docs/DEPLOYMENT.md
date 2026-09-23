@@ -1,39 +1,178 @@
-# Hosting and database deployment
+# Deployment — Cloudflare Workers + D1
 
-No live deployment, database write or migration has been performed. A cPanel hosting plan has not been inspected. Storage space alone does not establish that it supports running Next.js.
+Current architecture. Runs entirely on Cloudflare's free tier: no card, no VPS,
+no cPanel dependency.
 
-## Hosting requirements
+```
+Browser -> crm.enercore.ae -> Cloudflare Worker -> Next.js 16
+                                    |
+                                    v
+                            Drizzle ORM -> D1 (SQLite)
+```
 
-- A supported Node.js runtime compatible with the pinned Next.js release, persistent Node process and HTTPS reverse proxy.
-- MySQL/MariaDB supported by Prisma 6.19.3, utf8mb4, transactions and JSON support.
-- A private database user limited to this CRM database. Use a separate migration account and restrict the runtime account from schema changes. Prefer restricting audit tables to insert/read for runtime use.
-- If the application and database use different hosts, allow only the application host IP and use TLS. Never expose a database port to all IPs.
-- Scheduled jobs, encrypted independent backups, logs and resource monitoring.
+`APP_MODE` stays `preview` until production is explicitly approved. In preview
+the app runs on fictional in-browser data and never touches D1.
 
-Confirm the cPanel plan's Node application manager, Node version, remote database policy, TLS, memory/process limits and backup/restore access with the hosting provider. If it cannot reliably run Next.js, use a VPS for the app and retain cPanel MySQL only if a secure connection is supported. A static HTML upload does not run this application.
+## 1. Install
 
-## Approved staging setup
+```
+npm ci
+```
 
-1. Create an isolated empty database and configure the private `DATABASE_URL`.
-2. Set `APP_MODE=production`, `APP_URL=https://your-approved-staging-host`, `NODE_ENV=production`.
-3. Install from the lockfile with `npm ci`; generate the Prisma client with `npm run db:generate`.
-4. Review `prisma/migrations/202609220001_initial/migration.sql`. Only after database approval, apply with `npm run db:migrate`.
-5. Create the initial MD administrator through `npm run db:bootstrap`, using private environment variables `BOOTSTRAP_EMAIL`, `BOOTSTRAP_PASSWORD` (minimum 14 characters) and `BOOTSTRAP_CONFIRM=CREATE_INITIAL_ADMIN`. The command refuses to run if users already exist. Remove bootstrap secrets after use.
-6. Build using `npm run build`. Run `npm start` under a process manager or the provider's Node application system, behind HTTPS. For the generated standalone build, follow Next.js standalone asset-copy requirements or use the ordinary start command with installed dependencies.
-7. Verify login, deactivation, branch isolation, company isolation, independent approvals, concurrent updates and restore procedures against staging before using real records.
+## 2. Local development
 
-Secure cookies require HTTPS in production. `APP_URL` must exactly match the browser origin for authenticated mutations. No common demo passwords or shared staff credentials are provided.
+Two ways to run it:
 
-## Backups and private storage
+```
+npm run dev          # Next.js dev server, preview data, fastest feedback
+npm run cf:preview   # the real Workers runtime with a local D1 binding
+```
 
-Schedule encrypted database backups with an independent retention location; test restoration before launch. Define retention with Accounts and HR. cPanel document storage should be outside `public_html` and exposed only through authenticated download endpoints. This implementation does not yet include file upload/download or a document-storage adapter: do not place private HR or customer documents in `public/`.
+`cf:preview` is the one that exercises D1. It reads `.dev.vars` (gitignored);
+copy `.dev.vars.example` to `.dev.vars` first.
 
-## Jobs and integrations
+## 3. Tests
 
-Reminder indicators currently derive from saved due dates while the app is open. There is no background worker, email scheduler or WhatsApp sender yet. Do not configure a pretend cron job. Implement a durable outbox, retries, idempotency and per-company notification rules before enabling outbound automation.
+```
+npm run typecheck
+npm test                                    # unit tests
+npx playwright test                         # browser tests
+npx playwright test e2e/d1-worker.spec.ts   # D1 integration, needs cf:preview running
+```
 
-Website HMAC intake setup is in `INTEGRATIONS.md`. Add proxy request-size/rate limits before public exposure. Configure an application monitoring sink without logging passwords, tokens or full HR/financial payloads.
+The D1 spec skips itself when the Worker is not running on port 8788.
 
-## Rollback
+## 4. Create the D1 database
 
-Preserve the prior application release and database backup before each approved deployment. Avoid destructive schema resets. Use reviewed forward migrations; test any restore in isolation before replacing a production database.
+```
+npx wrangler login
+npx wrangler d1 create enercore-crm
+```
+
+Copy the printed `database_id` into `wrangler.jsonc`, replacing
+`REPLACE_WITH_D1_DATABASE_ID`. The id is not a secret, but it is account
+specific, which is why the repository ships a placeholder.
+
+## 5. Migrations
+
+Migrations live in `drizzle/` and are generated from `src/lib/schema.ts`.
+
+```
+npm run db:migrate            # local D1, for development
+npm run db:migrate:remote     # the real Cloudflare D1 database
+npm run db:check              # read-only; add -- --remote for the real one
+```
+
+Regenerate after a schema change with `npm run db:generate`.
+
+## 6. Secrets and variables
+
+Non-secret values live in `wrangler.jsonc` under `vars`: `APP_MODE`,
+`NODE_ENV`. Set `APP_URL` there too once the domain is attached.
+
+Secrets never go in `wrangler.jsonc`. Use:
+
+```
+npx wrangler secret put INTAKE_PETRONIK_SECRET
+npx wrangler secret put INTAKE_PETRONIK_OWNER_ID
+```
+
+There is no `DATABASE_URL` any more — D1 is a binding, not a connection string.
+
+## 7. Deploy the Worker
+
+```
+npm run cf:build
+npm run cf:deploy
+```
+
+This deploys to the generated `workers.dev` URL first, which is the safe place
+to verify before touching DNS.
+
+## 8. Create the administrator
+
+Once, against the deployed database:
+
+```
+BOOTSTRAP_EMAIL="you@yourcompany.com" \
+BOOTSTRAP_PASSWORD="at least fourteen characters" \
+BOOTSTRAP_CONFIRM=CREATE_INITIAL_ADMIN \
+npm run db:bootstrap -- --remote
+```
+
+It refuses without the confirmation value, refuses passwords under 14
+characters, and refuses to run if any user already exists. Remove the values
+from your shell afterwards.
+
+## 9. Connect crm.enercore.ae
+
+In the Cloudflare dashboard: Workers & Pages -> enercore-crm -> Settings ->
+Domains & Routes -> Add custom domain -> `crm.enercore.ae`.
+
+Cloudflare issues the certificate and routes the domain to the Worker. Then set
+`APP_URL` to `https://crm.enercore.ae` in `wrangler.jsonc` and redeploy, because
+authenticated writes are rejected when the origin does not match.
+
+## 10. Switch to production
+
+Only after the site loads on the custom domain, `db:check --remote` passes and
+login works:
+
+1. Set `"APP_MODE": "production"` in `wrangler.jsonc`
+2. `npm run cf:deploy`
+
+## 11. Rollback
+
+Deployments are versioned, so the fastest rollback is:
+
+```
+npx wrangler deployments list
+npx wrangler rollback [deployment-id]
+```
+
+To go back to preview data without redeploying code, set `APP_MODE` back to
+`preview` and deploy. The previous MySQL/Prisma implementation remains in git
+history, and `prisma/` with its migrations is retained for reference.
+
+## Free-tier limits that matter here
+
+| Limit | Free plan | Relevance |
+|---|---|---|
+| Worker CPU per request | 10 ms | Drove the password hashing choice, below |
+| Requests | 100,000/day | Ample for an internal CRM |
+| D1 databases | 10 | One needed |
+| D1 storage | 500 MB per database, 5 GB total | Records are small JSON payloads |
+| D1 queries per invocation | 50 | Current pages use far fewer |
+| Rows read/written | Daily free quota applies | Monitor in the dashboard as usage grows |
+
+## Behaviour differences introduced by D1
+
+- **Password hashing changed from bcrypt to PBKDF2-SHA256** (WebCrypto,
+  100,000 iterations). bcrypt cost 12 needs roughly 250 ms of CPU and the free
+  plan allows 10 ms; PBKDF2 through WebCrypto measured about 7.5 ms. The stored
+  format records its own iteration count, so the cost can be raised later
+  without invalidating existing accounts. 100,000 is below OWASP's 600,000
+  recommendation for PBKDF2 — raise it if you move to a paid Workers plan.
+- **No interactive transactions.** D1 has no BEGIN/COMMIT that application code
+  can branch inside. Each former transaction now reads, decides in application
+  code, then commits with `batch()`. Specifically:
+  - Login rate limiting became a single atomic `INSERT … ON CONFLICT … RETURNING`,
+    which is stronger than before: the old read-then-write could double count.
+  - Record updates keep the optimistic version check. The guarded update runs
+    first and only a winning update is followed by its linked inserts and audit
+    entry, committed together. A stale write still changes nothing.
+  - The narrow remaining difference: if the follow-up batch fails after a
+    successful update, the record can be updated without its audit row. The
+    error surfaces to the caller. MySQL rolled both back.
+- **JSON, dates and booleans** are stored as TEXT, INTEGER epoch milliseconds
+  and INTEGER 0/1 respectively; Drizzle converts them so callers see the same
+  types as before.
+- **Case sensitivity**: SQLite `=` on TEXT is case sensitive, where MySQL's
+  default collation was not. Email is normalised to lower case on both write
+  and lookup, preserving the previous behaviour.
+
+## Previous architectures
+
+The cPanel MySQL and Node-host instructions were removed when this migration
+landed. See `HOSTING-AUDIT.md` for why Workers plus external MySQL was not
+viable, and git history for the previous deployment guide.

@@ -60,6 +60,7 @@
   .cell-date svg { opacity:0.55; flex-shrink:0; }
   /* The avatar sits on the same line as the name, not above it. */
   .collection-identity { display:flex; align-items:flex-start; gap:11px; min-width:0; }
+  .collection-identity > .badge { margin-left:auto; flex-shrink:0; }
   .collection-identity > div { min-width:0; }
   .collection-identity h3 { margin:0; }
   td .avatar-name { gap:8px; }

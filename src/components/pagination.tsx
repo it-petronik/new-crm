@@ -59,13 +59,15 @@ export const sortChoices = {
 type SortChoice = { value: string; label: string };
 
 export function ListFilters({
-  query, setQuery, statuses, valued, mixedCurrency, label = "results", sortable = true,
+  query, setQuery, statuses, valued, mixedCurrency, sourceTotal, label = "results", sortable = true,
   sortOptions,
 }: ListControls & { sortable?: boolean; sortOptions?: SortChoice[] }) {
   const [open, setOpen] = useState(false);
   const panelId = useId();
   // Sorting is an ordering, not a filter, so it never counts towards the badge.
   const active = query.status !== "all" ? 1 : 0;
+  // Nothing to search or filter when the list has no records at all.
+  if (!sourceTotal) return null;
   const sorts: SortChoice[] = sortOptions || [
     sortChoices.name, sortChoices.nameDesc, sortChoices.newest, sortChoices.oldest,
     ...(valued ? [sortChoices.amountDesc, sortChoices.amountAsc] : []),

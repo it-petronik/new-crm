@@ -1,5 +1,94 @@
 # Implementation status
 
+## Current architecture (authoritative)
+
+Everything below this section is a reverse-chronological work log. Where an
+older entry describes deployment or the database, **this section supersedes
+it**. Entries describing application behaviour remain accurate.
+
+```
+crm.enercore.ae
+  -> Cloudflare Workers
+  -> Next.js 16 (OpenNext adapter)
+  -> Drizzle ORM
+  -> Cloudflare D1
+```
+
+| | Production | Preview |
+|---|---|---|
+| Worker | `enercore-crm-live` | `enercore-crm` |
+| URL | `https://crm.enercore.ae` | `…red-bread-8f67.workers.dev` |
+| `APP_MODE` | `production` | `preview` |
+| `APP_URL` | `https://crm.enercore.ae` | the workers.dev origin |
+| Data | Cloudflare D1 (`enercore-crm`) | fictional, in-browser only |
+
+Two separate Worker scripts, configured as separate environments in
+`wrangler.jsonc`, so deploying one cannot alter the other. Both declare the
+same D1 database deliberately; preview never reads it.
+
+- Passwords use **Argon2id** (m=4MiB, t=1), chosen because the Workers Free
+  plan allows 10ms CPU per request. Parameters are stored per hash and can be
+  raised on a paid plan.
+- D1 has **no interactive transactions**; atomic writes use `batch()`.
+- Deploy with `npm run cf:deploy` (preview) or `npm run cf:deploy:live`
+  (production). See `DEPLOYMENT.md`.
+
+**Retained for rollback, not used at runtime:** `prisma/` with its MySQL
+migrations, and the `@prisma/client`, `prisma` and `bcryptjs` dependencies.
+Nothing in `src/` imports them.
+
+---
+
+## Superseded deployment history
+
+The entries below were written while the application targeted MySQL on cPanel,
+then a Node host. **That architecture was never put into production.** The
+analysis is kept because it explains why the current one was chosen —
+see `HOSTING-AUDIT.md` for the decision record. Ignore their deployment,
+database and hosting instructions.
+
+## Database connection tooling and UX sweep (23 September)
+
+### Connecting to a cPanel database
+
+> **Superseded.** The application no longer uses MySQL or cPanel. This records
+> the tooling and findings from that attempt.
+
+
+- Added `npm run db:check`: a **read-only** connection check that reports the
+  server version, which tables exist and whether an administrator has been
+  created, and translates the usual cPanel failures into the fix (missing
+  `cpaneluser_` prefix, user not added to the database, port 3306 blocked from
+  outside, client IP not allowlisted, unencoded password characters).
+- `.env.example` now shows cPanel-shaped connection strings for both the
+  app-on-cPanel and app-elsewhere cases. `.env` remains gitignored.
+- `docs/DEPLOYMENT.md` has a cPanel runbook: what to check before starting,
+  creating the database and user, the verified command order, and how to run
+  the standalone build.
+- **The whole sequence was executed against a real MySQL 8.4 server** in a local
+  container: both migrations applied, the schema matched, bootstrap created an
+  administrator and refused weak input, login issued a session, the records API
+  returned data for an authenticated request and 401 without one, and the rows
+  were confirmed in MySQL. The container was removed afterwards. **No cPanel or
+  other live database was contacted.**
+- Two deployment facts found while testing: `npm start` does not work because
+  `next.config.ts` sets `output: "standalone"` (use
+  `node .next/standalone/server.js` after copying `public/` and `.next/static/`),
+  and session cookies are `Secure`, so login silently fails over plain HTTP.
+
+### UX sweep
+
+- Lists with no records at all no longer show a search box and Filters button
+  over an empty panel; the controls appear once there is something to filter.
+- Record cards dropped the module glyph row. The avatar carries identity and
+  the page already names the module, so the avatar, name and status now share a
+  single row, making each card shorter.
+
+- Verified: TypeScript, 58 unit tests, 79 browser tests and a production build
+  pass. Screens swept at 1440px and 390px across twelve modules with no
+  horizontal overflow.
+
+
 ## Role dashboards, avatars and responsive pass (23 September)
 
 - **Reload no longer flashes the overview.** Route state was derived in an
@@ -284,6 +373,11 @@ Employee self-service exposes only the current user's own leave requests and sup
 - Latest checks: production build, type checking and 19 unit tests passed. Browser checks confirmed preserved company selection across self-service navigation, distinct employee/support dialogs, persisted support priority, and quotation customer/product prefills. Updated browser regression specs remain separate from the executed unit suite.
 
 ## Remaining production scope
+
+> Written against the MySQL/Prisma design. Items about hosting, migrations and
+> the database are superseded by the current architecture; the functional gaps
+> (purchasing, payroll, reporting and so on) still stand.
+
 
 | Area | Still required before full production use |
 | --- | --- |

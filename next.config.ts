@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 const config: NextConfig = {
-  output: "standalone",
+  // No standalone output: the Cloudflare adapter produces its own bundle.
   poweredByHeader: false,
   async headers() {
     return [

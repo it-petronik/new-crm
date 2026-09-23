@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { Prisma } from "@prisma/client";
-import { db, isPreview } from "@/lib/db";
+import { getDb, isPreview } from "@/lib/db";
+import {
+  listAllRecords, listAuditEvents, findRecord, listRecordsForCompany,
+  createRecordWithAudit, updateRecordWithAudit, type NewRecord,
+} from "@/lib/data";
 import { checkOrigin, currentActor } from "@/lib/auth";
 import {
   canWrite,
@@ -106,29 +109,28 @@ export async function GET() {
   const actor = await currentActor();
   if (!actor)
     return NextResponse.json({ error: "Sign in required." }, { status: 401 });
-  const records = await db.businessRecord.findMany({
-    where: {
-      company: { in: actor.companies },
-      ...(actor.branches.length ? { branch: { in: actor.branches } } : {}),
-    },
-    orderBy: { updatedAt: "desc" },
-  });
-  const audit = await db.auditEvent.findMany({
-    where: { company: { in: actor.companies } },
-    orderBy: { at: "desc" },
-    take: 100,
-  });
+  const db = await getDb();
+  if (!db)
+    return NextResponse.json(
+      scopedWorkspace(actor, { records: [], audit: [] }),
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  const rows = await listAllRecords(db);
+  const events = await listAuditEvents(db, 100);
+  const visible = rows.filter(
+    (r) =>
+      actor.companies.includes(r.company) &&
+      (!actor.branches.length || actor.branches.includes(r.branch)),
+  );
   return NextResponse.json(
     scopedWorkspace(actor, {
-      records: records.map((r) => r.payload as unknown as RecordItem),
-      audit: audit.map((a) => ({
-        id: a.id,
-        actor: a.actor,
-        action: a.action,
-        recordId: a.recordId,
-        company: a.company,
-        at: a.at.toISOString(),
-      })),
+      records: visible.map((r) => r.payload as RecordItem),
+      audit: events
+        .filter((a) => actor.companies.includes(a.company))
+        .map((a) => ({
+          id: a.id, actor: a.actor, action: a.action,
+          recordId: a.recordId, company: a.company, at: a.at.toISOString(),
+        })),
     }),
     { headers: { "Cache-Control": "no-store" } },
   );
@@ -144,6 +146,8 @@ export async function POST(request: Request) {
     const actor = await currentActor();
     if (!actor)
       return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+    const db = await getDb();
+    if (!db) return NextResponse.json({ error: "Database unavailable." }, { status: 503 });
     const body = input.parse(await request.json());
     if(body.kind === "hr") body.attributes = salaryAttributes(body.attributes);
     const quoteError =
@@ -170,14 +174,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Access denied." }, { status: 403 });
     if (record.lines?.length) record.amount = totalCents(record.lines) / 100;
     if (record.parentId) {
-      const parent = await db.businessRecord.findUnique({
-        where: { id: record.parentId },
-      });
+      const parent = await findRecord(db, record.parentId);
       if (
         !parent ||
         parent.company !== record.company ||
         parent.branch !== record.branch ||
-        !canWrite(actor, parent.payload as unknown as RecordItem)
+        !canWrite(actor, parent.payload as RecordItem)
       )
         return NextResponse.json(
           { error: "Invalid linked record." },
@@ -194,30 +196,18 @@ export async function POST(request: Request) {
         { error: "Create this record through quotation acceptance." },
         { status: 400 },
       );
-    await db.$transaction(async (tx) => {
-      await tx.businessRecord.create({
-        data: {
-          id: record.id,
-          kind: record.kind,
-          company: record.company,
-          branch: record.branch,
-          ownerId: actor.id,
-          status: record.status,
-          payload: record as unknown as Prisma.InputJsonValue,
-        },
-      });
-      await tx.auditEvent.create({
-        data: {
-          id: crypto.randomUUID(),
-          actor: actor.name,
-          actorId: actor.id,
-          company: record.company,
-          action: `Created ${record.kind}`,
-          recordId: record.id,
-          after: record as unknown as Prisma.InputJsonValue,
-        },
-      });
-    });
+    await createRecordWithAudit(
+      db,
+      {
+        id: record.id, kind: record.kind, company: record.company,
+        branch: record.branch, ownerId: actor.id, status: record.status, payload: record,
+      },
+      {
+        id: crypto.randomUUID(), actor: actor.name, actorId: actor.id,
+        company: record.company, action: `Created ${record.kind}`,
+        recordId: record.id, after: record,
+      },
+    );
     return NextResponse.json({ record }, { status: 201 });
   } catch {
     return NextResponse.json(
@@ -257,66 +247,59 @@ export async function PATCH(request: Request) {
     const raw = await request.json();
     const c = command.parse({ ...raw, action: raw.action || "status" });
     const id = c.id;
-    await db.$transaction(async (tx) => {
-      const row = await tx.businessRecord.findUnique({ where: { id } });
-      if (!row) throw new Error("Record not found.");
-      const record = row.payload as unknown as RecordItem;
-      const before = { records: [record], audit: [] };
-      if (c.action === "delete") {
-        const peers = await tx.businessRecord.findMany({ where: { company: record.company } });
-        before.records = peers.map(peer => peer.payload as unknown as RecordItem);
-      }
-      const result =
-        c.action === "edit" || c.action === "delete"
-          ? mutateRecord(before, actor, id, c.expectedUpdatedAt, c.action === "edit" ? c.values : undefined)
-          : c.action === "status"
+    const db = await getDb();
+    if (!db) return NextResponse.json({ error: "Database unavailable." }, { status: 503 });
+
+    // D1 has no interactive transactions, so the reads and the business rules
+    // run here and the resulting writes are committed as one guarded batch.
+    const row = await findRecord(db, id);
+    if (!row) throw new Error("Record not found.");
+    const record = row.payload as RecordItem;
+    const before = { records: [record], audit: [] };
+    if (c.action === "delete") {
+      const peers = await listRecordsForCompany(db, record.company);
+      before.records = peers.map((peer) => peer.payload as RecordItem);
+    }
+    const result =
+      c.action === "edit" || c.action === "delete"
+        ? mutateRecord(before, actor, id, c.expectedUpdatedAt, c.action === "edit" ? c.values : undefined)
+        : c.action === "status"
           ? transition(before, actor, id, c.status)
           : c.action === "note"
             ? addNote(before, actor, id, c.text, c.due)
             : recordPayment(before, actor, id, c.amountCents, c.reference);
-      if (!result.audit.length) return;
-      const changed = result.records.find(r => r.id === id)!;
-      const updated = await tx.businessRecord.updateMany({
-        where: { id, version: row.version },
-        data: {
-          status: changed.status,
-          payload: changed as unknown as Prisma.InputJsonValue,
-          version: { increment: 1 },
-        },
-      });
-      if (updated.count !== 1)
-        throw new Error("Another user updated this record. Refresh and retry.");
-      for (const r of result.records.filter(r => !before.records.some(old => old.id === r.id)))
-        await tx.businessRecord.create({
-          data: {
-            id: r.id,
-            kind: r.kind,
-            company: r.company,
-            branch: r.branch,
-            ownerId: r.ownerId,
-            status: r.status,
-            payload: r as unknown as Prisma.InputJsonValue,
-          },
-        });
+    if (result.audit.length) {
+      const changed = result.records.find((r) => r.id === id)!;
+      const created: NewRecord[] = result.records
+        .filter((r) => !before.records.some((old) => old.id === r.id))
+        .map((r) => ({
+          id: r.id, kind: r.kind, company: r.company, branch: r.branch,
+          ownerId: r.ownerId, status: r.status, payload: r,
+        }));
       const event = result.audit[0];
-      await tx.auditEvent.create({
-        data: {
-          ...event,
-          actorId: actor.id,
-          at: new Date(event.at),
-          before: record as unknown as Prisma.InputJsonValue,
-          after: changed as unknown as Prisma.InputJsonValue,
+      // The version guard preserves the original optimistic-concurrency check.
+      const applied = await updateRecordWithAudit(
+        db,
+        id,
+        row.version,
+        { status: changed.status, payload: changed },
+        {
+          id: event.id, company: event.company, actor: event.actor, actorId: actor.id,
+          action: event.action, recordId: event.recordId,
+          before: record, after: changed, at: new Date(event.at),
         },
-      });
-    });
+        created,
+      );
+      if (!applied)
+        throw new Error("Another user updated this record. Refresh and retry.");
+    }
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json(
       {
+        // Business-rule messages are shown; driver errors are not surfaced.
         error:
-          error instanceof Error &&
-          !(error instanceof Prisma.PrismaClientKnownRequestError) &&
-          !(error instanceof Prisma.PrismaClientInitializationError)
+          error instanceof Error && !/D1_|SQLITE|no such table/i.test(error.message)
             ? error.message
             : "Unable to update record. Contact IT if this continues.",
       },

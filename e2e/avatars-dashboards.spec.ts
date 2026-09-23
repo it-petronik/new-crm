@@ -101,3 +101,34 @@ test("a profile picture can be cropped, saved, removed and shared across the app
   await expect(page.locator(".avatar-editor .entity-avatar img")).toHaveCount(0);
   await expect(page.locator(".avatar-editor .entity-avatar")).toHaveText("AM");
 });
+
+test("a list with no records at all offers nothing to filter", async ({ page }) => {
+  await signIn(page, "md");
+  await page.goto("/workspace/all-companies/accounts");
+  const cashbook = page.locator(".cashbook-panel");
+  await cashbook.waitFor();
+  // The cashbook starts empty, so a search box over it would be pointless.
+  await expect(cashbook).toContainText("No USD entries yet");
+  await expect(cashbook.getByRole("textbox", { name: /Search entries/ })).toHaveCount(0);
+  await expect(cashbook.getByRole("button", { name: /^Filters/ })).toHaveCount(0);
+  // A list that does have records still offers its controls.
+  await expect(page.locator(".records-panel").getByRole("button", { name: /^Filters/ })).toBeVisible();
+});
+
+test("record cards show one identity row, not a separate glyph row", async ({ page }) => {
+  await signIn(page, "md");
+  await page.goto("/workspace/all-companies/customers");
+  await page.locator(".record-grid").waitFor();
+  const card = page.locator(".record-card-shell").first();
+  // The module glyph row was redundant once the avatar carried identity.
+  await expect(card.locator(".collection-icon")).toHaveCount(0);
+  const identity = card.locator(".collection-identity");
+  await expect(identity.locator(".entity-avatar")).toBeVisible();
+  await expect(identity.locator(".badge")).toBeVisible();
+  // Avatar, name and status share one line.
+  const rows = await identity.evaluate((el) => {
+    const tops = [...el.children].map((c) => Math.round(c.getBoundingClientRect().top));
+    return new Set(tops).size;
+  });
+  expect(rows).toBe(1);
+});

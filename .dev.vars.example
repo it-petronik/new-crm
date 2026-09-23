@@ -1,0 +1,4 @@
+# Local Worker variables for `npm run cf:preview`. Copy to .dev.vars.
+# .dev.vars is gitignored; never put real secrets in this example file.
+APP_MODE=local
+APP_URL=http://localhost:8788

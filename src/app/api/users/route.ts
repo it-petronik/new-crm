@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import bcrypt from "bcryptjs";
-import { db } from "@/lib/db";
+import { hashPassword } from "@/lib/password";
+import { getDb } from "@/lib/db";
+import {
+  listUsers, findUserById, createUser, updateUserAndRevokeSessions, writeAudit,
+} from "@/lib/data";
 import { currentActor, checkOrigin } from "@/lib/auth";
 import {
   roles,
@@ -11,16 +14,21 @@ import {
   type Actor,
 } from "@/lib/domain";
 import { inAdminScope, mayAssign } from "@/lib/access-control";
-const safeSelect = {
-  id: true,
-  name: true,
-  email: true,
-  role: true,
-  companies: true,
-  branches: true,
-  active: true,
-  moduleAccess: true,
+/** Never return passwordHash or createdAt to the client. */
+type SafeUser = {
+  id: string; name: string; email: string; role: string;
+  companies: string[]; branches: string[]; active: boolean;
+  moduleAccess: Record<string, string> | null;
 };
+const safeUser = (u: {
+  id: string; name: string; email: string; role: string;
+  companies: string[]; branches: string[]; active: boolean;
+  moduleAccess: Record<string, string> | null;
+}): SafeUser => ({
+  id: u.id, name: u.name, email: u.email, role: u.role,
+  companies: u.companies, branches: u.branches, active: u.active,
+  moduleAccess: u.moduleAccess,
+});
 const accessFields = {
   role: z.enum(roles),
   companies: z.array(z.enum(companies)).min(1).max(4),
@@ -39,15 +47,16 @@ export async function GET() {
   const actor = await currentActor();
   if (!actor || !canManageUsers(actor))
     return NextResponse.json({ error: "Access denied." }, { status: 403 });
-  const users = await db.user.findMany({
-    select: safeSelect,
-    orderBy: { name: "asc" },
-  });
+  const db = await getDb();
+  if (!db)
+    return NextResponse.json({ users: [] }, { headers: { "Cache-Control": "no-store" } });
+  const rows = await listUsers(db);
   return NextResponse.json(
     {
-      users: users.filter((u) =>
-        inAdminScope(actor, u.companies as string[], u.branches as string[]),
-      ),
+      users: rows
+        .map(safeUser)
+        .filter((u) => inAdminScope(actor, u.companies, u.branches))
+        .sort((a, b) => a.name.localeCompare(b.name)),
     },
     { headers: { "Cache-Control": "no-store" } },
   );
@@ -64,30 +73,32 @@ export async function POST(request: Request) {
         { error: "Role or scope exceeds your administrative access." },
         { status: 403 },
       );
+    const db = await getDb();
+    if (!db) return NextResponse.json({ error: "Database unavailable." }, { status: 503 });
     const { password, ...fields } = body;
-    const passwordHash = await bcrypt.hash(password, 12);
-    const user = await db.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: {
-          ...fields,
-          moduleAccess: fields.moduleAccess || {},
-          email: body.email.toLowerCase(),
-          passwordHash,
-        },
-        select: safeSelect,
-      });
-      await tx.auditEvent.create({
-        data: {
-          id: crypto.randomUUID(),
-          company: body.companies[0],
-          actorId: actor.id,
-          actor: actor.name,
-          action: `Created user: ${body.name} (${body.role})`,
-          recordId: user.id,
-        },
-      });
-      return user;
+    const passwordHash = await hashPassword(password);
+    const id = crypto.randomUUID();
+    const row = {
+      id,
+      name: fields.name,
+      email: body.email.toLowerCase(),
+      role: fields.role,
+      companies: fields.companies,
+      branches: fields.branches,
+      moduleAccess: fields.moduleAccess || {},
+      active: true,
+      passwordHash,
+    };
+    await createUser(db, row);
+    await writeAudit(db, {
+      id: crypto.randomUUID(),
+      company: body.companies[0],
+      actorId: actor.id,
+      actor: actor.name,
+      action: `Created user: ${body.name} (${body.role})`,
+      recordId: id,
     });
+    const user = safeUser(row);
     return NextResponse.json({ user }, { status: 201 });
   } catch {
     return NextResponse.json(
@@ -111,61 +122,46 @@ export async function PATCH(request: Request) {
         z.object({ id: z.string(), active: z.boolean() }),
       ])
       .parse(await request.json());
-    await db.$transaction(
-      async (tx) => {
-        const target = await tx.user.findUnique({
-          where: { id: body.id },
-          select: safeSelect,
-        });
-        if (!target) throw new Error("Access denied.");
-        const current = {
-          ...target,
-          role: target.role as Actor["role"],
-          companies: target.companies as string[],
-          branches: target.branches as string[],
-        };
-        const requested =
-          "role" in body
-            ? body
-            : {
-                ...current,
-                moduleAccess: (target.moduleAccess ||
-                  {}) as Actor["moduleAccess"],
-              };
-        if (!mayAssign(actor, current, requested))
-          throw new Error("Access denied.");
-        const changes =
-          "role" in body
-            ? {
-                role: body.role,
-                companies: body.companies,
-                branches: body.branches,
-                moduleAccess: body.moduleAccess || {},
-              }
-            : { active: body.active };
-        await tx.user.update({ where: { id: body.id }, data: changes });
-        await tx.session.deleteMany({ where: { userId: body.id } });
-        await tx.auditEvent.create({
-          data: {
-            id: crypto.randomUUID(),
-            company: current.companies[0],
-            actorId: actor.id,
-            actor: actor.name,
-            recordId: body.id,
-            action: `Updated user access: ${target.name}`,
-            before: {
-              role: current.role,
-              companies: current.companies,
-              branches: current.branches,
-              moduleAccess: target.moduleAccess,
-              active: target.active,
-            },
-            after: changes,
-          },
-        });
+    const db = await getDb();
+    if (!db) return NextResponse.json({ error: "Database unavailable." }, { status: 503 });
+    const target = await findUserById(db, body.id);
+    if (!target) throw new Error("Access denied.");
+    const current = {
+      ...safeUser(target),
+      role: target.role as Actor["role"],
+      companies: target.companies,
+      branches: target.branches,
+    };
+    const requested =
+      "role" in body
+        ? body
+        : { ...current, moduleAccess: (target.moduleAccess || {}) as Actor["moduleAccess"] };
+    if (!mayAssign(actor, current, requested)) throw new Error("Access denied.");
+    const changes =
+      "role" in body
+        ? {
+            role: body.role,
+            companies: body.companies,
+            branches: body.branches,
+            moduleAccess: body.moduleAccess || {},
+          }
+        : { active: body.active };
+    // Updating access and revoking that user's sessions commit together, so a
+    // revoked account cannot keep a live session.
+    await updateUserAndRevokeSessions(db, body.id, changes);
+    await writeAudit(db, {
+      id: crypto.randomUUID(),
+      company: current.companies[0],
+      actorId: actor.id,
+      actor: actor.name,
+      recordId: body.id,
+      action: `Updated user access: ${target.name}`,
+      before: {
+        role: current.role, companies: current.companies, branches: current.branches,
+        moduleAccess: target.moduleAccess, active: target.active,
       },
-      { isolationLevel: "Serializable" },
-    );
+      after: changes,
+    });
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json(

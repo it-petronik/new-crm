@@ -877,7 +877,7 @@ export default function Workspace({
               browser.
             </span>
             <span className="preview-right">
-              MySQL ready · No live connection
+              Preview data · not connected to the workspace database
             </span>
           </div>
         )}
@@ -1505,18 +1505,6 @@ function RecordCards({
       <ListFilters {...pagination} label="records" />
       <div className="record-grid">
         {pagination.items.map((r) => {
-          const Icon =
-            r.kind === "logistics"
-              ? Truck
-              : r.kind === "products"
-                ? Box
-                : r.kind === "marketing"
-                  ? Globe2
-                  : r.kind === "it"
-                    ? Monitor
-                    : r.kind === "leave"
-                      ? CalendarDays
-                      : Users;
           const description =
             r.kind === "hr"
               ? r.contact
@@ -1531,12 +1519,8 @@ function RecordCards({
               className="collection-card"
               onClick={() => onSelect(r)}
             >
-              <div className="collection-top">
-                <span className="collection-icon">
-                  <Icon size={20} />
-                </span>
-                <Badge status={r.status} />
-              </div>
+              {/* The avatar identifies the record and the page already names
+                  the module, so the separate module glyph row is dropped. */}
               <div className="collection-identity">
                 <Avatar name={r.title} size={36} />
                 <div>
@@ -1547,6 +1531,7 @@ function RecordCards({
                       "Details available in record"}
                   </p>
                 </div>
+                <Badge status={r.status} />
               </div>
               <Company name={r.company} />
               <div className="collection-bottom">
@@ -2484,7 +2469,7 @@ function Settings({ actor, preview }: { actor: Actor; preview: boolean }) {
             <dd>{actor.companies.length} companies</dd>
 
             <dt>Environment</dt>
-            <dd>{preview ? "Fictional preview" : "MySQL workspace"}</dd>
+            <dd>{preview ? "Fictional preview" : "Cloudflare D1 workspace"}</dd>
           </dl>
           <p className="small muted">
             MD and IT can provision accounts above. Leadership access requires

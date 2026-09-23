@@ -1,0 +1,66 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "enercore-crm",
+	"main": ".open-next/worker.js",
+	"compatibility_date": "2026-09-01",
+	// nodejs_compat is required by the Next.js runtime and by node:crypto usage.
+	"compatibility_flags": ["nodejs_compat"],
+	"assets": {
+		"directory": ".open-next/assets",
+		"binding": "ASSETS"
+	},
+	"observability": { "enabled": true },
+
+	// ------------------------------------------------------------------
+	// TOP LEVEL = the preview Worker on workers.dev.
+	// Deployed with:  npm run cf:deploy
+	// This must stay APP_MODE=preview and serve fictional in-browser data.
+	// ------------------------------------------------------------------
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "enercore-crm",
+			"database_id": "71f8d380-5c3c-478b-822c-7fcd47b102d2",
+			"migrations_dir": "drizzle"
+		}
+	],
+	"vars": {
+		"APP_MODE": "preview",
+		"NODE_ENV": "production",
+		"APP_URL": "https://enercore-crm.red-bread-8f67.workers.dev"
+	},
+
+	// ------------------------------------------------------------------
+	// ENVIRONMENT "live" = the real CRM on crm.enercore.ae.
+	// Deployed with:  npm run cf:deploy:live
+	// Wrangler publishes this as a SEPARATE Worker script
+	// (enercore-crm-live), so deploying the preview Worker can never
+	// change the live one, and vice versa.
+	//
+	// wrangler does NOT inherit `vars`, `d1_databases` or `routes` into an
+	// environment, so each is declared explicitly below. The database_id is
+	// deliberately the same verified database that already holds the
+	// administrator - this is intentional shared state, not a copy.
+	// ------------------------------------------------------------------
+	"env": {
+		"live": {
+			"d1_databases": [
+				{
+					"binding": "DB",
+					"database_name": "enercore-crm",
+					"database_id": "71f8d380-5c3c-478b-822c-7fcd47b102d2",
+					"migrations_dir": "drizzle"
+				}
+			],
+			"vars": {
+				"APP_MODE": "production",
+				"NODE_ENV": "production",
+				"APP_URL": "https://crm.enercore.ae"
+			},
+			"routes": [
+				{ "pattern": "crm.enercore.ae", "custom_domain": true }
+			],
+			"observability": { "enabled": true }
+		}
+	}
+}
