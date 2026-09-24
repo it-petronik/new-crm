@@ -21,6 +21,7 @@ import {
   type Actor,
 } from "@/lib/domain";
 import { leadership, mayAssign, branchesForRole } from "@/lib/access-control";
+import { check, required, minLength, email as emailRule } from "@/lib/validation";
 type User = Actor & { email: string; active: boolean };
 export default function UserAdmin({
   actor,
@@ -39,6 +40,7 @@ export default function UserAdmin({
   const [resetLink, setResetLink] = useState<{ link: string; name: string; minutes: number } | null>(null);
   const [copied, setCopied] = useState(false);
   const [ready, setReady] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [review, setReview] = useState(false);
   const key = `enercore-user-preview-${actor.id}`;
   async function load() {
@@ -328,9 +330,38 @@ export default function UserAdmin({
               Your own access cannot be changed here.
             </p>
             <form
+              noValidate
               id="user-access-form"
+              onInput={(e) => {
+                const name = (e.target as HTMLElement & { name?: string }).name;
+                if (name) setFieldErrors((prev) => (prev[name] ? { ...prev, [name]: "" } : prev));
+              }}
               onSubmit={async (e) => {
                 e.preventDefault();
+                // Client-side only for speed of feedback; the API re-checks.
+                if (creating) {
+                  const entered = new FormData(e.currentTarget);
+                  const found: Record<string, string> = {};
+                  const nameError = check(editor.name, [required("Name"), minLength("Name", 2)]);
+                  if (nameError) found.name = nameError;
+                  const emailError = check(editor.email, [required("Work email"), emailRule]);
+                  if (emailError) found.email = emailError;
+                  if (!preview) {
+                    const password = String(entered.get("password") ?? "");
+                    const passwordError = check(password, [
+                      required("An initial password"),
+                      minLength("The password", 14),
+                    ]);
+                    if (passwordError) found.password = passwordError;
+                  }
+                  setFieldErrors(found);
+                  const first = Object.keys(found)[0];
+                  if (first) {
+                    const el = e.currentTarget.querySelector("[name=\"" + first + "\"]");
+                    setTimeout(() => (el as HTMLElement | null)?.focus(), 0);
+                    return;
+                  }
+                }
                 if (
                   !mayAssign(
                     actor,
@@ -392,11 +423,10 @@ export default function UserAdmin({
                 <div className="form-grid">
                   {creating && (
                     <>
-                      <Field>
+                      <Field error={fieldErrors.name}>
                         Name
                         <Input
-                          required
-                          minLength={2}
+                          name="name"
                           maxLength={100}
                           value={editor.name}
                           onChange={(e) =>
@@ -404,11 +434,11 @@ export default function UserAdmin({
                           }
                         />
                       </Field>
-                      <Field>
+                      <Field error={fieldErrors.email}>
                         Work email
                         <Input
-                          type="email"
-                          required
+                          name="email"
+                          inputMode="email"
                           value={editor.email}
                           onChange={(e) =>
                             setEditor({ ...editor, email: e.target.value })
@@ -494,15 +524,13 @@ export default function UserAdmin({
                 </div>
               </fieldset>
               {creating && !preview && (
-                <Field>
+                <Field error={fieldErrors.password} hint="At least 14 characters">
                   Initial password
                   <Input
                     name="password"
                     type="password"
                     autoComplete="new-password"
-                    minLength={14}
                     maxLength={128}
-                    required
                     readOnly={review}
                   />
                 </Field>

@@ -2,11 +2,14 @@
 import { companyName } from "@/lib/company-name";
 import { recordsToCsv, exportFilename, downloadCsv } from "@/lib/export";
 import { isImportable, type ImportableKind } from "@/lib/import";
-import { attentionItems, isoDate } from "@/lib/attention";
+import { attentionItems, isoDate, nextAction } from "@/lib/attention";
+import LogActivity from "./log-activity";
+import MorningBrief from "./morning-brief";
+import BusinessClock from "./business-clock";
 import MyDay from "./my-day";
 import QuickAdd from "./quick-add";
 import { SkeletonDashboard, SkeletonMyDay, SkeletonList } from "./ui/skeleton";
-import FollowUpControl from "./follow-up-control";
+import FollowUpControl, { FollowUpMenu } from "./follow-up-control";
 import ImportDialog from "./import-dialog";
 import { salaryAttributes } from "@/lib/salary";
 import { workspaceUrl, workspaceParams } from "@/lib/workspace-url";
@@ -56,6 +59,7 @@ import {
   ShieldCheck,
   Sparkles,
   AlertTriangle,
+  Phone,
   Target,
   Truck,
   Users,
@@ -380,6 +384,10 @@ export default function Workspace({
   const [deleting, setDeleting] = useState<RecordItem | null>(null);
   const [importing, setImporting] = useState(false);
   const [quickAdd, setQuickAdd] = useState<{ open: boolean; kind?: Kind }>({ open: false });
+  const [logging, setLogging] = useState<RecordItem | null>(null);
+  // After advancing a record, offer the follow-up rather than relying on the
+  // person to remember. Dismissable, never blocking.
+  const [prompt, setPrompt] = useState<{ record: RecordItem; status: string } | null>(null);
   // Who sees the company view rather than their own day.
   const executive = ["MD", "IT Administrator", "Group Manager", "Branch Manager"].includes(actor.role);
   const [mutationError, setMutationError] = useState("");
@@ -644,6 +652,15 @@ export default function Workspace({
    * this goes through the same authenticated, audited, concurrency-guarded
    * path as any other change — it simply removes the typing.
    */
+  /**
+   * Records a contact and, when one was chosen, the next follow-up — in one
+   * write through the same audited action a typed note uses.
+   */
+  async function logActivity(r: RecordItem, text: string, due?: string) {
+    await extraAction(r, { action: "note", text, ...(due ? { due } : {}) });
+    setToast(due ? `Activity logged · follow-up ${due}.` : "Activity logged.");
+  }
+
   async function setFollowUp(r: RecordItem, date: string) {
     await extraAction(r, {
       action: "note",
@@ -848,6 +865,7 @@ export default function Workspace({
             </nav>
           </div>
           <div className="top-right">
+            <BusinessClock />
             {/* Always reachable, on every screen, so creating a record is
                 never a navigation task. The shortcut is a convenience on top
                 of this button, never a requirement. */}
@@ -1414,9 +1432,9 @@ export default function Workspace({
                           ))}
                       </div>
                     ) : cardModules.includes(module) && board ? (
-                      <RecordCards records={visible} onSelect={setSelected} actor={actor} onEdit={r => { setMutationError(""); setEditing(r); setForm(r.kind); }} onDelete={r => { setMutationError(""); setDeleting(r); }} onStatus={(r, status) => void update(r, status)} onImport={isImportable(module) ? () => setImporting(true) : undefined} />
+                      <RecordCards records={visible} onSelect={setSelected} actor={actor} onEdit={r => { setMutationError(""); setEditing(r); setForm(r.kind); }} onDelete={r => { setMutationError(""); setDeleting(r); }} onLog={setLogging} onStatus={(r, status) => { void update(r, status).then(() => setPrompt({ record: r, status })); }} onImport={isImportable(module) ? () => setImporting(true) : undefined} />
                     ) : (
-                      <RecordTable records={visible} onSelect={setSelected} actor={actor} onEdit={r => { setMutationError(""); setEditing(r); setForm(r.kind); }} onDelete={r => { setMutationError(""); setDeleting(r); }} onStatus={(r, status) => void update(r, status)} onImport={isImportable(module) ? () => setImporting(true) : undefined} />
+                      <RecordTable records={visible} onSelect={setSelected} actor={actor} onEdit={r => { setMutationError(""); setEditing(r); setForm(r.kind); }} onDelete={r => { setMutationError(""); setDeleting(r); }} onLog={setLogging} onStatus={(r, status) => { void update(r, status).then(() => setPrompt({ record: r, status })); }} onImport={isImportable(module) ? () => setImporting(true) : undefined} />
                     )}
                   </section>
                   {["orders", "accounts", "logistics"].includes(module) && (
@@ -1540,6 +1558,16 @@ export default function Workspace({
         )}
       </DialogPresence>
       <DialogPresence>
+        {logging && (
+          <LogActivity
+            record={logging}
+            busy={busy}
+            onLog={(text, due) => logActivity(logging, text, due)}
+            onClose={() => setLogging(null)}
+          />
+        )}
+      </DialogPresence>
+      <DialogPresence>
         {quickAdd.open && (
           <QuickAdd
             actor={actor}
@@ -1575,6 +1603,22 @@ export default function Workspace({
           {!deletionReason(deleting, data.records) && <Button className="danger-button" disabled={busy} loading={busy} onClick={deleteRecord}>Delete record</Button>}
         </div></DialogActions>
       </Dialog>}</DialogPresence>
+      {prompt && (
+        <div className="after-action" role="status">
+          <span>
+            {prompt.record.title} is now <b>{prompt.status}</b>. Set the next follow-up?
+          </span>
+          <FollowUpControl
+            compact
+            busy={busy}
+            onChoose={(date) => { void setFollowUp(prompt.record, date); setPrompt(null); }}
+            onClear={() => setPrompt(null)}
+          />
+          <Button className="icon-button" aria-label="Dismiss" onClick={() => setPrompt(null)}>
+            <X size={15} />
+          </Button>
+        </div>
+      )}
       {toast && (
         <div className="toast" role="status">
           <CheckCircle2 size={18} />
@@ -1591,11 +1635,44 @@ type RecordActionsProps = {
   onImport?: () => void;
   /** Inline status change; omitted where a row must not be changed in place. */
   onStatus?: (r: RecordItem, status: string) => void;
+  /** Opens the quick activity log; omitted for kinds nobody contacts. */
+  onLog?: (r: RecordItem) => void;
 };
-function RecordIcons({ record, actor, onEdit, onDelete, onStatus }: RecordActionsProps & { record: RecordItem }) {
+
+/** Kinds where "I contacted them" is a real event. */
+const LOGGABLE = ["leads", "customers", "suppliers", "quotations", "orders"];
+/** The next action, with its date kept as secondary detail. */
+function NextActionCell({ record }: { record: RecordItem }) {
+  const action = nextAction(record);
+  return (
+    <span className="next-action-cell">
+      <span className={`next-action tone-${action.tone}`}>{action.label}</span>
+      {record.due && (
+        <small className="muted cell-date">
+          <CalendarDays size={12} aria-hidden="true" />
+          {record.due}
+        </small>
+      )}
+    </span>
+  );
+}
+
+function RecordIcons({ record, actor, onEdit, onDelete, onStatus, onLog }: RecordActionsProps & { record: RecordItem }) {
   if (!canWrite(actor, record)) return null;
   const options = stages[record.kind] || [];
   return <span className="record-icon-actions">
+    {/* Logging a contact is the most frequent thing that happens to a record
+        and should never require opening it. */}
+    {onLog && LOGGABLE.includes(record.kind) && (
+      <Button
+        className="icon-button log-activity-trigger"
+        title="Log activity"
+        aria-label={`Log activity for ${record.title}`}
+        onClick={(e) => { e.stopPropagation(); onLog(record); }}
+      >
+        <Phone size={15} />
+      </Button>
+    )}
     {/* Advancing a record is the most repeated action in the CRM, so it
         happens in the row. It still goes through the same authenticated,
         audited, version-guarded update as the full dialog. */}
@@ -1737,7 +1814,7 @@ function RecordTable({
               <SortHeader sortKey="product" query={pagination.query} setQuery={pagination.setQuery}>Product / Details</SortHeader>
               <SortHeader sortKey="amount" query={pagination.query} setQuery={pagination.setQuery}>Value</SortHeader>
               <SortHeader sortKey="status" query={pagination.query} setQuery={pagination.setQuery}>Status</SortHeader>
-              <SortHeader sortKey="due" query={pagination.query} setQuery={pagination.setQuery}>Due date</SortHeader>
+              <SortHeader sortKey="due" query={pagination.query} setQuery={pagination.setQuery}>Next action</SortHeader>
               <SortHeader sortKey="owner" query={pagination.query} setQuery={pagination.setQuery}>Created by</SortHeader>
               <th>Actions</th>
             </tr>
@@ -1775,8 +1852,11 @@ function RecordTable({
                 <td>
                   <Badge status={r.status} />
                 </td>
-                <td className="muted">
-                  {r.due ? <span className="cell-date"><CalendarDays size={14} aria-hidden="true" />{r.due}</span> : "—"}
+                {/* The derived next action replaces a bare date: it says what
+                    to do as well as when, so nobody opens a record to find
+                    out. The date remains visible underneath. */}
+                <td>
+                  <NextActionCell record={r} />
                 </td>
                 <td>
                   {r.owner ? (
@@ -1839,6 +1919,7 @@ function Overview({
   onQuickAdd: (kind?: Kind) => void;
   busy?: boolean;
 }) {
+  const [showAllAttention, setShowAllAttention] = useState(false);
   const custom = period === "custom";
   const reversed = custom && Boolean(from && to && from > to);
   const incomplete = custom && !(from && to);
@@ -2039,19 +2120,23 @@ function Overview({
   // Exceptions first: the executive view leads with what needs a decision,
   // then the numbers, then the analysis. Ranked by business impact so the
   // most costly problem is the first thing read.
-  const ranked = attentionItems(actor, allRecords).slice(0, 8);
+  const rankedAll = attentionItems(actor, allRecords);
+  // Five is what fits the first screen beside the brief and the KPI strip.
+  // The rest are one click away rather than pushing the numbers off-screen.
+  const ranked = showAllAttention ? rankedAll : rankedAll.slice(0, 5);
 
   return (
     <>
+      <MorningBrief actor={actor} records={allRecords} onGo={(m) => go(m as Module)} />
       {ranked.length > 0 && (
         <section className="panel attention-section tone-urgent command-attention">
           <div className="panel-heading">
             <h2><AlertTriangle size={16} /> Needs attention</h2>
-            <span className="attention-count">{ranked.length}</span>
+            <span className="attention-count">{rankedAll.length}</span>
           </div>
           <ul className="attention-list">
             {ranked.map((item) => (
-              <li key={item.id} className={`attention-item sev-${item.severity}`}>
+              <li key={item.id} className={`attention-row sev-${item.severity}`}>
                 <Button className="record-link attention-open" onClick={() => onSelect(item.record)}>
                   <span className="my-day-title">{item.record.title}</span>
                   <small>
@@ -2062,11 +2147,16 @@ function Overview({
                   </small>
                 </Button>
                 {item.action === "follow-up" && (
-                  <FollowUpControl compact busy={busy} onChoose={(date) => void onFollowUp(item.record, date)} />
+                  <FollowUpMenu busy={busy} onChoose={(date) => void onFollowUp(item.record, date)} />
                 )}
               </li>
             ))}
           </ul>
+          {rankedAll.length > ranked.length && (
+            <Button className="secondary attention-more" onClick={() => setShowAllAttention(true)}>
+              View all {rankedAll.length} <ArrowRight size={14} />
+            </Button>
+          )}
         </section>
       )}
       <p className="dashboard-scope">
@@ -2232,7 +2322,7 @@ function Overview({
           </div>
           {[...approvals, ...attention].slice(0, 4).map((r, i) => (
             <Button
-              className="attention-item"
+              className="attention-row"
               key={r.id}
               onClick={() => onSelect(r)}
             >

@@ -135,3 +135,17 @@
   .skeleton-kpis, .skeleton-two-col { grid-template-columns: 1fr; }
   .skeleton-day-head { flex-direction: column; }
 }
+
+/* Placeholder padding matches the loaded panels exactly, so the swap is
+   invisible rather than a jump. */
+.skeleton-brief, .skeleton-attention { padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; }
+.skeleton-brief-lines { display: flex; flex-direction: column; gap: 8px; }
+.skeleton-attn-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 9px 0; border-top: 1px solid var(--border);
+}
+.skeleton-attn-row:first-child { border-top: 0; }
+.skeleton-attention .skeleton-stack { gap: 0; margin-top: 4px; }
+@media (max-width: 720px) {
+  .skeleton-brief, .skeleton-attention { padding: 16px; }
+}

@@ -1,7 +1,7 @@
 "use client";
 import { AlertTriangle, CalendarClock, CheckCircle2, Clock, Plus, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/controls";
-import FollowUpControl from "./follow-up-control";
+import { FollowUpMenu } from "./follow-up-control";
 import { myDay, type AttentionItem } from "@/lib/attention";
 import { companyName } from "@/lib/company-name";
 import { allowedModules, money, type Actor, type Kind, type RecordItem } from "@/lib/domain";
@@ -191,17 +191,13 @@ function Section({
       </div>
       <ul className="attention-list">
         {items.slice(0, 6).map((item) => (
-          <li key={item.id} className="attention-item">
+          <li key={item.id} className="attention-row">
             <Button className="record-link attention-open" onClick={() => onOpen(item.record)}>
               <span className="my-day-title">{item.record.title}</span>
               <small>{item.reason}{item.record.amount ? ` · ${money(item.record.amount, item.record.currency)}` : ""}</small>
             </Button>
             {item.action === "follow-up" && (
-              <FollowUpControl
-                compact
-                busy={busy}
-                onChoose={(date) => void onFollowUp(item.record, date)}
-              />
+              <FollowUpMenu busy={busy} onChoose={(date) => void onFollowUp(item.record, date)} />
             )}
           </li>
         ))}

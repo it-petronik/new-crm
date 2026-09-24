@@ -28,12 +28,12 @@
 }
 
 .attention-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-.attention-item {
+.attention-row {
   display: flex; align-items: center; justify-content: space-between;
   gap: 12px; flex-wrap: wrap;
   padding: 10px 0; border-top: 1px solid var(--border);
 }
-.attention-item:first-child { border-top: 0; }
+.attention-row:first-child { border-top: 0; }
 .attention-open { flex: 1 1 260px; text-align: left; min-width: 0; }
 .my-day-title { display: block; font-weight: 600; }
 .attention-open small { display: block; color: var(--muted); margin-top: 2px; }
@@ -92,7 +92,7 @@
   .quick-add-trigger-label { display: none; }
 
   .quick-add-row { grid-template-columns: 1fr; }
-  .attention-item { align-items: flex-start; }
+  .attention-row { align-items: flex-start; }
   /* Tap targets stay comfortable on a phone. */
   .follow-up-control.is-compact button,
   .follow-up-control.is-compact input[type="date"] { min-height: 38px; }
@@ -107,3 +107,157 @@
 /* My Day supplies its own heading, so the page header collapses to its controls. */
 .page-heading.is-my-day > div:first-child:empty { display: none; }
 .page-heading.is-my-day { margin-bottom: 4px; }
+
+/* --- morning brief ------------------------------------------------------- */
+.morning-brief .panel-heading h2 { display: flex; align-items: center; gap: 8px; }
+.morning-brief-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.morning-brief-clear { margin: 0; }
+.brief-line { display: flex; align-items: center; gap: 9px; font-size: 0.9rem; }
+.brief-dot {
+  width: 7px; height: 7px; border-radius: 999px; flex: none;
+  background: var(--muted);
+}
+.brief-line.tone-urgent .brief-dot { background: var(--danger, #d9534f); }
+.brief-line.tone-warning .brief-dot { background: var(--warning, #d98c1f); }
+.brief-line.tone-done .brief-dot { background: var(--success, #2e9e5b); }
+.brief-link { display: inline-flex; align-items: center; gap: 6px; text-align: left; }
+
+/* --- next action --------------------------------------------------------- */
+.next-action {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 0.78rem; white-space: nowrap;
+}
+.next-action::before {
+  content: ""; width: 6px; height: 6px; border-radius: 999px; background: var(--muted);
+}
+.next-action.tone-urgent { color: var(--danger, #d9534f); }
+.next-action.tone-urgent::before { background: var(--danger, #d9534f); }
+.next-action.tone-warning { color: var(--warning, #d98c1f); }
+.next-action.tone-warning::before { background: var(--warning, #d98c1f); }
+.next-action.tone-done { color: var(--success, #2e9e5b); }
+.next-action.tone-done::before { background: var(--success, #2e9e5b); }
+.next-action.tone-neutral, .next-action.tone-info { color: var(--muted); }
+
+/* --- log activity -------------------------------------------------------- */
+.log-activity-record { margin: -4px 0 12px; }
+.log-activity-kinds { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.log-activity-kind { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 8px; }
+.log-activity-kind.is-active { background: var(--accent, #14505a); color: #fff; }
+.log-activity-outcomes { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.log-activity-chip { padding: 5px 11px; border-radius: 999px; font-size: 0.8rem; }
+.log-activity-chip.is-active { background: var(--accent, #14505a); color: #fff; }
+.log-activity-trigger { white-space: nowrap; }
+
+@media (max-width: 720px) {
+  .log-activity-kind, .log-activity-chip { min-height: 40px; }
+  .log-activity-kinds button { flex: 1 1 calc(33% - 6px); justify-content: center; }
+}
+
+.next-action-cell { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
+.next-action-cell .cell-date { display: inline-flex; align-items: center; gap: 4px; font-size: 0.74rem; }
+
+/* After-action prompt: a quiet bar above the toast, never a modal. */
+.after-action {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 45;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  max-width: min(680px, calc(100vw - 32px));
+  padding: 10px 12px; border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface, #fff);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.14);
+  font-size: 0.86rem;
+}
+@media (max-width: 720px) {
+  .after-action { left: 16px; right: 16px; transform: none; max-width: none; bottom: calc(84px + env(safe-area-inset-bottom)); }
+}
+
+/* ---------------------------------------------------------------------------
+   Density corrections.
+
+   The brief and the attention list sit in the executive first viewport, so
+   their height is a budget. Both are content-driven: no minimum height, no
+   padding that survives when the content does not.
+   ------------------------------------------------------------------------ */
+
+.morning-brief { padding: 18px 20px; }
+.morning-brief .panel-heading { margin: 0 0 10px; padding: 0; border: 0; min-height: 0; }
+.morning-brief .panel-heading h2 { margin: 0; font-size: 0.95rem; }
+.morning-brief-list { gap: 8px; }
+.morning-brief .brief-line { line-height: 1.35; }
+.morning-brief-clear { font-size: 0.88rem; }
+
+/* One attention item is one line of substance plus one of detail, with its
+   action on the same row — around 56px, not the 140px five buttons produced. */
+.attention-section { padding: 16px 20px; }
+.attention-section .panel-heading { margin: 0 0 6px; padding: 0; border: 0; min-height: 0; }
+.attention-section .panel-heading h2 { margin: 0; font-size: 0.95rem; }
+.attention-row { padding: 9px 0; gap: 10px; flex-wrap: nowrap; align-items: center; }
+.attention-open { flex: 1 1 auto; min-width: 0; }
+.attention-open small {
+  display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.attention-more { margin-top: 10px; }
+
+.follow-up-menu-trigger { flex: none; padding: 5px 11px; font-size: 0.79rem; }
+.follow-up-menu {
+  display: flex; flex-direction: column; gap: 2px; min-width: 190px;
+  padding: 6px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--surface, #fff);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14);
+  z-index: 60;
+}
+.follow-up-menu-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; padding: 8px 10px; border-radius: 7px; font-size: 0.85rem;
+}
+.follow-up-menu-item small { color: var(--muted); }
+.follow-up-menu-date {
+  display: flex; flex-direction: column; gap: 5px;
+  padding: 8px 10px 4px; margin-top: 2px;
+  border-top: 1px solid var(--border);
+  font-size: 0.78rem; color: var(--muted);
+}
+
+@media (max-width: 720px) {
+  /* Stacked, with the action still on its own reachable line. */
+  .attention-row { flex-wrap: wrap; align-items: flex-start; }
+  .attention-open { flex: 1 1 100%; }
+  .follow-up-menu-trigger { min-height: 38px; }
+  .morning-brief, .attention-section { padding: 16px; }
+}
+
+/* --- business clock ------------------------------------------------------ */
+.business-clock {
+  display: flex; flex-direction: column; align-items: flex-end;
+  line-height: 1.2; min-width: 124px;
+}
+.business-clock-time { font-size: 0.86rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.business-clock-time abbr { text-decoration: none; color: var(--muted); font-weight: 500; }
+.business-clock small { color: var(--muted); font-size: 0.7rem; white-space: nowrap; }
+
+@media (max-width: 900px) {
+  /* The offset line is the first thing to go; the time itself stays. */
+  .business-clock small { display: none; }
+  .business-clock { min-width: 0; }
+}
+@media (max-width: 560px) {
+  .business-clock { display: none; }
+}
+
+/* Two lines of text and an action, at the density the executive screen needs. */
+.attention-row { padding: 7px 0; }
+.attention-open { padding: 0; }
+.attention-open .my-day-title { font-size: 0.89rem; line-height: 1.25; }
+.attention-open small { font-size: 0.765rem; line-height: 1.25; margin-top: 1px; }
+.attention-tag { padding: 0 6px; font-size: 0.69rem; }
+
+/* More specific than the generic panel-list and button rules these sit inside. */
+.attention-section .attention-list .attention-row { padding: 7px 0; }
+.attention-section .attention-row .attention-open { min-height: 0; padding: 0; }
+.attention-section .attention-row .follow-up-menu-trigger {
+  min-height: 0; height: 28px; padding: 0 10px; font-size: 0.78rem;
+}
+@media (max-width: 720px) {
+  .attention-section .attention-row .follow-up-menu-trigger { height: 38px; }
+}

@@ -1,5 +1,6 @@
 "use client";
 import { Button, Input, Textarea, Field } from "@/components/ui/controls";
+import { check, required, number } from "@/lib/validation";
 import { useState } from "react";
 import { Plus, X } from "lucide-react";
 import { ProductInput } from "./product-input";
@@ -163,6 +164,7 @@ export function RecordActivity({
   ) => Promise<void>;
 }) {
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [adding, setAdding] = useState(false);
   const profile = activityProfile(record.kind);
   if (record.kind === "accounts" && record.attributes?.entryType) return null;
@@ -205,10 +207,22 @@ export function RecordActivity({
       )}
       {writable && profile && adding && (
         <form
+          noValidate
+          onInput={(e) => {
+            const name = (e.target as HTMLElement & { name?: string }).name;
+            if (name) setFieldErrors((prev) => (prev[name] ? { ...prev, [name]: "" } : prev));
+          }}
           onSubmit={async (e) => {
             e.preventDefault();
             const form = e.currentTarget;
             const data = new FormData(form);
+            const noteError = check(String(data.get("note") ?? ""), [required(profile.label)]);
+            if (noteError) {
+              setFieldErrors({ note: noteError });
+              setTimeout(() => (form.querySelector("[name=\"note\"]") as HTMLElement | null)?.focus(), 0);
+              return;
+            }
+            setFieldErrors({});
             try {
               await onAction({
                 action: "note",
@@ -223,11 +237,10 @@ export function RecordActivity({
             }
           }}
         >
-          <Field>
+          <Field error={fieldErrors.note}>
             {profile.label}
             <Textarea
               name="note"
-              required
               maxLength={5000}
               placeholder="What happened? What comes next?"
               rows={2}
@@ -265,10 +278,34 @@ export function RecordActivity({
           {writable &&
             !["Draft", "Paid", "Cancelled"].includes(record.status) && (
               <form
+                noValidate
+                onInput={(e) => {
+                  const name = (e.target as HTMLElement & { name?: string }).name;
+                  if (name) setFieldErrors((prev) => (prev[name] ? { ...prev, [name]: "" } : prev));
+                }}
                 onSubmit={async (e) => {
                   e.preventDefault();
                   const form = e.currentTarget;
                   const data = new FormData(form);
+                  // Immediate feedback only; the API re-checks the amount
+                  // against what is actually outstanding.
+                  const found: Record<string, string> = {};
+                  const amountError = check(String(data.get("payment") ?? ""), [
+                    required("An amount"),
+                    number("The amount", { min: 0.01, max: outstanding(record) }),
+                  ]);
+                  if (amountError) found.payment = amountError;
+                  const referenceError = check(String(data.get("reference") ?? ""), [
+                    required("A reference"),
+                  ]);
+                  if (referenceError) found.reference = referenceError;
+                  setFieldErrors(found);
+                  const first = Object.keys(found)[0];
+                  if (first) {
+                    const el = form.querySelector("[name=\"" + first + "\"]");
+                    setTimeout(() => (el as HTMLElement | null)?.focus(), 0);
+                    return;
+                  }
                   try {
                     await onAction({
                       action: "payment",
@@ -289,20 +326,13 @@ export function RecordActivity({
                 }}
               >
                 <div className="form-grid">
-                  <Field>
+                  <Field error={fieldErrors.payment}>
                     Amount received ({record.currency})
-                    <Input
-                      name="payment"
-                      type="number"
-                      min="0.01"
-                      step="0.01"
-                      max={outstanding(record)}
-                      required
-                    />
+                    <Input name="payment" inputMode="decimal" />
                   </Field>
-                  <Field>
+                  <Field error={fieldErrors.reference}>
                     Bank / Receipt reference
-                    <Input name="reference" required maxLength={160} />
+                    <Input name="reference" maxLength={160} />
                   </Field>
                 </div>
                 <p className="small muted">

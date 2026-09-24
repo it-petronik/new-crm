@@ -88,10 +88,20 @@ export function SkeletonPanel({ lines = 3, title = true }: { lines?: number; tit
 export function SkeletonDashboard() {
   return (
     <SkeletonRegion label="Loading your dashboard">
+      {/* Four brief lines and five attention rows: the same shape and the same
+          padding as the loaded panels, so neither moves when data lands. */}
+      <section className="panel skeleton-brief" aria-hidden="true">
+        <Skeleton w="34%" h={13} />
+        <div className="skeleton-brief-lines">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} w={["62%", "74%", "55%", "68%"][i]} h={11} />
+          ))}
+        </div>
+      </section>
       <section className="panel skeleton-attention tone-urgent" aria-hidden="true">
-        <Skeleton w="28%" h={14} />
+        <Skeleton w="30%" h={13} />
         <div className="skeleton-stack">
-          {[0, 1, 2].map((i) => <SkeletonListRow key={i} />)}
+          {[0, 1, 2, 3, 4].map((i) => <SkeletonAttnRow key={i} />)}
         </div>
       </section>
       <SkeletonKpiRow />
@@ -100,6 +110,19 @@ export function SkeletonDashboard() {
         <SkeletonPanel lines={4} />
       </div>
     </SkeletonRegion>
+  );
+}
+
+/** Matches a loaded attention row: identity, detail, and its action button. */
+export function SkeletonAttnRow() {
+  return (
+    <div className="skeleton-attn-row" aria-hidden="true">
+      <div className="skeleton-row-main">
+        <Skeleton w="38%" h={12} />
+        <Skeleton w="58%" h={10} />
+      </div>
+      <Skeleton w={96} h={26} r={7} />
+    </div>
   );
 }
 
@@ -119,9 +142,9 @@ export function SkeletonMyDay() {
           </div>
         </header>
         <section className="panel skeleton-attention tone-warning">
-          <Skeleton w="30%" h={14} />
+          <Skeleton w="30%" h={13} />
           <div className="skeleton-stack">
-            {[0, 1, 2].map((i) => <SkeletonListRow key={i} />)}
+            {[0, 1, 2].map((i) => <SkeletonAttnRow key={i} />)}
           </div>
         </section>
         <div className="skeleton-two-col">

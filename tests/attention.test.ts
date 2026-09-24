@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { attentionItems, myDay, followUpPresets, isOpen, idleDays } from "../src/lib/attention";
+import {
+  attentionItems, myDay, followUpPresets, isOpen, idleDays,
+  nextAction, staleRecords, morningBrief,
+} from "../src/lib/attention";
 import { previewActor } from "../src/lib/fixtures";
 import type { Actor, RecordItem } from "../src/lib/domain";
 
@@ -89,4 +92,61 @@ test("follow-up presets are all in the future and ordered", () => {
 
 test("idle time is measured from the last change", () => {
   assert.equal(idleDays(rec({ updatedAt: "2026-09-20T00:00:00.000Z" }), TODAY), 5);
+});
+
+test("every open record says what to do next, without anyone maintaining a field", () => {
+  const cases: [Partial<RecordItem>, RegExp, string][] = [
+    [{ due: "2026-09-19" }, /Follow up — 6 days late/, "urgent"],
+    [{ due: TODAY }, /Follow up today/, "warning"],
+    [{ due: "2026-09-26" }, /Follow up tomorrow/, "info"],
+    [{ kind: "leads", status: "New", due: "" }, /Make first contact/, "info"],
+    [{ kind: "leads", status: "Qualified", due: "" }, /Prepare quotation/, "info"],
+    [{ kind: "quotations", status: "Draft", due: "" }, /Send quotation/, "info"],
+    [{ kind: "quotations", status: "Sent", due: "" }, /Awaiting customer response/, "info"],
+    [{ kind: "quotations", status: "Sent", due: "", updatedAt: "2026-09-10T00:00:00.000Z" }, /No response for 15 days/, "warning"],
+    [{ status: "Overdue", due: "" }, /Payment overdue/, "urgent"],
+    [{ kind: "logistics", status: "Delayed", due: "" }, /Shipment delayed/, "urgent"],
+    [{ status: "Pending Approval", due: "" }, /Awaiting approval/, "warning"],
+  ];
+  for (const [over, pattern, tone] of cases) {
+    const action = nextAction(rec(over), TODAY);
+    assert.match(action.label, pattern, JSON.stringify(over));
+    assert.equal(action.tone, tone, action.label);
+  }
+  // A finished record asks for nothing.
+  assert.equal(nextAction(rec({ status: "Won" }), TODAY).tone, "done");
+});
+
+test("staleness uses a threshold suited to the kind of record", () => {
+  const quiet = (kind: RecordItem["kind"], days: number) =>
+    rec({ kind, due: "", updatedAt: `2026-09-${String(25 - days).padStart(2, "0")}T00:00:00.000Z` });
+  // A quotation going quiet for 10 days is a problem; a supplier record is not.
+  assert.equal(staleRecords([quiet("quotations", 10)], TODAY).length, 1);
+  assert.equal(staleRecords([quiet("suppliers", 10)], TODAY).length, 0);
+  assert.equal(staleRecords([quiet("leads", 10)], TODAY).length, 0, "under the 14-day lead threshold");
+  assert.equal(staleRecords([quiet("leads", 20)], TODAY).length, 1);
+  // A closed record is never stale.
+  assert.equal(staleRecords([{ ...quiet("leads", 40), status: "Won" }], TODAY).length, 0);
+});
+
+test("the morning brief counts facts and stays silent when there is nothing to say", () => {
+  assert.deepEqual(morningBrief(previewActor, [], TODAY), [], "a quiet company gets no bullets");
+
+  const lines = morningBrief(previewActor, [
+    rec({ kind: "accounts", status: "Overdue", due: "", amount: 184000, currency: "AED" }),
+    rec({ kind: "quotations", status: "Sent", due: "", updatedAt: "2026-09-10T00:00:00.000Z" }),
+    rec({ kind: "logistics", status: "Delayed", due: "" }),
+    rec({ status: "Won", due: "", updatedAt: `${TODAY}T09:00:00.000Z`, amount: 50000 }),
+  ], TODAY);
+
+  const text = lines.map((l) => l.text).join(" | ");
+  assert.match(text, /AED 184k overdue across 1 invoice/);
+  assert.match(text, /1 quotation has had no response for 7\+ days/);
+  assert.match(text, /1 shipment is delayed/);
+  assert.match(text, /1 deal won since yesterday/);
+  // Nothing is padded with zeroes.
+  assert.ok(!/\b0 /.test(text), text);
+  // Urgent facts are marked as such, and money links to its module.
+  assert.equal(lines.find((l) => /overdue across/.test(l.text))?.tone, "urgent");
+  assert.equal(lines.find((l) => /overdue across/.test(l.text))?.to, "accounts");
 });

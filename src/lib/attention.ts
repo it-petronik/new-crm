@@ -1,4 +1,5 @@
 import { canApprove, type Actor, type RecordItem } from "./domain";
+import { businessToday } from "./gst";
 
 /**
  * The exception engine behind both "My day" and the executive dashboard.
@@ -28,6 +29,19 @@ export type AttentionItem = {
 
 const DAY = 86_400_000;
 const iso = (d: Date) => d.toISOString().slice(0, 10);
+
+/**
+ * "Today" for the business, not for the reader's laptop.
+ *
+ * The company runs on Dubai time. Using the UTC date would mean that between
+ * midnight and 04:00 Gulf time every follow-up was judged against yesterday —
+ * an hour of the morning where the CRM quietly disagrees with the office.
+ */
+const today0 = () => businessToday();
+
+/** Shifts a business date by whole days without reintroducing a local clock. */
+const addDays = (date: string, days: number) =>
+  iso(new Date(Date.parse(`${date}T00:00:00Z`) + days * DAY));
 const daysBetween = (from: string, to: string) =>
   Math.round((Date.parse(to) - Date.parse(from)) / DAY);
 
@@ -57,7 +71,7 @@ export const idleDays = (r: RecordItem, today: string) =>
 export function attentionItems(
   actor: Actor,
   records: RecordItem[],
-  today = iso(new Date()),
+  today = today0(),
 ): AttentionItem[] {
   const items: AttentionItem[] = [];
   const add = (
@@ -142,7 +156,7 @@ export type MyDay = {
 export function myDay(
   actor: Actor,
   records: RecordItem[],
-  today = iso(new Date()),
+  today = today0(),
 ): MyDay {
   const mine = records.filter((r) => r.ownerId === actor.id);
   const items = attentionItems(actor, mine, today);
@@ -166,11 +180,175 @@ export function myDay(
 }
 
 /** Follow-up presets, so a date is one tap rather than a typed calendar. */
-export const followUpPresets = (from = new Date()) => [
-  { label: "Tomorrow", date: iso(new Date(from.getTime() + DAY)) },
-  { label: "In 3 days", date: iso(new Date(from.getTime() + 3 * DAY)) },
-  { label: "Next week", date: iso(new Date(from.getTime() + 7 * DAY)) },
-  { label: "In 2 weeks", date: iso(new Date(from.getTime() + 14 * DAY)) },
-];
+export const followUpPresets = (from?: Date | string) => {
+  // Offsets are counted from the business day, so "tomorrow" means tomorrow in
+  // Dubai even for someone working from another timezone.
+  const base =
+    typeof from === "string" ? from : from ? businessToday(from) : today0();
+  return [
+    { label: "Tomorrow", date: addDays(base, 1) },
+    { label: "In 3 days", date: addDays(base, 3) },
+    { label: "Next week", date: addDays(base, 7) },
+    { label: "In 2 weeks", date: addDays(base, 14) },
+  ];
+};
 
 export { iso as isoDate };
+
+// ---------------------------------------------------------------- next action
+
+export type NextAction = {
+  label: string;
+  tone: "urgent" | "warning" | "info" | "neutral" | "done";
+};
+
+/**
+ * What this record needs next, derived rather than stored.
+ *
+ * Nobody should have to open a record to find out what to do with it. Every
+ * answer here comes from status, due date and last activity, so it stays true
+ * without anyone maintaining a field.
+ */
+export function nextAction(r: RecordItem, today = today0()): NextAction {
+  if (r.deletedAt) return { label: "Deleted", tone: "neutral" };
+  if (!isOpen(r)) return { label: r.status, tone: "done" };
+
+  if (r.status === "Pending Approval") return { label: "Awaiting approval", tone: "warning" };
+  if (r.status === "Overdue") return { label: "Payment overdue", tone: "urgent" };
+  if (r.status === "Delayed")
+    return { label: r.kind === "logistics" ? "Shipment delayed" : "Order delayed", tone: "urgent" };
+
+  const due = (r.due || "").slice(0, 10);
+  if (due) {
+    const overdueBy = daysBetween(due, today);
+    if (overdueBy > 1) return { label: `Follow up — ${overdueBy} days late`, tone: "urgent" };
+    if (overdueBy === 1) return { label: "Follow up — 1 day late", tone: "urgent" };
+    if (overdueBy === 0) return { label: "Follow up today", tone: "warning" };
+    if (overdueBy === -1) return { label: "Follow up tomorrow", tone: "info" };
+    if (overdueBy >= -7) return { label: `Follow up ${due}`, tone: "info" };
+  }
+
+  const idle = idleDays(r, today);
+  if (r.kind === "quotations" && r.status === "Sent")
+    return idle >= 7
+      ? { label: `No response for ${idle} days`, tone: "warning" }
+      : { label: "Awaiting customer response", tone: "info" };
+  if (r.kind === "quotations" && r.status === "Draft")
+    return { label: "Send quotation", tone: "info" };
+  if (r.kind === "leads" && r.status === "New") return { label: "Make first contact", tone: "info" };
+  if (r.kind === "leads" && r.status === "Qualified") return { label: "Prepare quotation", tone: "info" };
+  if (idle >= (STALE_DAYS[r.kind] ?? 30))
+    return { label: `No activity for ${idle} days`, tone: "warning" };
+
+  return { label: "No next action", tone: "neutral" };
+}
+
+/**
+ * How long a record of each kind may sit untouched before it counts as stale.
+ * A shipment going quiet for a fortnight is a problem; a supplier record is not.
+ */
+export const STALE_DAYS: Record<string, number> = {
+  leads: 14,
+  quotations: 7,
+  orders: 14,
+  logistics: 7,
+  accounts: 14,
+  customers: 90,
+  suppliers: 180,
+};
+
+/** Records of a kind that have gone quiet for longer than that kind allows. */
+export const staleRecords = (records: RecordItem[], today = today0()) =>
+  records.filter(
+    (r) => isOpen(r) && idleDays(r, today) >= (STALE_DAYS[r.kind] ?? 30),
+  );
+
+// --------------------------------------------------------------- morning brief
+
+export type BriefLine = { text: string; tone: NextAction["tone"]; to?: string };
+
+/**
+ * A deterministic executive briefing.
+ *
+ * Every line is counted from the records themselves — nothing is generated,
+ * estimated or phrased by a model. Lines that would read "0 of something" are
+ * omitted rather than padded, so the brief is short on a good day.
+ */
+export function morningBrief(
+  actor: Actor,
+  records: RecordItem[],
+  today = today0(),
+): BriefLine[] {
+  const items = attentionItems(actor, records, today);
+  const lines: BriefLine[] = [];
+  const money = (value: number) =>
+    value >= 1000 ? `${Math.round(value / 1000)}k` : String(Math.round(value));
+
+  if (items.length)
+    lines.push({
+      text: `${items.length} ${items.length === 1 ? "item needs" : "items need"} attention`,
+      tone: items.some((i) => i.severity === "urgent") ? "urgent" : "warning",
+    });
+
+  const overduePay = records.filter((r) => isOpen(r) && r.status === "Overdue");
+  if (overduePay.length) {
+    const total = overduePay.reduce((sum, r) => sum + (r.amount || 0), 0);
+    lines.push({
+      text: `${overduePay[0].currency} ${money(total)} overdue across ${overduePay.length} ${overduePay.length === 1 ? "invoice" : "invoices"}`,
+      tone: "urgent",
+      to: "accounts",
+    });
+  }
+
+  const silentQuotes = records.filter(
+    (r) => isOpen(r) && r.kind === "quotations" && r.status === "Sent" && idleDays(r, today) >= 7,
+  );
+  if (silentQuotes.length)
+    lines.push({
+      text: `${silentQuotes.length} ${silentQuotes.length === 1 ? "quotation has" : "quotations have"} had no response for 7+ days`,
+      tone: "warning",
+      to: "quotations",
+    });
+
+  const delayed = records.filter((r) => isOpen(r) && r.status === "Delayed");
+  if (delayed.length)
+    lines.push({
+      text: `${delayed.length} ${delayed.length === 1 ? "shipment is" : "shipments are"} delayed`,
+      tone: "urgent",
+      to: "logistics",
+    });
+
+  // Who is carrying overdue work, rather than who is "top".
+  const behind = new Set(
+    records
+      .filter((r) => isOpen(r) && r.due && daysBetween(r.due.slice(0, 10), today) > 0 && r.owner)
+      .map((r) => r.owner),
+  );
+  if (behind.size)
+    lines.push({
+      text: `${behind.size} ${behind.size === 1 ? "person has" : "people have"} overdue follow-ups`,
+      tone: "warning",
+    });
+
+  const yesterday = iso(new Date(Date.parse(today) - DAY));
+  const wonRecently = records.filter(
+    (r) => r.status === "Won" && (r.updatedAt || "").slice(0, 10) >= yesterday,
+  );
+  if (wonRecently.length) {
+    const total = wonRecently.reduce((sum, r) => sum + (r.amount || 0), 0);
+    lines.push({
+      text: `${wonRecently.length} ${wonRecently.length === 1 ? "deal" : "deals"} won since yesterday${total ? ` · ${wonRecently[0].currency} ${money(total)}` : ""}`,
+      tone: "done",
+    });
+  }
+
+  const stale = staleRecords(records.filter((r) => r.kind === "leads"), today);
+  if (stale.length)
+    lines.push({
+      text: `${stale.length} ${stale.length === 1 ? "opportunity has" : "opportunities have"} gone quiet`,
+      tone: "warning",
+      to: "leads",
+    });
+
+  return lines;
+}

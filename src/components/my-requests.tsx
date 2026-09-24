@@ -1,5 +1,6 @@
 "use client";
 import { companyName } from "@/lib/company-name";
+import { check, required, minLength, number } from "@/lib/validation";
 import { Pagination, ListFilters, ListEmpty, usePagination } from "./pagination";
 import {
   Button,
@@ -27,6 +28,7 @@ export default function MyRequests({
   const [records, setRecords] = useState<RecordItem[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [kind, setKind] = useState<"leave" | "it">("leave");
   const [loaded, setLoaded] = useState(false);
   const pagination = usePagination(records);
@@ -96,11 +98,41 @@ export default function MyRequests({
             <Plus size={18} />
           </div>
           <form
+            noValidate
             className="settings-body request-form"
+            onInput={(e) => {
+              const name = (e.target as HTMLElement & { name?: string }).name;
+              if (name) setFieldErrors((prev) => (prev[name] ? { ...prev, [name]: "" } : prev));
+            }}
             onSubmit={async (e) => {
               e.preventDefault();
               const form = e.currentTarget;
               const f = new FormData(form);
+              // Client-side only, for immediate feedback; the API re-checks.
+              const found: Record<string, string> = {};
+              const titleError = check(String(f.get("title") ?? ""), [
+                required(kind === "leave" ? "Leave type" : "Issue summary"),
+                minLength(kind === "leave" ? "Leave type" : "Issue summary", 2),
+              ]);
+              if (titleError) found.title = titleError;
+              const dueError = check(String(f.get("due") ?? ""), [
+                required(kind === "leave" ? "A start date" : "A date"),
+              ]);
+              if (dueError) found.due = dueError;
+              if (kind === "leave") {
+                const quantityError = check(String(f.get("quantity") ?? ""), [
+                  required("Working days"),
+                  number("Working days", { min: 1, max: 365 }),
+                ]);
+                if (quantityError) found.quantity = quantityError;
+              }
+              setFieldErrors(found);
+              const first = Object.keys(found)[0];
+              if (first) {
+                const el = form.querySelector("[name=\"" + first + "\"]");
+                setTimeout(() => (el as HTMLElement | null)?.focus(), 0);
+                return;
+              }
               setBusy(true);
               try {
                 const body = {
@@ -175,12 +207,10 @@ export default function MyRequests({
               </Button>
             </div>
             <div className="form-grid">
-              <Field className="full">
+              <Field className="full" error={fieldErrors.title}>
                 {kind === "leave" ? "Leave type" : "Issue summary"}
                 <Input
                   name="title"
-                  required
-                  minLength={2}
                   maxLength={160}
                   placeholder={
                     kind === "leave" ? "Annual leave" : "Describe the problem"
@@ -202,20 +232,14 @@ export default function MyRequests({
                 name="branch"
                 value={actor.branches[0] || "Main"}
               />
-              <Field>
+              <Field error={fieldErrors.due}>
                 {kind === "leave" ? "Start date" : "Needed by"}
-                <Input name="due" type="date" required />
+                <Input name="due" type="date" />
               </Field>
               {kind === "leave" && (
-                <Field>
+                <Field error={fieldErrors.quantity}>
                   Working days
-                  <Input
-                    name="quantity"
-                    type="number"
-                    min="1"
-                    max="365"
-                    required
-                  />
+                  <Input name="quantity" inputMode="numeric" />
                 </Field>
               )}
               <Field className="full">
