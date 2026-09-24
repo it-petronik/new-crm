@@ -7,6 +7,7 @@ import {
 } from "../src/lib/password-reset";
 import { RESET_TTL_MS } from "../src/lib/data";
 import type { Actor } from "../src/lib/domain";
+import { canSeeAccountEvent, scopedWorkspace } from "../src/lib/domain";
 import { branchesForRole, mayAssign } from "../src/lib/access-control";
 
 const md: Actor = { id: "md-1", name: "MD", role: "MD", companies: ["Petronik", "Afrilube"], branches: [] };
@@ -174,4 +175,47 @@ test("error summaries redact token-shaped material and stay bounded", () => {
   assert.ok(noisy.length <= 200, "a log line stays bounded");
   assert.equal(safeErrorSummary("a bare string"), "Unknown error");
   assert.equal(safeErrorSummary(null), "Unknown error");
+});
+
+test("account events reach administrators of that account and nobody else", () => {
+  const event = {
+    id: "a1", actor: "MD", action: "Issued password reset link for Sara",
+    recordId: "u-9", company: "Petronik", at: new Date().toISOString(),
+    subject: "account" as const, branch: null,
+  };
+
+  // Only roles that administer users see them.
+  assert.equal(canSeeAccountEvent(md, event), true);
+  assert.equal(canSeeAccountEvent(itAdmin, event), true);
+  assert.equal(canSeeAccountEvent(sales, event), false);
+  for (const role of ["Group Manager", "Branch Manager"] as const)
+    assert.equal(
+      canSeeAccountEvent({ ...md, role }, event),
+      false,
+      `${role} sees record history but must not see account changes`,
+    );
+
+  // Company scope.
+  assert.equal(canSeeAccountEvent({ ...md, companies: ["Petronex"] }, event), false);
+
+  // Branch scope mirrors inAdminScope: a group-wide account (branch null) is
+  // visible only to a group-wide administrator.
+  const branchAdmin: Actor = { ...md, branches: ["Main"] };
+  assert.equal(canSeeAccountEvent(branchAdmin, event), false);
+  assert.equal(canSeeAccountEvent(branchAdmin, { ...event, branch: "Main" }), true);
+  assert.equal(canSeeAccountEvent(branchAdmin, { ...event, branch: "Dubai" }), false);
+  // A group-wide administrator sees both.
+  assert.equal(canSeeAccountEvent(md, { ...event, branch: "Dubai" }), true);
+});
+
+test("historical audit rows keep exactly their previous visibility", () => {
+  // Rows written before `subject` existed have no subject and must still be
+  // gated on a visible business record, not on account rules.
+  const legacy = {
+    id: "a2", actor: "MD", action: "Created leads", recordId: "rec-1",
+    company: "Petronik", at: new Date().toISOString(),
+  };
+  const scoped = scopedWorkspace(md, { records: [], audit: [legacy] });
+  assert.equal(scoped.audit.length, 0, "no matching record means no visibility");
+  assert.equal(canSeeAccountEvent(md, legacy), false, "a legacy row is not an account event");
 });

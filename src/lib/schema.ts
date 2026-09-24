@@ -59,6 +59,9 @@ export const businessRecords = sqliteTable(
   (table) => [
     index("BusinessRecord_company_branch_kind_idx").on(table.company, table.branch, table.kind),
     index("BusinessRecord_ownerId_kind_idx").on(table.ownerId, table.kind),
+    // Records are listed newest-first; without this the ordering is a sort
+    // over the whole table.
+    index("BusinessRecord_createdAt_idx").on(table.createdAt),
   ],
 );
 
@@ -74,8 +77,32 @@ export const auditEvents = sqliteTable(
     before: text("before", { mode: "json" }).$type<unknown>(),
     after: text("after", { mode: "json" }).$type<unknown>(),
     at: integer("at", { mode: "timestamp_ms" }).notNull(),
+    /**
+     * What the event is about. NULL means a business record, which is every
+     * row written before this column existed, so historical rows keep their
+     * previous visibility exactly. "account" marks a user-administration
+     * event, whose recordId is a User id and therefore never matches a
+     * business record.
+     *
+     * Deliberately a stored column rather than something derived from the
+     * action text: those strings are user-facing and have already been
+     * renamed once.
+     */
+    subject: text("subject").$type<"account" | null>(),
+    /**
+     * Branch scope for account events, so a branch-scoped administrator does
+     * not see accounts outside their branch. NULL means group-wide, which
+     * mirrors `inAdminScope`: a group-wide target sits inside no branch list,
+     * so a branch-scoped actor cannot see it.
+     */
+    branch: text("branch"),
   },
-  (table) => [index("AuditEvent_company_at_idx").on(table.company, table.at)],
+  (table) => [
+    index("AuditEvent_company_at_idx").on(table.company, table.at),
+    // The workspace reads recent events across all companies, which the
+    // composite index above cannot serve without a company predicate.
+    index("AuditEvent_at_idx").on(table.at),
+  ],
 );
 
 /**

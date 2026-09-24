@@ -371,6 +371,14 @@ export default function Workspace({
   const [deleting, setDeleting] = useState<RecordItem | null>(null);
   const [mutationError, setMutationError] = useState("");
   useEffect(() => { if (!form) { setEditing(null); setMutationError(""); } }, [form]);
+  /**
+   * One key per create-form session. Sent with the submission so a
+   * double-click, a retry or a dropped response resolves to the same record
+   * instead of creating a second one. A new key is minted only when a create
+   * form opens, so a genuine second record still gets its own.
+   */
+  const createKey = useRef("");
+  useEffect(() => { if (form && !editing) createKey.current = crypto.randomUUID(); }, [form, editing]);
   const [quoteSource, setQuoteSource] = useState<RecordItem | null>(null);
   const [selected, setSelected] = useState<RecordItem | null>(null);
   const [board, setBoard] = useState(true);
@@ -688,7 +696,7 @@ export default function Workspace({
         const response = await fetch("/api/records", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(values),
+          body: JSON.stringify({ ...values, requestId: createKey.current }),
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error);
@@ -2231,7 +2239,8 @@ function ActivityList({
                   : []),
                 ["Change", activityParts(detail.action).change],
                 ["Company", companyName(detail.company)],
-                ["Record", detail.recordId || "—"],
+                // Account events reference a user, not a business record.
+                [detail.subject === "account" ? "Account" : "Record", detail.recordId || "—"],
                 ["When", new Date(detail.at).toLocaleString("en-GB", { dateStyle: "full", timeStyle: "short" })],
               ] as [string, string][]).map(([term, value]) => (
                 <div key={term}>

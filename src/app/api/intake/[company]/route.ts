@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getDb, isPreview } from "@/lib/db";
-import { findUserById, findRecord, createRecordWithAudit } from "@/lib/data";
+import { findUserById, findRecord, createRecordWithAudit, recordLoginAttempt } from "@/lib/data";
 import { type RecordItem, companies } from "@/lib/domain";
 
 const payload = z.object({
@@ -64,6 +64,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ com
       !/^[a-f0-9]{64}$/i.test(signature)
     )
       return NextResponse.json({ error: "Invalid signature." }, { status: 401 });
+    // Rate limit per company before the body is read. Signature verification
+    // is cheap, but a valid-signature flood would still create records, and an
+    // invalid one should not be free to repeat indefinitely.
+    if ((await recordLoginAttempt(db, `intake:${slug}`, 60_000)) > 120)
+      return NextResponse.json({ error: "Too many enquiries. Try again shortly." }, { status: 429 });
     const buffer = await request.arrayBuffer();
     if (buffer.byteLength > 20000)
       return NextResponse.json({ error: "Payload too large." }, { status: 413 });

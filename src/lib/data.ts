@@ -1,4 +1,4 @@
-import { eq, and, lt, gt, sql, desc } from "drizzle-orm";
+import { eq, and, or, lt, gt, inArray, sql, desc } from "drizzle-orm";
 import type { Database } from "./d1";
 import { users, sessions, businessRecords, auditEvents, loginAttempts, passwordResets } from "./schema";
 import type { UserRow } from "./schema";
@@ -46,7 +46,46 @@ export const updateUserAndRevokeSessions = (db: Database, id: string, values: Pa
   db.batch([
     db.update(users).set(values).where(eq(users.id, id)),
     db.delete(sessions).where(eq(sessions.userId, id)),
+    // An outstanding reset link is a credential for this account, so an access
+    // change retires it with the sessions rather than leaving it usable until
+    // it expires on its own.
+    db.delete(passwordResets).where(eq(passwordResets.userId, id)),
   ]);
+
+/**
+ * Deactivates a user only while another active MD would remain.
+ *
+ * The count lives inside the statement rather than in a preceding read, so two
+ * administrators deactivating each other at the same moment cannot both pass a
+ * check and leave the organisation with no administrator. Returns false when
+ * the change was refused.
+ */
+export async function deactivateUnlessLastAdmin(db: Database, id: string): Promise<boolean> {
+  await db.run(sql`
+    UPDATE "User" SET "active" = 0
+    WHERE "id" = ${id}
+      AND ("role" <> 'MD' OR EXISTS (
+        SELECT 1 FROM "User" WHERE "role" = 'MD' AND "active" = 1 AND "id" <> ${id}
+      ))
+  `);
+  const after = await findUserById(db, id);
+  if (after?.active) return false;
+  await db.batch([
+    db.delete(sessions).where(eq(sessions.userId, id)),
+    db.delete(passwordResets).where(eq(passwordResets.userId, id)),
+  ]);
+  return true;
+}
+
+/** True when this user is the only active MD left. */
+export async function isLastActiveAdmin(db: Database, id: string) {
+  const row = await db
+    .select({ total: sql<number>`count(*)` })
+    .from(users)
+    .where(and(eq(users.role, "MD"), eq(users.active, true), sql`"id" <> ${id}`))
+    .get();
+  return Number(row?.total ?? 0) === 0;
+}
 
 // ------------------------------------------------------------- sessions
 
@@ -66,6 +105,14 @@ export const createSession = (db: Database, id: string, userId: string, expiresA
 
 export const deleteSession = (db: Database, id: string) =>
   db.delete(sessions).where(eq(sessions.id, id)).run();
+
+/**
+ * Drops sessions that have already expired. Expiry is enforced on read, so
+ * this is housekeeping rather than a security control: without it, a session
+ * abandoned by closing the browser stays in the table for ever.
+ */
+export const purgeExpiredSessions = (db: Database) =>
+  db.delete(sessions).where(lt(sessions.expiresAt, new Date())).run();
 
 // ------------------------------------------------------ login attempts
 
@@ -102,6 +149,44 @@ export const listRecordsForCompany = (db: Database, company: string) =>
 export const listAllRecords = (db: Database) =>
   db.select().from(businessRecords).orderBy(desc(businessRecords.createdAt)).all();
 
+/** Upper bound on one workspace page, so a large table cannot exhaust CPU. */
+export const RECORD_PAGE_LIMIT = 1000;
+
+/**
+ * Records the actor may see, filtered in the database rather than in JS.
+ *
+ * The predicate is the one the route previously applied after loading every
+ * row: the record's company must be one of the actor's, and if the actor is
+ * branch-scoped the branch must be one of theirs. Expressing it in SQL lets
+ * `BusinessRecord_company_branch_kind_idx` do the work and stops the whole
+ * table being read on every request.
+ */
+export function listRecordsForActor(
+  db: Database,
+  companies: string[],
+  branches: string[],
+  limit = RECORD_PAGE_LIMIT,
+  offset = 0,
+) {
+  if (!companies.length) return Promise.resolve([]);
+  const scope = branches.length
+    ? and(inArray(businessRecords.company, companies), inArray(businessRecords.branch, branches))
+    : inArray(businessRecords.company, companies);
+  return db
+    .select()
+    .from(businessRecords)
+    .where(scope)
+    .orderBy(desc(businessRecords.createdAt))
+    .limit(Math.min(limit, RECORD_PAGE_LIMIT))
+    .offset(offset)
+    .all();
+}
+
+/**
+ * Recent audit events. The limit is a display window, not a scope control;
+ * `AuditEvent_at_idx` makes the ordering an index scan rather than a sort over
+ * the whole table. Account events now share this window with record events.
+ */
 export const listAuditEvents = (db: Database, limit = 200) =>
   db.select().from(auditEvents).orderBy(desc(auditEvents.at)).limit(limit).all();
 
@@ -112,6 +197,10 @@ export type NewRecord = {
 export type NewAudit = {
   id: string; company: string; actor: string; actorId: string;
   action: string; recordId: string; before?: unknown; after?: unknown; at?: Date;
+  /** "account" for user administration; omitted for business records. */
+  subject?: "account";
+  /** Branch of the account an "account" event concerns; null means group-wide. */
+  branch?: string | null;
 };
 
 const insertRecord = (db: Database, record: NewRecord, now: Date) =>
@@ -123,6 +212,8 @@ const insertAudit = (db: Database, event: NewAudit) =>
     action: event.action, recordId: event.recordId,
     before: event.before ?? null, after: event.after ?? null,
     at: event.at ?? new Date(),
+    subject: event.subject ?? null,
+    branch: event.branch ?? null,
   });
 
 /** Writes a single audit entry. */
@@ -171,9 +262,28 @@ export async function updateRecordWithAudit(
 
   // Step two commits everything that accompanies a successful update as one
   // atomic batch: any linked records, then the audit entry.
+  //
+  // D1 has no interactive transaction spanning both steps, so if this batch
+  // fails the record is already changed and its audit entry is missing. That
+  // gap cannot be closed with the primitives available, but it must never pass
+  // unnoticed, so it is recorded with a stable event name. The identifiers
+  // below are record ids, never payloads or credentials.
   const follow = [...alsoCreate.map((record) => insertRecord(db, record, now)), insertAudit(db, event)];
   type Batchable = Parameters<Database["batch"]>[0][number];
-  await db.batch(follow as unknown as [Batchable, ...Batchable[]]);
+  try {
+    await db.batch(follow as unknown as [Batchable, ...Batchable[]]);
+  } catch (cause) {
+    console.error(
+      JSON.stringify({
+        event: "record_update_audit_failed",
+        recordId: id,
+        auditId: event.id,
+        linkedRecords: alsoCreate.length,
+        detail: cause instanceof Error ? `${cause.name}: ${cause.message}`.slice(0, 200) : "Unknown error",
+      }),
+    );
+    throw cause;
+  }
   return true;
 }
 

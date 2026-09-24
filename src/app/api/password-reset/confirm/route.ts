@@ -75,6 +75,8 @@ export async function POST(request: Request) {
       actorId: found.user.id,
       action: `Password reset completed (issued by ${found.reset.issuedByName})`,
       recordId: found.user.id,
+      subject: "account",
+      branch: found.user.branches[0] ?? null,
       // No password, no hash, no token.
     });
     if (!redeemed) return NextResponse.json({ error: INVALID }, { status: 400 });

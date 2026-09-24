@@ -10,8 +10,14 @@ Browser -> crm.enercore.ae -> Cloudflare Worker -> Next.js 16
                             Drizzle ORM -> D1 (SQLite)
 ```
 
-`APP_MODE` stays `preview` until production is explicitly approved. In preview
-the app runs on fictional in-browser data and never touches D1.
+**Status: live.** `crm.enercore.ae` is served by the `enercore-crm-live`
+Worker with `APP_MODE=production`. The separate `enercore-crm` Worker on
+workers.dev stays `APP_MODE=preview`, where the app runs on fictional
+in-browser data and never touches D1. Both Workers share one D1 database, so a
+migration applied once covers both.
+
+This is the only current deployment architecture. Anything describing MySQL,
+Prisma, cPanel or a Node host is historical — see *Previous architectures*.
 
 ## 1. Install
 
@@ -121,7 +127,59 @@ login works:
 1. Set `"APP_MODE": "production"` in `wrangler.jsonc`
 2. `npm run cf:deploy`
 
-## 11. Rollback
+## 11. Backup and restore
+
+D1 Time Travel gives point-in-time restore for roughly 30 days, but only
+*inside this Cloudflare account*. It does not survive account loss, suspension
+or a billing lapse, and it cannot reach corruption found after the window. So
+keep an off-platform copy.
+
+### Taking a backup (read-only, safe to run any time)
+
+```
+npm run db:backup
+```
+
+Writes `backups/enercore-crm-<UTC timestamp>.sql` via `wrangler d1 export
+--remote`, which only reads. The script refuses to leave behind an empty or
+schema-less file, because a broken export that looks like a backup is worse
+than none. `backups/` is gitignored — **copy the file somewhere off
+Cloudflare**; a backup that only exists in this working directory protects
+against very little.
+
+Do this before every schema migration, and on a schedule that matches how much
+data you are willing to lose.
+
+### Restoring — destructive, deliberate, never routine
+
+Both options **overwrite production data**. Take a fresh export first, so you
+can get back to where you started.
+
+**Time Travel** (preferred within the retention window; no file needed):
+
+```
+npx wrangler d1 time-travel info enercore-crm
+npx wrangler d1 time-travel restore enercore-crm --bookmark=<bookmark>
+```
+
+**From an export** (outside the window, or to a different database):
+
+```
+npx wrangler d1 execute <database> --remote --file backups/<file>.sql
+```
+
+Restore into a scratch database first and check row counts against what you
+expect. Restoring re-creates tables, so applying an export over a live
+database that still holds those tables will fail or conflict — this is a
+recovery procedure, not a sync.
+
+After any restore, re-check `npx wrangler d1 migrations list <db> --remote`:
+the restored `d1_migrations` ledger decides what is considered applied.
+
+Rehearse this at least once against a scratch database. An untested restore is
+not a backup strategy.
+
+## 12. Rollback
 
 Deployments are versioned, so the fastest rollback is:
 
@@ -130,9 +188,17 @@ npx wrangler deployments list
 npx wrangler rollback [deployment-id]
 ```
 
-To go back to preview data without redeploying code, set `APP_MODE` back to
-`preview` and deploy. The previous MySQL/Prisma implementation remains in git
-history, and `prisma/` with its migrations is retained for reference.
+Note the two Workers are separate scripts, so roll back the one you deployed
+(`enercore-crm-live` for production).
+
+The previous MySQL/Prisma implementation lives in git history only. Prisma,
+`@prisma/client`, `bcryptjs` and the `prisma/` directory were removed once
+production was verified on D1; recover them from history if ever needed.
+
+A schema rollback is separate from a code rollback. Drizzle generates no down
+migrations, and both migrations so far are additive (new table, new nullable
+columns, new indexes), so an older Worker runs unchanged against the newer
+schema. Prefer rolling back the Worker and leaving the schema alone.
 
 ## Free-tier limits that matter here
 
@@ -147,12 +213,18 @@ history, and `prisma/` with its migrations is retained for reference.
 
 ## Behaviour differences introduced by D1
 
-- **Password hashing changed from bcrypt to PBKDF2-SHA256** (WebCrypto,
-  100,000 iterations). bcrypt cost 12 needs roughly 250 ms of CPU and the free
-  plan allows 10 ms; PBKDF2 through WebCrypto measured about 7.5 ms. The stored
-  format records its own iteration count, so the cost can be raised later
-  without invalidating existing accounts. 100,000 is below OWASP's 600,000
-  recommendation for PBKDF2 — raise it if you move to a paid Workers plan.
+- **Password hashing changed from bcrypt to Argon2id** (`@noble/hashes`,
+  m=4 MiB, t=1, p=1). bcrypt cost 12 needs roughly 250 ms of CPU and the free
+  plan allows 10 ms; this Argon2id configuration measures about 7.9 ms. PBKDF2
+  fits the same budget but is not memory-hard, so it parallelises far better on
+  a GPU — Argon2id was chosen for that reason. Each hash stores its own
+  parameters in PHC format, so the cost can be raised later without
+  invalidating existing accounts; `verifyPassword` bounds those parameters on
+  read. 4 MiB is below OWASP's 19 MiB recommendation, which is a deliberate
+  trade-off forced by the free plan's CPU ceiling — raise `MEMORY_KIB` to 19456
+  and `TIME_COST` to 2 on a paid plan. **Do not lower these to buy CPU
+  headroom.** A pure-JS implementation is used because Workers accepts only
+  statically imported WebAssembly.
 - **No interactive transactions.** D1 has no BEGIN/COMMIT that application code
   can branch inside. Each former transaction now reads, decides in application
   code, then commits with `batch()`. Specifically:
@@ -171,7 +243,10 @@ history, and `prisma/` with its migrations is retained for reference.
   default collation was not. Email is normalised to lower case on both write
   and lookup, preserving the previous behaviour.
 
-## Previous architectures
+## Previous architectures — historical only
+
+Nothing in this section is in use. It is retained to explain why the current
+architecture was chosen.
 
 The cPanel MySQL and Node-host instructions were removed when this migration
 landed. See `HOSTING-AUDIT.md` for why Workers plus external MySQL was not

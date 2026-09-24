@@ -31,6 +31,11 @@ export const MEMORY_KIB = 4 * 1024;
 export const TIME_COST = 1;
 export const PARALLELISM = 1;
 const HASH_BYTES = 32;
+
+/** Accepted ranges when verifying a stored hash; see verifyPassword. */
+export const MAX_MEMORY_KIB = 64 * 1024;
+export const MAX_TIME_COST = 10;
+export const MAX_PARALLELISM = 4;
 const SALT_BYTES = 16;
 
 /** Base64 without padding, as the PHC string format requires. */
@@ -66,6 +71,12 @@ export async function verifyPassword(password: string, stored: string): Promise<
   );
   const m = Number(options.m), t = Number(options.t), p = Number(options.p);
   if (![m, t, p].every((n) => Number.isInteger(n) && n > 0)) return false;
+  // Parameters come from the stored hash, so a database-write compromise could
+  // otherwise turn every login into a memory-exhaustion attempt. The ceilings
+  // are well above anything this application writes (4 MiB, t=1, p=1) and well
+  // below what would exhaust a Worker, so raising the real cost later needs no
+  // change here.
+  if (m > MAX_MEMORY_KIB || t > MAX_TIME_COST || p > MAX_PARALLELISM) return false;
   try {
     const expected = unb64(parts[5]);
     const key = argon2id(password, unb64(parts[4]), { m, t, p, dkLen: expected.length });

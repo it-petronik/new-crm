@@ -58,6 +58,8 @@ export async function POST(request: Request) {
         actorId: actor.id,
         action: `Issued password reset link for ${target.name}`,
         recordId: target.id,
+        subject: "account",
+        branch: target.branches[0] ?? null,
         // Deliberately no token, no hash, no password material.
       },
     );

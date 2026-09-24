@@ -10,3 +10,6 @@ playwright-report/
 .dev.vars
 .open-next/
 .wrangler/
+
+# Local D1 exports. Backups must never be committed.
+backups/

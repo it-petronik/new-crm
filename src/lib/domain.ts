@@ -103,6 +103,10 @@ export type Audit = {
   recordId: string;
   company: string;
   at: string;
+  /** "account" for user administration; absent for business records. */
+  subject?: "account" | null;
+  /** Branch of the account concerned; null or absent means group-wide. */
+  branch?: string | null;
 };
 export type Workspace = { records: RecordItem[]; audit: Audit[] };
 export const stages: Record<Kind, string[]> = {
@@ -312,22 +316,53 @@ export function outstanding(r: RecordItem) {
     ) / 100
   );
 }
+/**
+ * Whether an actor may see one user-administration event.
+ *
+ * Account events name people and what was done to their accounts, so they are
+ * shown only to the roles that administer users — never to a Group Manager or
+ * Branch Manager, who see record history but have no business seeing account
+ * changes.
+ *
+ * Scope mirrors `inAdminScope` rather than the looser company-only rule used
+ * for record events. The event carries the account's company and branch, so a
+ * branch-scoped administrator sees only accounts inside their branch, and a
+ * group-wide account (branch null) is visible only to a group-wide
+ * administrator — exactly as it is for issuing a reset link.
+ *
+ * Known limitation, deliberate: an event records the target's *primary*
+ * company, so an event about someone in companies A and B is visible to an
+ * administrator of A only. Widening that needs the account's current
+ * membership at read time, which is a larger change.
+ */
+export function canSeeAccountEvent(actor: Actor, event: Audit) {
+  // Self-contained rather than relying on the caller to have checked: a row
+  // without this marker is a business-record event and must go through the
+  // record rules, which are stricter for anyone who is not an administrator.
+  if (event.subject !== "account") return false;
+  if (!canManageUsers(actor)) return false;
+  if (!actor.companies.includes(event.company)) return false;
+  if (!actor.branches.length) return true;
+  return !!event.branch && actor.branches.includes(event.branch);
+}
+
 export function scopedWorkspace(actor: Actor, workspace: Workspace): Workspace {
+  const maySeeRecordHistory = [
+    "MD",
+    "Group Manager",
+    "Branch Manager",
+    "IT Administrator",
+  ].includes(actor.role);
   return {
     records: workspace.records.filter((r) => !r.deletedAt && canRead(actor, r)),
-    audit: [
-      "MD",
-      "Group Manager",
-      "Branch Manager",
-      "IT Administrator",
-    ].includes(actor.role)
-      ? workspace.audit.filter(
-          (a) =>
-            actor.companies.includes(a.company) &&
-            workspace.records.some(
-              (r) => r.id === a.recordId && canRead(actor, r),
-            ),
-        )
-      : [],
+    audit: workspace.audit.filter((a) =>
+      // Rows written before `subject` existed are business-record events and
+      // keep exactly their previous visibility.
+      a.subject === "account"
+        ? canSeeAccountEvent(actor, a)
+        : maySeeRecordHistory &&
+          actor.companies.includes(a.company) &&
+          workspace.records.some((r) => r.id === a.recordId && canRead(actor, r)),
+    ),
   };
 }

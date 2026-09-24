@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getDb, isPreview } from "@/lib/db";
 import {
-  listAllRecords, listAuditEvents, findRecord, listRecordsForCompany,
-  createRecordWithAudit, updateRecordWithAudit, type NewRecord,
+  listRecordsForActor, listAuditEvents, findRecord, listRecordsForCompany,
+  createRecordWithAudit, updateRecordWithAudit, RECORD_PAGE_LIMIT, type NewRecord,
 } from "@/lib/data";
 import { checkOrigin, currentActor } from "@/lib/auth";
 import {
@@ -18,6 +18,19 @@ import { quotationError } from "@/lib/quotation";
 import { mutateRecord } from "@/lib/record-mutations";
 import { isCashEntry, cashEntryError } from "@/lib/cashbook";
 import { salaryAttributes } from "@/lib/salary";
+/**
+ * Optional per-submission key. The browser generates one when a create form
+ * opens, so a double-click, a retry or a flaky connection replays the same key
+ * and resolves to the same record id instead of creating a second lead or
+ * quotation. Absent, behaviour is unchanged.
+ */
+const requestIdField = { requestId: z.string().min(8).max(100).optional() };
+
+const sha256Hex = async (value: string) =>
+  [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)))]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+
 const input = z.object({
   kind: z.enum([
     "leads",
@@ -104,8 +117,9 @@ const input = z.object({
       z.string().max(300),
     )
     .optional(),
+  ...requestIdField,
 });
-export async function GET() {
+export async function GET(request: Request) {
   const actor = await currentActor();
   if (!actor)
     return NextResponse.json({ error: "Sign in required." }, { status: 401 });
@@ -115,22 +129,28 @@ export async function GET() {
       scopedWorkspace(actor, { records: [], audit: [] }),
       { headers: { "Cache-Control": "no-store" } },
     );
-  const rows = await listAllRecords(db);
-  const events = await listAuditEvents(db, 100);
-  const visible = rows.filter(
-    (r) =>
-      actor.companies.includes(r.company) &&
-      (!actor.branches.length || actor.branches.includes(r.branch)),
+  // Company and branch scope are applied by the database, not by filtering a
+  // full table read in memory; the page bound keeps one request inside the
+  // Workers CPU budget however large the table grows.
+  const url = new URL(request.url);
+  const limit = Number(url.searchParams.get("limit")) || RECORD_PAGE_LIMIT;
+  const offset = Number(url.searchParams.get("offset")) || 0;
+  const rows = await listRecordsForActor(
+    db,
+    actor.companies,
+    actor.branches,
+    Number.isFinite(limit) && limit > 0 ? limit : RECORD_PAGE_LIMIT,
+    Number.isFinite(offset) && offset > 0 ? offset : 0,
   );
+  const events = await listAuditEvents(db, 200);
   return NextResponse.json(
     scopedWorkspace(actor, {
-      records: visible.map((r) => r.payload as RecordItem),
-      audit: events
-        .filter((a) => actor.companies.includes(a.company))
-        .map((a) => ({
-          id: a.id, actor: a.actor, action: a.action,
-          recordId: a.recordId, company: a.company, at: a.at.toISOString(),
-        })),
+      records: rows.map((r) => r.payload as RecordItem),
+      audit: events.map((a) => ({
+        id: a.id, actor: a.actor, action: a.action,
+        recordId: a.recordId, company: a.company, at: a.at.toISOString(),
+        subject: a.subject, branch: a.branch,
+      })),
     }),
     { headers: { "Cache-Control": "no-store" } },
   );
@@ -161,9 +181,26 @@ export async function POST(request: Request) {
     if (quoteError)
       return NextResponse.json({ error: quoteError }, { status: 400 });
     const now = new Date().toISOString();
+    // A deterministic id turns a repeated submission into the same row, which
+    // the primary key then rejects as a duplicate rather than duplicating the
+    // record. Scoped to the actor so one user's key cannot collide with or
+    // overwrite another's.
+    const id = body.requestId
+      ? "REQ-" + (await sha256Hex(`${actor.id}:${body.requestId}`)).slice(0, 40)
+      : crypto.randomUUID();
+    if (body.requestId) {
+      const existing = await findRecord(db, id);
+      if (existing)
+        return NextResponse.json(
+          { record: existing.payload as RecordItem, duplicate: true },
+          { status: 200 },
+        );
+    }
+    // The key is transport metadata, not part of the record.
+    const { requestId: _requestId, ...fields } = body;
     const record: RecordItem = {
-      ...body,
-      id: crypto.randomUUID(),
+      ...fields,
+      id,
       status: isCashEntry(body) ? "Recorded" : stages[body.kind][0],
       ownerId: actor.id,
       owner: actor.name,
@@ -196,19 +233,33 @@ export async function POST(request: Request) {
         { error: "Create this record through quotation acceptance." },
         { status: 400 },
       );
-    await createRecordWithAudit(
-      db,
-      {
-        id: record.id, kind: record.kind, company: record.company,
-        branch: record.branch, ownerId: actor.id, status: record.status, payload: record,
-      },
-      {
-        id: crypto.randomUUID(), actor: actor.name, actorId: actor.id,
-        company: record.company, action: `Created ${record.kind}`,
-        recordId: record.id, after: record,
-      },
-    );
-    return NextResponse.json({ record }, { status: 201 });
+    try {
+      await createRecordWithAudit(
+        db,
+        {
+          id: record.id, kind: record.kind, company: record.company,
+          branch: record.branch, ownerId: actor.id, status: record.status, payload: record,
+        },
+        {
+          id: crypto.randomUUID(), actor: actor.name, actorId: actor.id,
+          company: record.company, action: `Created ${record.kind}`,
+          recordId: record.id, after: record,
+        },
+      );
+    } catch (error) {
+      // Two simultaneous submissions of the same key race past the read above;
+      // the primary key is the last line of defence, as it is for intake.
+      if (body.requestId && /UNIQUE|constraint/i.test(String(error))) {
+        const existing = await findRecord(db, record.id);
+        if (existing)
+          return NextResponse.json(
+            { record: existing.payload as RecordItem, duplicate: true },
+            { status: 200 },
+          );
+      }
+      throw error;
+    }
+    return NextResponse.json({ record, duplicate: false }, { status: 201 });
   } catch {
     return NextResponse.json(
       { error: "Could not save. Check required fields and permissions." },
