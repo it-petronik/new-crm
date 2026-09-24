@@ -1,5 +1,6 @@
 "use client";
 import { companyName } from "@/lib/company-name";
+import { specError } from "@/lib/validation";
 import { commercialLocked, correctionFields } from "@/lib/record-mutations";
 import { Fragment, useState, useId } from "react";
 import { ArrowRight, ShieldCheck, X } from "lucide-react";
@@ -60,6 +61,11 @@ export default function RecordForm({
   const locked = Boolean(editing && initial && commercialLocked(initial));
   const quoteEditor = kind === "quotations" && !locked;
   const [formError, setFormError] = useState("");
+  // Per-field messages. They appear on submit and clear the moment the person
+  // edits the field, so a corrected value never needs a second submit.
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const clearFieldError = (name: string) =>
+    setFieldErrors((prev) => (prev[name] ? { ...prev, [name]: "" } : prev));
   const [section, setSection] = useState(0);
   const hiddenField = (name: string) =>
     quoteEditor && quoteSection(name) !== section
@@ -152,28 +158,49 @@ export default function RecordForm({
       )}
       <form
         id={formId}
-        noValidate={quoteEditor}
+        noValidate
+        // Editing any field clears that field's message immediately, so a
+        // correction never waits for another submit to be acknowledged.
+        onInput={(e) => {
+          const name = (e.target as HTMLElement & { name?: string }).name;
+          if (name) clearFieldError(name);
+        }}
         onSubmit={(e) => {
           e.preventDefault();
-          if (quoteEditor) {
-            const invalid = [
-              ...e.currentTarget.querySelectorAll<
-                HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-              >("input,textarea,select"),
-            ].find((field) => field.willValidate && !field.validity.valid);
-            if (invalid) {
-              setSection(
-                invalid.closest(".quotation-items-section, .line-editor")
-                  ? 1
-                  : quoteSection(invalid.name),
-              );
-              setFormError(
-                invalid.validationMessage || "Complete the required field.",
-              );
-              setTimeout(() => invalid.focus(), 0);
-              return;
-            }
+          // Validate against the same field metadata the CSV importer uses, so
+          // the wording is ours and identical in both places. The API still
+          // re-checks everything; this only makes the feedback immediate.
+          const entered = new FormData(e.currentTarget);
+          const read = (name: string) => String(entered.get(name) ?? "");
+          const found: Record<string, string> = {};
+          const nameError = specError(
+            { name: "title", label: profile.nameLabel, required: true },
+            read("title"),
+          ) || (read("title").trim() && read("title").trim().length < 2
+            ? `${profile.nameLabel} needs at least 2 characters.`
+            : "");
+          if (nameError) found.title = nameError;
+          for (const spec of profile.fields) {
+            if (hiddenField(spec.name)) continue;
+            const message = specError(spec, read(spec.name));
+            if (message) found[spec.name] = message;
           }
+          setFieldErrors(found);
+          const firstName = Object.keys(found)[0];
+          if (firstName) {
+            const el = e.currentTarget.querySelector<HTMLElement>(`[name="${firstName}"]`);
+            if (quoteEditor)
+              setSection(
+                el?.closest(".quotation-items-section, .line-editor") ? 1 : quoteSection(firstName),
+              );
+            setFormError("Check the highlighted fields.");
+            setTimeout(() => {
+              el?.focus();
+              el?.scrollIntoView({ block: "center", behavior: "smooth" });
+            }, 0);
+            return;
+          }
+          setFormError("");
           const data = new FormData(e.currentTarget);
           const str = (name: string) => data.has(name) ? String(data.get(name) || "") : editing && initial ? recordFieldValue(initial, name) : "";
           const attributes = Object.fromEntries(
@@ -230,14 +257,13 @@ export default function RecordForm({
         }}
       >
         <div className="form-grid">
-          <Field className={"field-wide" + hiddenField("title")}>
+          <Field className={"field-wide" + hiddenField("title")} error={fieldErrors.title}>
             {profile.nameLabel}
             <Input
               name="title"
               readOnly={locked}
-              required
-              minLength={2}
               maxLength={160}
+              onInput={() => clearFieldError("title")}
               {...(kind === "quotations"
                 ? {
                     value: contactDraft.title,
@@ -338,6 +364,7 @@ export default function RecordForm({
               <Fragment key={entity + field.name}>
                 <Field
                   className={fieldWidth(field.name) + hiddenField(field.name)}
+                  error={fieldErrors[field.name]}
                 >
                   {field.label}
                   {field.options ? (

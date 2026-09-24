@@ -6,6 +6,8 @@ import {
   Textarea,
   Field,
 } from "@/components/ui/controls";
+import { AlertCircle } from "lucide-react";
+import { check, required, email as emailRule } from "@/lib/validation";
 import { useState } from "react";
 import { ArrowRight, ShieldCheck } from "lucide-react";
 import { BrandLogo } from "@/components/brand";
@@ -13,6 +15,8 @@ import { demoAccounts, demoPassword, previewActorKey } from "@/lib/fixtures";
 import ThemeToggle from "@/components/theme-toggle";
 export default function LoginForm({ preview }: { preview: boolean }) {
   const [error, setError] = useState("");
+  // Field messages appear on blur and clear as soon as the value is valid.
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   return (
     <main className="login-page">
@@ -46,6 +50,7 @@ export default function LoginForm({ preview }: { preview: boolean }) {
           <h2>Welcome back.</h2>
           <p>Sign in with your company account.</p>
           <form
+            noValidate
             onSubmit={async (e) => {
               e.preventDefault();
               setBusy(true);
@@ -83,29 +88,31 @@ export default function LoginForm({ preview }: { preview: boolean }) {
               }
             }}
           >
-            <Field>
+            <Field error={fieldErrors.email}>
               Work email
               <Input
                 name="email"
-                type="email"
+                inputMode="email"
                 autoComplete="username"
                 placeholder="you@company.com"
-                required
+                onBlur={(e) => setFieldErrors((f) => ({ ...f, email: check(e.target.value, [required("Work email"), emailRule]) }))}
+                onChange={(e) => fieldErrors.email && setFieldErrors((f) => ({ ...f, email: check(e.target.value, [required("Work email"), emailRule]) }))}
               />
             </Field>
-            <Field>
+            <Field error={fieldErrors.password}>
               Password
               <Input
                 name="password"
                 type="password"
                 autoComplete="current-password"
-                minLength={1}
-                required
+                onBlur={(e) => setFieldErrors((f) => ({ ...f, password: check(e.target.value, [required("Password")]) }))}
+                onChange={(e) => fieldErrors.password && setFieldErrors((f) => ({ ...f, password: check(e.target.value, [required("Password")]) }))}
               />
             </Field>
             {error && (
-              <div className="error" role="alert">
-                {error}
+              <div className="form-error" role="alert">
+                <AlertCircle size={15} aria-hidden="true" />
+                <span>{error}</span>
               </div>
             )}
             <Button className="primary" disabled={busy}>

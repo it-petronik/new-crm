@@ -2,6 +2,11 @@
 import { companyName } from "@/lib/company-name";
 import { recordsToCsv, exportFilename, downloadCsv } from "@/lib/export";
 import { isImportable, type ImportableKind } from "@/lib/import";
+import { attentionItems, isoDate } from "@/lib/attention";
+import MyDay from "./my-day";
+import QuickAdd from "./quick-add";
+import { SkeletonDashboard, SkeletonMyDay, SkeletonList } from "./ui/skeleton";
+import FollowUpControl from "./follow-up-control";
 import ImportDialog from "./import-dialog";
 import { salaryAttributes } from "@/lib/salary";
 import { workspaceUrl, workspaceParams } from "@/lib/workspace-url";
@@ -50,6 +55,7 @@ import {
   Settings2,
   ShieldCheck,
   Sparkles,
+  AlertTriangle,
   Target,
   Truck,
   Users,
@@ -373,8 +379,24 @@ export default function Workspace({
   const [editing, setEditing] = useState<RecordItem | null>(null);
   const [deleting, setDeleting] = useState<RecordItem | null>(null);
   const [importing, setImporting] = useState(false);
+  const [quickAdd, setQuickAdd] = useState<{ open: boolean; kind?: Kind }>({ open: false });
+  // Who sees the company view rather than their own day.
+  const executive = ["MD", "IT Administrator", "Group Manager", "Branch Manager"].includes(actor.role);
   const [mutationError, setMutationError] = useState("");
   useEffect(() => { if (!form) { setEditing(null); setMutationError(""); } }, [form]);
+  // "n" opens quick add, the way a mail client opens a compose window. Ignored
+  // while typing, so it never swallows a character mid-field.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "n" || e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable)) return;
+      e.preventDefault();
+      setQuickAdd({ open: true });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   /**
    * One key per create-form session. Sent with the submission so a
    * double-click, a retry or a dropped response resolves to the same record
@@ -615,6 +637,22 @@ export default function Workspace({
       setBusy(false);
     }
   }
+  /**
+   * Sets the next follow-up on a record.
+   *
+   * A follow-up is a dated note, which the record API already supports, so
+   * this goes through the same authenticated, audited, concurrency-guarded
+   * path as any other change — it simply removes the typing.
+   */
+  async function setFollowUp(r: RecordItem, date: string) {
+    await extraAction(r, {
+      action: "note",
+      text: `Follow-up scheduled for ${date}`,
+      due: date,
+    });
+    setToast(`Follow-up set for ${date}.`);
+  }
+
   async function extraAction(
     r: RecordItem,
     action:
@@ -810,6 +848,17 @@ export default function Workspace({
             </nav>
           </div>
           <div className="top-right">
+            {/* Always reachable, on every screen, so creating a record is
+                never a navigation task. The shortcut is a convenience on top
+                of this button, never a requirement. */}
+            <Button
+              className="primary quick-add-trigger"
+              onClick={() => setQuickAdd({ open: true })}
+              title="Quick add (press n)"
+            >
+              <Plus size={17} aria-hidden="true" />
+              <span className="quick-add-trigger-label">Quick add</span>
+            </Button>
             {!selfService && !view && (
               <div className="global-search">
                 <Search size={16} />
@@ -941,33 +990,39 @@ export default function Workspace({
             </>
           ) : (
             <>
-              <div className="page-heading">
+              <div className={`page-heading${module === "overview" && !executive ? " is-my-day" : ""}`}>
                 <div>
-                  {module === "overview" && (
+                  {module === "overview" && executive && (
                     <p className="welcome-message">
                       Welcome back, {actor.name.split(" ")[0]}{" "}
                       <span>— here’s your business at a glance.</span>
                     </p>
                   )}
-                  <div className="eyebrow">
-                    {module === "overview"
-                      ? "PERFORMANCE & OPERATIONS"
-                      : "ENERCORE WORKSPACE"}
-                  </div>
-                  <h1>
-                    {module === "overview"
-                      ? company === "All companies"
-                        ? "Group dashboard"
-                        : `${companyName(company)} dashboard`
-                      : labels[module]}
-                  </h1>
-                  <p>
-                    {module === "overview"
-                      ? company === "All companies"
-                        ? "Consolidated view of your assigned companies."
-                        : `Performance and activity for ${companyName(company)}.`
-                      : subtitles[module]}
-                  </p>
+                  {/* On the employee home, My Day provides the heading, so the
+                      executive framing is omitted rather than stacked on top. */}
+                  {!(module === "overview" && !executive) && (
+                    <>
+                      <div className="eyebrow">
+                        {module === "overview"
+                          ? "PERFORMANCE & OPERATIONS"
+                          : "ENERCORE WORKSPACE"}
+                      </div>
+                      <h1>
+                        {module === "overview"
+                          ? company === "All companies"
+                            ? "Group dashboard"
+                            : `${companyName(company)} dashboard`
+                          : labels[module]}
+                      </h1>
+                      <p>
+                        {module === "overview"
+                          ? company === "All companies"
+                            ? "Consolidated view of your assigned companies."
+                            : `Performance and activity for ${companyName(company)}.`
+                          : subtitles[module]}
+                      </p>
+                    </>
+                  )}
                 </div>
                 <div className="heading-actions">
                   {module === "overview" && !selfService && !view && (
@@ -1068,15 +1123,23 @@ export default function Workspace({
                 </div>
               )}
               {!loaded ? (
-                <div className="loading-grid" aria-busy="true">
-                  {[1, 2, 3, 4].map((i) => (
-                    <div key={i} />
-                  ))}
-                </div>
+                // The page keeps its own shape while data arrives: an
+                // executive sees the attention block and KPI row, an employee
+                // sees their day, a list keeps its toolbar and loses only its
+                // rows. Nothing moves when the data lands.
+                module === "overview" ? (
+                  executive ? <SkeletonDashboard /> : <SkeletonMyDay />
+                ) : (
+                  <SkeletonList />
+                )
               ) : module === "overview" ? (
                 <Overview
                   records={records}
                   actor={actor}
+                  executive={executive}
+                  onFollowUp={setFollowUp}
+                  onQuickAdd={(kind) => setQuickAdd({ open: true, kind })}
+                  busy={busy}
                   approvals={approvals}
                   attention={attention}
                   audit={scoped.audit}
@@ -1351,9 +1414,9 @@ export default function Workspace({
                           ))}
                       </div>
                     ) : cardModules.includes(module) && board ? (
-                      <RecordCards records={visible} onSelect={setSelected} actor={actor} onEdit={r => { setMutationError(""); setEditing(r); setForm(r.kind); }} onDelete={r => { setMutationError(""); setDeleting(r); }} onImport={isImportable(module) ? () => setImporting(true) : undefined} />
+                      <RecordCards records={visible} onSelect={setSelected} actor={actor} onEdit={r => { setMutationError(""); setEditing(r); setForm(r.kind); }} onDelete={r => { setMutationError(""); setDeleting(r); }} onStatus={(r, status) => void update(r, status)} onImport={isImportable(module) ? () => setImporting(true) : undefined} />
                     ) : (
-                      <RecordTable records={visible} onSelect={setSelected} actor={actor} onEdit={r => { setMutationError(""); setEditing(r); setForm(r.kind); }} onDelete={r => { setMutationError(""); setDeleting(r); }} onImport={isImportable(module) ? () => setImporting(true) : undefined} />
+                      <RecordTable records={visible} onSelect={setSelected} actor={actor} onEdit={r => { setMutationError(""); setEditing(r); setForm(r.kind); }} onDelete={r => { setMutationError(""); setDeleting(r); }} onStatus={(r, status) => void update(r, status)} onImport={isImportable(module) ? () => setImporting(true) : undefined} />
                     )}
                   </section>
                   {["orders", "accounts", "logistics"].includes(module) && (
@@ -1477,6 +1540,19 @@ export default function Workspace({
         )}
       </DialogPresence>
       <DialogPresence>
+        {quickAdd.open && (
+          <QuickAdd
+            actor={actor}
+            company={company === "All companies" ? actor.companies[0] : company}
+            branch={actor.branches[0] || "Main"}
+            initialKind={quickAdd.kind}
+            onCreate={create}
+            onClose={() => setQuickAdd({ open: false })}
+            onOpenFullForm={(kind) => { setMutationError(""); setEditing(null); setForm(kind); }}
+          />
+        )}
+      </DialogPresence>
+      <DialogPresence>
         {importing && isImportable(module) && (
           <ImportDialog
             kind={module as ImportableKind}
@@ -1508,10 +1584,32 @@ export default function Workspace({
     </div>
   );
 }
-type RecordActionsProps = { actor: Actor; onEdit: (r: RecordItem) => void; onDelete: (r: RecordItem) => void; onImport?: () => void };
-function RecordIcons({ record, actor, onEdit, onDelete }: RecordActionsProps & { record: RecordItem }) {
+type RecordActionsProps = {
+  actor: Actor;
+  onEdit: (r: RecordItem) => void;
+  onDelete: (r: RecordItem) => void;
+  onImport?: () => void;
+  /** Inline status change; omitted where a row must not be changed in place. */
+  onStatus?: (r: RecordItem, status: string) => void;
+};
+function RecordIcons({ record, actor, onEdit, onDelete, onStatus }: RecordActionsProps & { record: RecordItem }) {
   if (!canWrite(actor, record)) return null;
+  const options = stages[record.kind] || [];
   return <span className="record-icon-actions">
+    {/* Advancing a record is the most repeated action in the CRM, so it
+        happens in the row. It still goes through the same authenticated,
+        audited, version-guarded update as the full dialog. */}
+    {onStatus && options.length > 1 && (
+      <Select
+        className="inline-status"
+        aria-label={`Status for ${record.title}`}
+        value={record.status}
+        onChange={(e) => onStatus(record, e.target.value)}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {options.map((s) => <option key={s}>{s}</option>)}
+      </Select>
+    )}
     <Button className="icon-button" title="Edit record" aria-label={`Edit ${record.title}`} onClick={() => onEdit(record)}><Pencil size={16} /></Button>
     <Button className="icon-button delete-action" title="Delete record" aria-label={`Delete ${record.title}`} onClick={() => onDelete(record)}><Trash2 size={16} /></Button>
   </span>;
@@ -1719,6 +1817,10 @@ function Overview({
   period,
   from,
   to,
+  executive,
+  onFollowUp,
+  onQuickAdd,
+  busy,
 }: {
   records: RecordItem[];
   actor: Actor;
@@ -1731,6 +1833,11 @@ function Overview({
   period: string;
   from: string;
   to: string;
+  /** Executives get the company view; everyone else gets their own day. */
+  executive: boolean;
+  onFollowUp: (r: RecordItem, date: string) => Promise<void> | void;
+  onQuickAdd: (kind?: Kind) => void;
+  busy?: boolean;
 }) {
   const custom = period === "custom";
   const reversed = custom && Boolean(from && to && from > to);
@@ -1890,8 +1997,78 @@ function Overview({
     .filter((m) => allowed.includes(m))
     .flatMap((m) => cards[m] || [])
     .slice(0, 4);
+
+  // The cards a role already gets from its own modules. Kept for everyone:
+  // they are the role's summary, and dropping them for non-executives would
+  // trade one useful thing for another rather than adding.
+  const roleCards = metrics.length > 0 && (
+    <div className="stats-grid">
+      {metrics.map((m) => (
+        <Button className={`stat-card metric-${m.accent}`} key={m.label} onClick={() => go(m.to)}>
+          <div className="stat-top">
+            <span>{m.label}</span>
+            <div className={`stat-icon ${m.accent}`}><m.icon size={18} /></div>
+          </div>
+          <strong>{m.value}</strong>
+          <div className="stat-bottom"><span>{m.sub}</span><ArrowUpRight size={15} /></div>
+        </Button>
+      ))}
+    </div>
+  );
+
+  // Someone whose job is to contact people today should not open with a
+  // company performance report. They get their own work first, with the action
+  // attached, and their module summary underneath.
+  if (!executive)
+    return (
+      <>
+        <MyDay
+          actor={actor}
+          records={allRecords}
+          company={company}
+          onOpen={onSelect}
+          onFollowUp={onFollowUp}
+          onQuickAdd={onQuickAdd}
+          onGo={(m) => go(m as Module)}
+          busy={busy}
+        />
+        {roleCards}
+      </>
+    );
+
+  // Exceptions first: the executive view leads with what needs a decision,
+  // then the numbers, then the analysis. Ranked by business impact so the
+  // most costly problem is the first thing read.
+  const ranked = attentionItems(actor, allRecords).slice(0, 8);
+
   return (
     <>
+      {ranked.length > 0 && (
+        <section className="panel attention-section tone-urgent command-attention">
+          <div className="panel-heading">
+            <h2><AlertTriangle size={16} /> Needs attention</h2>
+            <span className="attention-count">{ranked.length}</span>
+          </div>
+          <ul className="attention-list">
+            {ranked.map((item) => (
+              <li key={item.id} className={`attention-item sev-${item.severity}`}>
+                <Button className="record-link attention-open" onClick={() => onSelect(item.record)}>
+                  <span className="my-day-title">{item.record.title}</span>
+                  <small>
+                    <span className={`attention-tag sev-${item.severity}`}>{item.category}</span>
+                    {item.reason}
+                    {item.record.amount ? ` · ${money(item.record.amount, item.record.currency)}` : ""}
+                    {item.record.owner ? ` · ${item.record.owner}` : ""}
+                  </small>
+                </Button>
+                {item.action === "follow-up" && (
+                  <FollowUpControl compact busy={busy} onChoose={(date) => void onFollowUp(item.record, date)} />
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <p className="dashboard-scope">
         <span>Metrics and charts use record creation date. Daily focus remains current.</span>
         {scopeNote && <span className="dashboard-period-note" role={reversed ? "alert" : "status"}>{scopeNote}</span>}

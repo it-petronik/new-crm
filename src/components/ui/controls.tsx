@@ -28,6 +28,7 @@ import {
   EyeOff,
   LoaderCircle,
   X,
+  AlertCircle,
 } from "lucide-react";
 
 const cx = (...values: (string | undefined | false)[]) =>
@@ -200,11 +201,23 @@ export function Select({
   );
 }
 
+/**
+ * A labelled control, optionally carrying a validation message.
+ *
+ * Errors live here rather than in each form so that every field in the CRM
+ * announces itself the same way: the message sits under the control, the
+ * control is marked invalid for assistive technology, and the message is
+ * associated with it rather than merely adjacent. `hint` is for standing
+ * guidance and is replaced by the error while one is present, so the two never
+ * compete for the same space.
+ */
 export function Field({
   children,
   className,
+  error,
+  hint,
   ...props
-}: React.LabelHTMLAttributes<HTMLLabelElement>) {
+}: React.LabelHTMLAttributes<HTMLLabelElement> & { error?: string; hint?: string }) {
   const autoId = useId();
   const items = Children.toArray(children);
   const controls = items.filter(
@@ -232,8 +245,10 @@ export function Field({
     );
   const id = control.props.id || autoId;
   const labelId = id + "-label";
+  const messageId = id + "-message";
+  const message = error || hint;
   return (
-    <div className={cx("ui-field", className)} style={props.style}>
+    <div className={cx("ui-field", error && "has-error", className)} style={props.style}>
       {labelText.length > 0 && (
         <label className="ui-field-label" htmlFor={id} id={labelId}>
           {labelText}
@@ -252,7 +267,21 @@ export function Field({
           : labelText.length
             ? labelId
             : control.props["aria-labelledby"],
-      })}
+        "aria-invalid": error ? true : undefined,
+        "aria-describedby": message ? messageId : undefined,
+      } as Record<string, unknown>)}
+      {message && (
+        <p
+          id={messageId}
+          className={cx("ui-field-message", error && "is-error")}
+          // A correction should be read out; standing guidance should not
+          // interrupt what the person is doing.
+          role={error ? "alert" : undefined}
+        >
+          {error && <AlertCircle size={13} aria-hidden="true" />}
+          {message}
+        </p>
+      )}
     </div>
   );
 }

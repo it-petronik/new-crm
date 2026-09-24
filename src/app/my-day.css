@@ -1,0 +1,109 @@
+/* ---------------------------------------------------------------------------
+   My Day, quick add, follow-ups and the executive attention list.
+
+   Colour carries meaning only: red is urgent, amber needs attention, green is
+   clear. Everything else stays neutral so the two colours that matter are the
+   ones the eye finds first.
+   ------------------------------------------------------------------------ */
+
+.my-day { display: flex; flex-direction: column; gap: 18px; }
+
+.my-day-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+}
+.my-day-head h1 { margin: 2px 0 4px; }
+.my-day-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* --- attention groups --------------------------------------------------- */
+.attention-section { border-left: 3px solid var(--border); }
+.attention-section.tone-urgent { border-left-color: var(--danger, #d9534f); }
+.attention-section.tone-warning { border-left-color: var(--warning, #d98c1f); }
+.attention-section .panel-heading h2 { display: flex; align-items: center; gap: 8px; }
+
+.attention-count {
+  font-variant-numeric: tabular-nums; font-weight: 600; font-size: 0.82rem;
+  padding: 2px 9px; border-radius: 999px;
+  background: var(--surface-2, rgba(128, 128, 128, 0.12));
+}
+
+.attention-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.attention-item {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+  padding: 10px 0; border-top: 1px solid var(--border);
+}
+.attention-item:first-child { border-top: 0; }
+.attention-open { flex: 1 1 260px; text-align: left; min-width: 0; }
+.my-day-title { display: block; font-weight: 600; }
+.attention-open small { display: block; color: var(--muted); margin-top: 2px; }
+
+.attention-tag {
+  display: inline-block; margin-right: 7px; padding: 1px 7px;
+  border-radius: 4px; font-size: 0.72rem; font-weight: 600;
+  background: var(--surface-2, rgba(128, 128, 128, 0.12));
+}
+.attention-tag.sev-urgent { color: var(--danger, #d9534f); }
+.attention-tag.sev-warning { color: var(--warning, #d98c1f); }
+
+/* --- follow-up presets -------------------------------------------------- */
+.follow-up-control { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.follow-up-label {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 0.78rem; color: var(--muted); white-space: nowrap;
+}
+.follow-up-presets { display: flex; gap: 6px; flex-wrap: wrap; }
+.follow-up-control.is-compact button { padding: 4px 9px; font-size: 0.78rem; }
+.follow-up-control.is-compact input[type="date"] { padding: 4px 8px; font-size: 0.78rem; }
+
+/* --- caught up ---------------------------------------------------------- */
+.my-day-clear { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.my-day-clear svg { color: var(--success, #2e9e5b); flex: none; }
+.my-day-clear > div { flex: 1 1 240px; }
+.my-day-clear p { margin: 2px 0 0; }
+
+.my-day-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.my-day-list { list-style: none; margin: 0; padding: 0; }
+.my-day-list li { border-top: 1px solid var(--border); }
+.my-day-list li:first-child { border-top: 0; }
+.my-day-list .record-link { width: 100%; text-align: left; padding: 9px 0; }
+.my-day-list small { color: var(--muted); }
+.my-day-more { align-self: flex-start; }
+
+/* --- quick add ---------------------------------------------------------- */
+.quick-add-kinds { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.quick-add-kind { padding: 6px 13px; border-radius: 999px; }
+.quick-add-kind.is-active { background: var(--accent, #14505a); color: #fff; }
+.quick-add-form { display: flex; flex-direction: column; gap: 12px; }
+.quick-add-row { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+.quick-add-note { margin: 0; }
+
+.quick-add-trigger { white-space: nowrap; }
+
+/* --- mobile ------------------------------------------------------------- */
+@media (max-width: 720px) {
+  /* One-handed reach: the primary create action sits at the bottom of the
+     screen rather than in a top bar the thumb cannot comfortably get to. */
+  .quick-add-trigger {
+    position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom));
+    z-index: 40; border-radius: 999px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22);
+    min-height: 52px; min-width: 52px; padding: 0 18px;
+  }
+  .quick-add-trigger-label { display: none; }
+
+  .quick-add-row { grid-template-columns: 1fr; }
+  .attention-item { align-items: flex-start; }
+  /* Tap targets stay comfortable on a phone. */
+  .follow-up-control.is-compact button,
+  .follow-up-control.is-compact input[type="date"] { min-height: 38px; }
+  .my-day-head { flex-direction: column; align-items: stretch; }
+  .my-day-actions button { flex: 1 1 calc(50% - 8px); justify-content: center; }
+}
+
+/* Inline status control inside a row: compact, and never wider than needed. */
+.inline-status { min-width: 0; width: auto; max-width: 150px; padding: 3px 24px 3px 8px; font-size: 0.78rem; }
+@media (max-width: 720px) { .inline-status { max-width: 120px; min-height: 36px; } }
+
+/* My Day supplies its own heading, so the page header collapses to its controls. */
+.page-heading.is-my-day > div:first-child:empty { display: none; }
+.page-heading.is-my-day { margin-bottom: 4px; }

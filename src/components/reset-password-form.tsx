@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import { ArrowRight, ShieldCheck } from "lucide-react";
 import { Button, Input, Field } from "@/components/ui/controls";
+import { AlertCircle } from "lucide-react";
+import { check, required, email as emailRule, minLength } from "@/lib/validation";
 import { BrandLogo } from "@/components/brand";
 import ThemeToggle from "@/components/theme-toggle";
 import { MIN_PASSWORD_LENGTH } from "@/lib/password-reset";
@@ -9,6 +11,8 @@ import { MIN_PASSWORD_LENGTH } from "@/lib/password-reset";
 export default function ResetPasswordForm({ preview }: { preview: boolean }) {
   const [token, setToken] = useState("");
   const [error, setError] = useState("");
+  // Field messages appear on blur and clear as soon as the value is valid.
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
 
@@ -58,6 +62,7 @@ export default function ResetPasswordForm({ preview }: { preview: boolean }) {
               <h2>Choose a new password.</h2>
               <p>At least {MIN_PASSWORD_LENGTH} characters. Use something unique to this workspace.</p>
               <form
+            noValidate
                 onSubmit={async (e) => {
                   e.preventDefault();
                   const form = e.currentTarget;
@@ -83,24 +88,24 @@ export default function ResetPasswordForm({ preview }: { preview: boolean }) {
                   }
                 }}
               >
-                <Field>
+                <Field error={fieldErrors.password} hint={`At least ${MIN_PASSWORD_LENGTH} characters`}>
                   New password
                   <Input
                     name="password"
                     type="password"
                     autoComplete="new-password"
-                    minLength={MIN_PASSWORD_LENGTH}
-                    required
+                    onBlur={(e) => setFieldErrors((f) => ({ ...f, password: check(e.target.value, [required("A new password"), minLength("Your password", MIN_PASSWORD_LENGTH)]) }))}
+                    onChange={(e) => fieldErrors.password && setFieldErrors((f) => ({ ...f, password: check(e.target.value, [required("A new password"), minLength("Your password", MIN_PASSWORD_LENGTH)]) }))}
                   />
                 </Field>
-                <Field>
+                <Field error={fieldErrors.confirm}>
                   Confirm new password
                   <Input
                     name="confirm"
                     type="password"
                     autoComplete="new-password"
-                    minLength={MIN_PASSWORD_LENGTH}
-                    required
+                    onBlur={(e) => setFieldErrors((f) => ({ ...f, confirm: check(e.target.value, [required("Confirmation")]) }))}
+                    onChange={(e) => fieldErrors.confirm && setFieldErrors((f) => ({ ...f, confirm: "" }))}
                   />
                 </Field>
                 {preview && (
@@ -110,8 +115,9 @@ export default function ResetPasswordForm({ preview }: { preview: boolean }) {
                   </p>
                 )}
                 {error && (
-                  <div className="error" role="alert">
-                    {error}
+                  <div className="form-error" role="alert">
+                    <AlertCircle size={15} aria-hidden="true" />
+                    <span>{error}</span>
                   </div>
                 )}
                 <Button className="primary" disabled={busy}>

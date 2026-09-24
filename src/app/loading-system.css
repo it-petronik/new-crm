@@ -1,0 +1,137 @@
+/* ---------------------------------------------------------------------------
+   Loading placeholders, field validation and the boot loader.
+
+   Placeholders match the dimensions of what replaces them, so nothing moves
+   when data arrives. Motion is a slow, low-contrast sweep rather than a pulse
+   that draws the eye, and it stops entirely when the system asks it to.
+   ------------------------------------------------------------------------ */
+
+.skeleton {
+  display: block;
+  background: linear-gradient(
+    90deg,
+    var(--skeleton-base, rgba(128, 128, 128, 0.13)) 25%,
+    var(--skeleton-sheen, rgba(128, 128, 128, 0.2)) 37%,
+    var(--skeleton-base, rgba(128, 128, 128, 0.13)) 63%
+  );
+  background-size: 400% 100%;
+  animation: skeleton-sweep 1.5s ease-in-out infinite;
+}
+@keyframes skeleton-sweep {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+.skeleton-text { display: flex; flex-direction: column; gap: 8px; }
+.skeleton-region { display: flex; flex-direction: column; gap: 16px; }
+.skeleton-stack { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+
+.skeleton-card { display: flex; flex-direction: column; gap: 10px; }
+
+.skeleton-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 13px 0; border-top: 1px solid var(--border);
+}
+.skeleton-row:first-child { border-top: 0; }
+.skeleton-row-main { flex: 1; display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.skeleton-table { padding-top: 4px; padding-bottom: 4px; }
+
+/* Screen readers get one message; the rectangles stay silent. */
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* --- field validation ---------------------------------------------------- */
+.ui-field-message {
+  display: flex; align-items: center; gap: 5px;
+  margin: 5px 0 0; font-size: 0.79rem; line-height: 1.35;
+  color: var(--muted);
+}
+.ui-field-message.is-error { color: var(--danger, #d9534f); }
+.ui-field-message svg { flex: none; }
+
+/* Restrained: a border and a message, not a red wash. */
+.ui-field.has-error input,
+.ui-field.has-error select,
+.ui-field.has-error textarea,
+.ui-field.has-error .ui-password input {
+  border-color: var(--danger, #d9534f);
+}
+.ui-field.has-error input:focus,
+.ui-field.has-error select:focus,
+.ui-field.has-error textarea:focus {
+  outline-color: var(--danger, #d9534f);
+}
+
+/* Form-level failure, distinct from a single field's message. */
+.form-error {
+  display: flex; align-items: flex-start; gap: 9px;
+  padding: 11px 13px; border-radius: 8px;
+  border: 1px solid var(--danger, #d9534f);
+  background: color-mix(in srgb, var(--danger, #d9534f) 7%, transparent);
+  font-size: 0.87rem;
+}
+.form-error svg { flex: none; margin-top: 1px; }
+
+/* --- boot loader --------------------------------------------------------- */
+.app-boot {
+  position: fixed; inset: 0; z-index: 90;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 16px; background: var(--bg, #fff);
+}
+.app-boot-mark {
+  width: 46px; height: 46px; border-radius: 12px;
+  display: grid; place-items: center;
+  background: var(--accent, #14505a); color: #fff;
+  font-weight: 600; font-size: 1.3rem;
+}
+.app-boot p { margin: 0; color: var(--muted); font-size: 0.88rem; }
+/* An indeterminate bar: it shows work is happening without claiming progress. */
+.app-boot-bar {
+  width: 132px; height: 3px; border-radius: 999px; overflow: hidden;
+  background: var(--border);
+}
+.app-boot-bar span {
+  display: block; width: 40%; height: 100%; border-radius: 999px;
+  background: var(--accent, #14505a);
+  animation: boot-slide 1.1s ease-in-out infinite;
+}
+@keyframes boot-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(330%); }
+}
+
+/* --- view transition ----------------------------------------------------- */
+/* Continuity only. Navigation is never delayed for it. */
+.view-enter { animation: view-in 150ms ease-out; }
+@keyframes view-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton, .app-boot-bar span, .view-enter { animation: none; }
+  .skeleton { background: var(--skeleton-base, rgba(128, 128, 128, 0.15)); }
+}
+
+/* Placeholders mirror the real layouts' dimensions without borrowing their
+   class names, so nothing can mistake a placeholder for content. */
+.skeleton-kpis {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+.skeleton-kpi {
+  padding: 16px; border: 1px solid var(--border); border-radius: 12px;
+  min-height: 104px;
+}
+.skeleton-my-day { display: flex; flex-direction: column; gap: 18px; }
+.skeleton-day-head { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.skeleton-day-head > div { display: flex; flex-direction: column; gap: 8px; }
+.skeleton-day-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.skeleton-two-col { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.skeleton-attention { border-left: 3px solid var(--border); }
+@media (max-width: 720px) {
+  .skeleton-kpis, .skeleton-two-col { grid-template-columns: 1fr; }
+  .skeleton-day-head { flex-direction: column; }
+}

@@ -48,11 +48,22 @@ test("a role's dashboard fills its row instead of leaving another role's gaps", 
   // The last card reaches the right edge of the grid, so no column is orphaned.
   expect(Math.abs(Math.max(...cardBoxes) - (gridBox.x + gridBox.width))).toBeLessThan(2);
 
-  // A single remaining panel also takes the full width.
+  // My Day sits above those cards and must not overflow its column either.
+  const day = page.locator(".my-day");
+  await expect(day).toBeVisible();
+  const dayBox = (await day.boundingBox())!;
+  expect(dayBox.width).toBeLessThanOrEqual(gridBox.width + 2);
+
+  // The executive layout keeps its own grid. Whatever it holds — one panel or
+  // several — the row must end flush, leaving no orphaned column.
+  await signIn(page, "md");
   const lower = page.locator(".overview-grid");
   const lowerBox = (await lower.boundingBox())!;
-  const panel = (await lower.locator("> .panel").first().boundingBox())!;
-  expect(Math.abs(panel.width - lowerBox.width)).toBeLessThan(2);
+  const rights = await lower.locator("> .panel").evaluateAll((nodes) =>
+    nodes.map((n) => n.getBoundingClientRect().right),
+  );
+  expect(rights.length).toBeGreaterThan(0);
+  expect(Math.abs(Math.max(...rights) - (lowerBox.x + lowerBox.width))).toBeLessThan(2);
 });
 
 test("records and people carry initials avatars", async ({ page }) => {
