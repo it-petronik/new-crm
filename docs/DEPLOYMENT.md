@@ -177,8 +177,19 @@ A mirror failure is reported but never aborts the run and never deletes the
 local backup. If the destination is missing the run still succeeds, and the
 output says `MIRROR SKIPPED` or `MIRROR FAILED`.
 
-Verify the copy actually left the device — a sync client that is paused or out
-of quota will silently keep the file local.
+Verify the copy actually left the device. A destination folder existing is not
+evidence that it syncs:
+
+- **iCloud Drive**: `~/Library/Mobile Documents/com~apple~CloudDocs` exists and
+  is writable even when no iCloud account is signed in, and the `bird` daemon
+  runs regardless. Check that `~/Library/Preferences/MobileMeAccounts.plist`
+  contains an account rather than an empty dict; if it is empty, files written
+  there never leave the Mac. This is the state this machine was in when the
+  backup system was set up.
+- **Google Drive / OneDrive / Dropbox**: the folder appears under
+  `~/Library/CloudStorage/` only once the client is configured.
+
+A paused client, or one out of quota, also keeps files local silently.
 
 ### Scheduling a daily backup (macOS)
 
@@ -195,10 +206,13 @@ The installer fills absolute paths into the plist template, validates it with
 job does not need a terminal, but the Mac must be awake — launchd runs a missed
 job after wake.
 
-**Unattended authentication.** launchd runs as you and can read your existing
-wrangler OAuth login, which is usually enough. That login can expire, and it
-cannot be refreshed non-interactively — a scheduled run then fails and the
-error log says so. For a schedule you do not want to babysit, put a Cloudflare
+**Unattended authentication.** launchd runs as you and reads your existing
+wrangler OAuth login. This was verified end to end: the installed job ran and
+exited 0 without an API token, so no token is needed today. That login can
+still expire, and it cannot be refreshed non-interactively — a scheduled run
+then fails and the error log says so. Check
+`scripts/launchd/install-backup-schedule.sh status` periodically, or after any
+run of backups stops appearing. For a schedule you do not want to babysit, put a Cloudflare
 API token in `.backup.env`:
 
 ```
