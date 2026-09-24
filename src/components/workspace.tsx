@@ -1,5 +1,8 @@
 "use client";
 import { companyName } from "@/lib/company-name";
+import { recordsToCsv, exportFilename, downloadCsv } from "@/lib/export";
+import { isImportable, type ImportableKind } from "@/lib/import";
+import ImportDialog from "./import-dialog";
 import { salaryAttributes } from "@/lib/salary";
 import { workspaceUrl, workspaceParams } from "@/lib/workspace-url";
 import { Cashbook } from "./cashbook";
@@ -369,6 +372,7 @@ export default function Workspace({
   const [form, setForm] = useState<Kind | null>(null);
   const [editing, setEditing] = useState<RecordItem | null>(null);
   const [deleting, setDeleting] = useState<RecordItem | null>(null);
+  const [importing, setImporting] = useState(false);
   const [mutationError, setMutationError] = useState("");
   useEffect(() => { if (!form) { setEditing(null); setMutationError(""); } }, [form]);
   /**
@@ -1347,9 +1351,9 @@ export default function Workspace({
                           ))}
                       </div>
                     ) : cardModules.includes(module) && board ? (
-                      <RecordCards records={visible} onSelect={setSelected} actor={actor} onEdit={r => { setMutationError(""); setEditing(r); setForm(r.kind); }} onDelete={r => { setMutationError(""); setDeleting(r); }} />
+                      <RecordCards records={visible} onSelect={setSelected} actor={actor} onEdit={r => { setMutationError(""); setEditing(r); setForm(r.kind); }} onDelete={r => { setMutationError(""); setDeleting(r); }} onImport={isImportable(module) ? () => setImporting(true) : undefined} />
                     ) : (
-                      <RecordTable records={visible} onSelect={setSelected} actor={actor} onEdit={r => { setMutationError(""); setEditing(r); setForm(r.kind); }} onDelete={r => { setMutationError(""); setDeleting(r); }} />
+                      <RecordTable records={visible} onSelect={setSelected} actor={actor} onEdit={r => { setMutationError(""); setEditing(r); setForm(r.kind); }} onDelete={r => { setMutationError(""); setDeleting(r); }} onImport={isImportable(module) ? () => setImporting(true) : undefined} />
                     )}
                   </section>
                   {["orders", "accounts", "logistics"].includes(module) && (
@@ -1472,6 +1476,19 @@ export default function Workspace({
           />
         )}
       </DialogPresence>
+      <DialogPresence>
+        {importing && isImportable(module) && (
+          <ImportDialog
+            kind={module as ImportableKind}
+            company={company === "all-companies" ? actor.companies[0] : company}
+            branch={actor.branches[0] || "Main"}
+            actor={actor}
+            existing={records}
+            onClose={() => setImporting(false)}
+            onDone={reload}
+          />
+        )}
+      </DialogPresence>
       <DialogPresence>{deleting && <Dialog title="Delete record?" className="delete-record-dialog" onClose={() => { if (!busy) { setSelected(deleting); setDeleting(null); } }}>
         <p className="delete-record-name">{deleting.title}</p>
         <p className="muted">{companyName(deleting.company)} · {deleting.id}</p>
@@ -1491,7 +1508,7 @@ export default function Workspace({
     </div>
   );
 }
-type RecordActionsProps = { actor: Actor; onEdit: (r: RecordItem) => void; onDelete: (r: RecordItem) => void };
+type RecordActionsProps = { actor: Actor; onEdit: (r: RecordItem) => void; onDelete: (r: RecordItem) => void; onImport?: () => void };
 function RecordIcons({ record, actor, onEdit, onDelete }: RecordActionsProps & { record: RecordItem }) {
   if (!canWrite(actor, record)) return null;
   return <span className="record-icon-actions">
@@ -1499,9 +1516,25 @@ function RecordIcons({ record, actor, onEdit, onDelete }: RecordActionsProps & {
     <Button className="icon-button delete-action" title="Delete record" aria-label={`Delete ${record.title}`} onClick={() => onDelete(record)}><Trash2 size={16} /></Button>
   </span>;
 }
+/**
+ * Exports the filtered list as CSV. Company and kind come from the records
+ * themselves, so this needs no extra props and cannot name a scope the rows do
+ * not belong to. The rows are already permission-scoped and filtered by the
+ * caller; nothing extra is fetched.
+ */
+function exportRecords(records: RecordItem[]) {
+  if (!records.length) return;
+  const first = records[0];
+  downloadCsv(
+    exportFilename(first.company, labels[first.kind as Module] || first.kind),
+    recordsToCsv(records),
+  );
+}
+
 function RecordCards({
   records,
   onSelect,
+  onImport,
   ...actions
 }: {
   records: RecordItem[];
@@ -1510,7 +1543,13 @@ function RecordCards({
   const pagination = usePagination(records);
   return (
     <>
-      <ListFilters {...pagination} label="records" />
+      <ListFilters
+        {...pagination}
+        label="records"
+        exportCount={pagination.matched.length}
+        onExport={() => exportRecords(pagination.matched as RecordItem[])}
+        onImport={onImport}
+      />
       <div className="record-grid">
         {pagination.items.map((r) => {
           const description =
@@ -1574,6 +1613,7 @@ function RecordCards({
 function RecordTable({
   records,
   onSelect,
+  onImport,
   ...actions
 }: {
   records: RecordItem[];
@@ -1582,7 +1622,14 @@ function RecordTable({
   const pagination = usePagination(records);
   return (
     <>
-      <ListFilters {...pagination} label="records" sortable={false} />
+      <ListFilters
+        {...pagination}
+        label="records"
+        sortable={false}
+        exportCount={pagination.matched.length}
+        onExport={() => exportRecords(pagination.matched as RecordItem[])}
+        onImport={onImport}
+      />
       {pagination.total > 0 && <div className="table-scroll">
         <table>
           <thead>

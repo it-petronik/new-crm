@@ -1,6 +1,6 @@
 "use client";
 import { useState, useId, type ReactNode } from "react";
-import { ChevronLeft, ChevronRight, SearchX, SlidersHorizontal, ArrowUp, ArrowDown, ChevronsUpDown } from "lucide-react";
+import { ChevronLeft, ChevronRight, SearchX, SlidersHorizontal, ArrowUp, ArrowDown, ChevronsUpDown, Download, Upload } from "lucide-react";
 import { Button, Select, Input } from "./ui/controls";
 import { emptyQuery, queryList, listStatus, mixedCurrencies, sortDirection, nextSort, type ListQuery } from "@/lib/list-query";
 import { pageWindow } from "@/lib/pagination";
@@ -32,6 +32,10 @@ export function usePagination<T extends { id: string }>(
     filtered: JSON.stringify(query) !== JSON.stringify(emptyQuery),
     ...window,
     items: items.slice(window.start, window.end),
+    // Everything matching the current filters, not just the visible page.
+    // Export uses this so the file reflects the filtered list rather than
+    // whichever page happens to be open.
+    matched: items,
     onPage: (page: number) => setState({ key, page }),
     onSize: (value: number) => {
       setSize(value);
@@ -60,8 +64,16 @@ type SortChoice = { value: string; label: string };
 
 export function ListFilters({
   query, setQuery, statuses, valued, mixedCurrency, sourceTotal, label = "results", sortable = true,
-  sortOptions,
-}: ListControls & { sortable?: boolean; sortOptions?: SortChoice[] }) {
+  sortOptions, onExport, exportCount, onImport,
+}: ListControls & {
+  sortable?: boolean;
+  sortOptions?: SortChoice[];
+  /** Exports the rows currently matching the filters; omitted where export makes no sense. */
+  onExport?: () => void;
+  exportCount?: number;
+  /** Opens the CSV import dialog; omitted for modules that cannot be imported. */
+  onImport?: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const panelId = useId();
   // Sorting is an ordering, not a filter, so it never counts towards the badge.
@@ -86,6 +98,25 @@ export function ListFilters({
         {active > 0 && <span className="list-query-count" aria-label={`${active} active`}>{active}</span>}
       </Button>
       {(active > 0 || query.search) && <Button className="secondary list-query-reset" onClick={()=>{setQuery(emptyQuery);}}>Reset</Button>}
+      {onExport && (
+        // Exports exactly what the filters currently match, so the file
+        // matches the list the user is looking at rather than everything.
+        <Button
+          className="secondary list-query-export"
+          onClick={onExport}
+          disabled={!exportCount}
+          title={exportCount ? `Export ${exportCount} ${label} as CSV` : `No ${label} to export`}
+        >
+          <Download size={15} aria-hidden="true" />
+          Export
+        </Button>
+      )}
+      {onImport && (
+        <Button className="secondary list-query-import" onClick={onImport}>
+          <Upload size={15} aria-hidden="true" />
+          Import
+        </Button>
+      )}
       <div id={panelId} className="list-query-panel" hidden={!open}>
         {statuses.length > 0 && <label>Status
           <Select aria-label={`${label} status`} value={query.status} onChange={e=>setQuery({...query,status:e.target.value})}><option value="all">All statuses</option>{statuses.map(s=><option key={s}>{s}</option>)}</Select>

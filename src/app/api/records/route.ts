@@ -24,7 +24,15 @@ import { salaryAttributes } from "@/lib/salary";
  * and resolves to the same record id instead of creating a second lead or
  * quotation. Absent, behaviour is unchanged.
  */
-const requestIdField = { requestId: z.string().min(8).max(100).optional() };
+const requestIdField = {
+  requestId: z.string().min(8).max(100).optional(),
+  /**
+   * Marks a creation as coming from a CSV import so the audit entry says so.
+   * It never becomes part of the record and never carries file contents — only
+   * a batch identifier, so a set of imported rows can be traced together.
+   */
+  importBatch: z.string().min(8).max(64).regex(/^[A-Za-z0-9_-]+$/).optional(),
+};
 
 const sha256Hex = async (value: string) =>
   [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)))]
@@ -196,8 +204,8 @@ export async function POST(request: Request) {
           { status: 200 },
         );
     }
-    // The key is transport metadata, not part of the record.
-    const { requestId: _requestId, ...fields } = body;
+    // Both keys are transport metadata, not part of the record.
+    const { requestId: _requestId, importBatch, ...fields } = body;
     const record: RecordItem = {
       ...fields,
       id,
@@ -242,7 +250,8 @@ export async function POST(request: Request) {
         },
         {
           id: crypto.randomUUID(), actor: actor.name, actorId: actor.id,
-          company: record.company, action: `Created ${record.kind}`,
+          company: record.company,
+          action: `Created ${record.kind}${importBatch ? ` (CSV import ${importBatch})` : ""}`,
           recordId: record.id, after: record,
         },
       );

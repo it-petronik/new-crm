@@ -266,13 +266,29 @@ test("only one of several simultaneous redemptions can succeed", async ({ reques
   expect(after.status()).not.toBe(200);
 });
 
-/** Runs one statement against the local D1 database and returns its output. */
+/**
+ * Runs one statement against the local D1 database and returns its output.
+ *
+ * Retries briefly: the preview Worker holds this same local SQLite file open
+ * while serving the suite, so an external write can lose a lock race when spec
+ * files run in parallel. The contention is transient, and retrying is
+ * preferable to serialising the suite or loosening what the test asserts.
+ */
 function d1(command: string) {
-  return execFileSync(
-    "npx",
-    ["wrangler", "d1", "execute", "enercore-crm", "--local", "--json", "--command", command],
-    { encoding: "utf8" },
-  );
+  let last: unknown;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      return execFileSync(
+        "npx",
+        ["wrangler", "d1", "execute", "enercore-crm", "--local", "--json", "--command", command],
+        { encoding: "utf8" },
+      );
+    } catch (error) {
+      last = error;
+      execFileSync("sleep", [String(0.4 * (attempt + 1))]);
+    }
+  }
+  throw last;
 }
 
 /**
