@@ -69,13 +69,20 @@ test("the MD opens on a brief counted from the data, not generated prose", async
 test("advancing a record offers the next follow-up instead of relying on memory", async ({ page }) => {
   await signIn(page, "md");
   await page.goto("/workspace/all-companies/customers");
-  const status = page.locator("select.inline-status").first();
-  test.skip(!(await status.count()), "no inline status control on this list");
-  const options = await status.locator("option").allInnerTexts();
-  const current = await status.inputValue();
-  const next = options.find((o) => o !== current);
-  test.skip(!next, "only one status available");
-  await status.selectOption(next!);
+  // The status control is the app's Select, which renders a listbox trigger
+  // rather than a native <select>.
+  const status = page.locator(".inline-status").first();
+  await expect(status).toBeVisible();
+  const current = (await status.innerText()).trim();
+
+  await status.click();
+  const listbox = page.getByRole("listbox");
+  await expect(listbox).toBeVisible();
+  const choices = (await listbox.getByRole("option").allInnerTexts()).map((o) => o.trim());
+  expect(choices.length, "a record must have somewhere to move to").toBeGreaterThan(1);
+  const next = choices.find((o) => o !== current)!;
+  expect(next, "another status must be available").toBeTruthy();
+  await listbox.getByRole("option", { name: next, exact: true }).click();
 
   const prompt = page.locator(".after-action");
   await expect(prompt).toBeVisible();

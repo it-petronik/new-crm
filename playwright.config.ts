@@ -9,6 +9,14 @@ export default defineConfig({
    * harness calling compilation time a defect.
    */
   timeout: 60_000,
+  /**
+   * `next dev` compiles routes on demand and is the bottleneck here, not the
+   * application. With more workers than it can serve, whichever test happens
+   * to request an uncompiled route waits on the others and a different one
+   * fails each run. Fewer workers makes the suite deterministic; it costs
+   * wall-clock time, not coverage.
+   */
+  workers: 3,
   use: {
     baseURL: "http://localhost:3000",
     headless: true,

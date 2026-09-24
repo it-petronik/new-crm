@@ -84,15 +84,20 @@ test("the keyboard shortcut opens quick add but is never required", async ({ pag
   await expect(search).toHaveValue("n");
 });
 
-test("a follow-up is two taps and is recorded on the lead", async ({ page }) => {
-  await signIn(page, "sales");
-  // The presets sit behind one control so a list row stays compact; opening it
-  // and choosing is still the whole interaction.
+test("a follow-up is two taps and is recorded on the record", async ({ page }) => {
+  // The executive dashboard always has attention items in the demo dataset, so
+  // this exercises the control rather than skipping when a given account's own
+  // day happens to be clear.
+  await signIn(page, "md");
+  await expect(page.locator(".command-attention")).toBeVisible();
+
+  // The presets sit behind one control so a row stays compact; opening it and
+  // choosing is the whole interaction.
   const trigger = page.locator(".follow-up-menu-trigger").first();
-  test.skip(!(await trigger.count()), "this demo account has nothing needing follow-up");
+  await expect(trigger).toBeVisible();
   await trigger.click();
   await page.locator(".follow-up-menu").getByRole("button", { name: "Tomorrow" }).click();
-  await expect(page.locator(".toast, [role='status']").first()).toContainText(/Follow-up set/);
+  await expect(page.locator(".toast")).toContainText(/Follow-up set/);
 });
 
 test("mobile keeps the create action in reach with no horizontal overflow", async ({ page }) => {
