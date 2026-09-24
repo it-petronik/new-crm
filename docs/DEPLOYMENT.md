@@ -129,57 +129,201 @@ login works:
 
 ## 11. Backup and restore
 
-D1 Time Travel gives point-in-time restore for roughly 30 days, but only
-*inside this Cloudflare account*. It does not survive account loss, suspension
-or a billing lapse, and it cannot reach corruption found after the window. So
-keep an off-platform copy.
-
-### Taking a backup (read-only, safe to run any time)
+### Taking a backup
 
 ```
 npm run db:backup
 ```
 
-Writes `backups/enercore-crm-<UTC timestamp>.sql` via `wrangler d1 export
---remote`, which only reads. The script refuses to leave behind an empty or
-schema-less file, because a broken export that looks like a backup is worse
-than none. `backups/` is gitignored — **copy the file somewhere off
-Cloudflare**; a backup that only exists in this working directory protects
-against very little.
+Read-only against production (`wrangler d1 export` only reads). Writes
+`backups/<db>-<UTC timestamp>.sql` and prints metadata only — filename,
+timestamp, size, database, result. Database contents are never printed or
+logged, and wrangler's own output (which includes a signed download URL) is
+captured rather than echoed.
 
-Do this before every schema migration, and on a schedule that matches how much
-data you are willing to lose.
+The run fails loudly if the export errors, produces nothing, produces an empty
+file, contains no `CREATE TABLE`, or is missing any of `User`, `Session`,
+`BusinessRecord`, `AuditEvent`. The file is written to `.partial` first and
+renamed only once validated, so a failed run can never leave behind something
+that looks like a good backup.
+
+**Retention:** the newest 30 backups are kept. Deletion only ever touches
+regular files inside the backup directory whose names match this script's own
+pattern, never a symlink, and never the newest backup or the one just written.
+
+**Configuration** (all optional, all environment variables; `.backup.env` in
+the repo root is loaded if present and is gitignored):
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `D1_DATABASE` | `enercore-crm` | database to export |
+| `BACKUP_DIR` | `<repo>/backups` | local destination |
+| `BACKUP_MIRROR_DIR` | none | off-device copy destination |
+| `BACKUP_KEEP` | `30` | successful backups retained |
+
+### Off-device copy
+
+A backup that exists only on this Mac protects against very little. Set
+`BACKUP_MIRROR_DIR` to any folder that syncs off the device — an iCloud Drive,
+Google Drive, Dropbox or OneDrive folder all work, because the sync client
+uploads it for you and no credentials ever enter this repo:
+
+```
+# ~/.../new-crm/.backup.env   (gitignored)
+BACKUP_MIRROR_DIR="$HOME/Library/CloudStorage/GoogleDrive-you@example.com/My Drive/enercore-backups"
+```
+
+A mirror failure is reported but never aborts the run and never deletes the
+local backup. If the destination is missing the run still succeeds, and the
+output says `MIRROR SKIPPED` or `MIRROR FAILED`.
+
+Verify the copy actually left the device — a sync client that is paused or out
+of quota will silently keep the file local.
+
+### Scheduling a daily backup (macOS)
+
+```
+scripts/launchd/install-backup-schedule.sh install     # daily at 02:30
+scripts/launchd/install-backup-schedule.sh status      # state + recent log
+scripts/launchd/install-backup-schedule.sh run         # trigger once now
+scripts/launchd/install-backup-schedule.sh uninstall   # remove (keeps backups)
+```
+
+The installer fills absolute paths into the plist template, validates it with
+`plutil -lint`, and loads it with `launchctl bootstrap`. Logs go to
+`~/Library/Logs/enercore-backup.log` and hold operational metadata only. The
+job does not need a terminal, but the Mac must be awake — launchd runs a missed
+job after wake.
+
+**Unattended authentication.** launchd runs as you and can read your existing
+wrangler OAuth login, which is usually enough. That login can expire, and it
+cannot be refreshed non-interactively — a scheduled run then fails and the
+error log says so. For a schedule you do not want to babysit, put a Cloudflare
+API token in `.backup.env`:
+
+```
+CLOUDFLARE_API_TOKEN=...
+CLOUDFLARE_ACCOUNT_ID=...
+```
+
+Minimum permissions: **Account → D1 → Edit** (D1 exposes no read-only scope;
+`export` is still read-only in what it does). Scope the token to this account
+only and nothing else. Create it yourself in the Cloudflare dashboard — never
+paste a token into the repo or a commit. `.backup.env` is gitignored. Manual
+`npm run db:backup` keeps working from your interactive login regardless.
 
 ### Restoring — destructive, deliberate, never routine
 
-Both options **overwrite production data**. Take a fresh export first, so you
-can get back to where you started.
+```
+scripts/restore-d1.sh <target-database> backups/<file>.sql
+```
 
-**Time Travel** (preferred within the retention window; no file needed):
+The script refuses to target the production database unless
+`I_UNDERSTAND_THIS_DESTROYS_PRODUCTION=yes` is set, because a restore replaces
+data and cannot be undone. **Take a fresh backup before any restore**, so the
+state you are leaving is itself recoverable.
+
+It applies the whole schema first, then inserts data parent-tables-first using
+the foreign keys declared in the schema. Both steps are necessary: a D1 export
+interleaves each table's `CREATE` with its `INSERT`s and emits tables
+alphabetically, so `Session` appears before the `User` rows its foreign key
+points at. Replaying the file directly with `wrangler d1 execute --file` fails —
+first with `no such table: main.User`, then with a `FOREIGN KEY constraint
+failed`. This is not theoretical; it is what happened when the procedure was
+first rehearsed.
+
+Rehearse into a scratch database, never production:
+
+```
+npx wrangler d1 create enercore-crm-restore-test
+scripts/restore-d1.sh enercore-crm-restore-test backups/<newest>.sql
+# compare counts against production, then:
+npx wrangler d1 delete enercore-crm-restore-test --skip-confirmation
+```
+
+Always confirm the scratch database's id differs from production's before
+restoring into it or deleting it.
+
+After any restore, check `npx wrangler d1 migrations list <db> --remote`: the
+restored `d1_migrations` ledger decides what counts as applied.
+
+---
+
+## Disaster recovery runbook
+
+Three different things are commonly confused. Pick by what actually broke.
+
+| Failure | Tool | Affects | Reversible |
+|---|---|---|---|
+| Bad deploy, code broken | **Worker rollback** | code only | yes |
+| Recent bad data change | **D1 Time Travel** | data only | within retention |
+| Database lost or corrupt | **SQL restore** | data only | only via a newer backup |
+
+A Worker rollback changes no data. Time Travel changes no code. Neither is a
+substitute for the other.
+
+### A. Worker deployment failure
+
+```
+npx wrangler deployments list --name enercore-crm-live
+npx wrangler rollback --name enercore-crm-live [version-id]
+```
+
+Roll back the Worker you deployed — production is `enercore-crm-live`, not
+`enercore-crm`. Schema is untouched; both migrations so far are additive, so an
+older Worker runs unchanged against the newer schema. Prefer rolling back code
+and leaving the schema alone.
+
+### B. Recent accidental data modification
+
+Time Travel restores the whole database to a point in time, roughly 30 days
+back. It is the right tool for "someone deleted the wrong thing an hour ago".
 
 ```
 npx wrangler d1 time-travel info enercore-crm
 npx wrangler d1 time-travel restore enercore-crm --bookmark=<bookmark>
 ```
 
-**From an export** (outside the window, or to a different database):
+Destructive: everything after that bookmark is lost, including good changes.
+Take a backup first so you can move forward again if you overshoot.
 
-```
-npx wrangler d1 execute <database> --remote --file backups/<file>.sql
-```
+### C. Database corruption or loss
 
-Restore into a scratch database first and check row counts against what you
-expect. Restoring re-creates tables, so applying an export over a live
-database that still holds those tables will fail or conflict — this is a
-recovery procedure, not a sync.
+Restore the newest validated SQL backup into a **scratch** database, verify row
+counts, and only then consider production. See *Restoring* above.
 
-After any restore, re-check `npx wrangler d1 migrations list <db> --remote`:
-the restored `d1_migrations` ledger decides what is considered applied.
+### D. Cloudflare account access problem
 
-Rehearse this at least once against a scratch database. An untested restore is
-not a backup strategy.
+Time Travel and the D1 database both live inside the Cloudflare account, so
+neither is reachable if the account is locked, suspended or lapsed. The only
+thing that survives is an off-device backup. This is the entire reason for
+`BACKUP_MIRROR_DIR` — set it.
 
-## 12. Rollback
+### E. This Mac is lost or damaged
+
+Local backups in `backups/` go with it. Recovery depends on the off-device
+copy plus git (`origin/main` holds the application and migrations). Without a
+mirror, the position is the same as D above.
+
+### F. Complete environment rebuild
+
+1. `git clone` the repository, `npm ci`
+2. `npx wrangler login`
+3. `npx wrangler d1 create enercore-crm` — note the new `database_id`
+4. Update both `database_id` entries in `wrangler.jsonc` (top level and `env.live`)
+5. `npm run db:migrate:remote`
+6. Restore data: `scripts/restore-d1.sh enercore-crm backups/<newest>.sql`
+   (requires the explicit production override; the database is empty, so this
+   is a rebuild rather than an overwrite)
+7. `npm run cf:deploy:live`
+8. Re-point `crm.enercore.ae` — the custom domain binds to the Worker, so
+   confirm the route in `wrangler.jsonc` and that no conflicting DNS record
+   exists
+9. Verify: `/login` loads, sign in works, row counts match the backup
+
+Step 6 needs a backup. Steps 1–5 and 7–8 need only the account and git.
+
+## 12. Rollback## 12. Rollback
 
 Deployments are versioned, so the fastest rollback is:
 

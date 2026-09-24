@@ -13,3 +13,6 @@ playwright-report/
 
 # Local D1 exports. Backups must never be committed.
 backups/
+
+# Optional local backup configuration (may hold CLOUDFLARE_API_TOKEN).
+.backup.env

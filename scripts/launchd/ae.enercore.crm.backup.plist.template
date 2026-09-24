@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Daily production D1 backup.
+
+  This is a TEMPLATE. Do not load it from the repo — `make` a copy with the
+  placeholders replaced, as docs/DEPLOYMENT.md describes, because launchd
+  requires absolute paths and this file must not hardcode a personal one.
+
+  Placeholders:
+    __REPO__      absolute path to the repository
+    __NODE_BIN__  directory holding node/npx (output of `dirname "$(command -v node)"`)
+    __LOG_DIR__   absolute path for logs
+
+  Logs hold operational metadata only: filename, timestamp, size, database
+  name, result. The backup script never writes database contents to stdout.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>ae.enercore.crm.backup</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>__REPO__/scripts/backup-d1.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>__REPO__</string>
+
+  <!-- launchd starts with a minimal PATH that excludes node. -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>__NODE_BIN__:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+
+  <!-- 02:30 local time daily. -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>2</integer>
+    <key>Minute</key><integer>30</integer>
+  </dict>
+
+  <!-- If the Mac was asleep at 02:30, run once after it wakes. -->
+  <key>RunAtLoad</key>
+  <false/>
+
+  <key>StandardOutPath</key>
+  <string>__LOG_DIR__/enercore-backup.log</string>
+  <key>StandardErrorPath</key>
+  <string>__LOG_DIR__/enercore-backup.error.log</string>
+
+  <key>ProcessType</key>
+  <string>Background</string>
+</dict>
+</plist>
