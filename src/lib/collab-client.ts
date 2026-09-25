@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { AttachmentView, CollabEvent, CollabSummary, PresenceView } from "./collab";
 import { businessDate, businessTime, businessToday } from "./gst";
 
@@ -302,6 +302,31 @@ export function useCollabSummary(enabled: boolean) {
     refresh,
   );
   return { summary, refresh };
+}
+
+/* ----------------------------------------------------------- file storage */
+
+/**
+ * Whether this deployment has file storage (the R2 binding). Learned from
+ * the conversation list; until then, and wherever storage is absent, file
+ * features stay hidden rather than failing on use.
+ */
+let filesEnabled = false;
+const filesListeners = new Set<() => void>();
+export function setFilesEnabled(value: boolean) {
+  if (filesEnabled === value) return;
+  filesEnabled = value;
+  for (const l of filesListeners) l();
+}
+export function useFilesEnabled() {
+  return useSyncExternalStore(
+    (listener) => {
+      filesListeners.add(listener);
+      return () => void filesListeners.delete(listener);
+    },
+    () => filesEnabled,
+    () => false,
+  );
 }
 
 /* -------------------------------------------------------------- presence */

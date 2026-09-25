@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { Hash, ImagePlus, Lock, Trash2 } from "lucide-react";
 import { roomAvatarUrl, type ConversationSummary } from "@/lib/collab";
 import { ROOM_AVATAR_MAX, formatBytes } from "@/lib/collab-files";
-import { collabFetch, uploadRoomAvatar } from "@/lib/collab-client";
+import { collabFetch, uploadRoomAvatar, useFilesEnabled } from "@/lib/collab-client";
 import { initials } from "../avatar";
 import { Button } from "../ui/controls";
 
@@ -55,6 +55,8 @@ export function RoomAvatarEditor({ room, onChanged }: { room: RoomLike; onChange
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // Room images need file storage on this deployment.
+  const filesEnabled = useFilesEnabled();
   const choose = async (file: File | undefined) => {
     if (!file) return;
     setError("");
@@ -84,6 +86,7 @@ export function RoomAvatarEditor({ room, onChanged }: { room: RoomLike; onChange
       setBusy(false);
     }
   };
+  if (!filesEnabled) return null;
   return (
     <div className="collab-avatar-editor">
       <RoomAvatar room={room} size={56} />

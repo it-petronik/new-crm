@@ -12,7 +12,7 @@ import type {
 import { excerpt, UNREAD_CAP } from "@/lib/collab";
 import type { Actor } from "@/lib/domain";
 import { companyName } from "@/lib/company-name";
-import { collabFetch, CollabRequestError, useCollabEvents, useLiveState, usePresence } from "@/lib/collab-client";
+import { collabFetch, CollabRequestError, useCollabEvents, useLiveState, usePresence, setFilesEnabled } from "@/lib/collab-client";
 import { Button, DialogPresence, Input } from "../ui/controls";
 import { ConversationListSkeleton } from "./skeletons";
 import { Avatar } from "../avatar";
@@ -148,7 +148,8 @@ export default function CollaborationHub({
 
   const loadList = useCallback(async () => {
     try {
-      const { conversations } = await collabFetch<{ conversations: ConversationSummary[] }>("/conversations");
+      const { conversations, files } = await collabFetch<{ conversations: ConversationSummary[]; files?: boolean }>("/conversations");
+      setFilesEnabled(!!files);
       setConversations(conversations);
       setListError(false);
       return conversations;

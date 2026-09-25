@@ -1,3 +1,4 @@
+import { collabBucket } from "@/lib/collab-storage";
 import { z } from "zod";
 import {
   cleanLine,
@@ -53,7 +54,9 @@ export function GET(request: Request) {
         }));
       return json({ rooms });
     }
-    return json({ conversations: await conversationSummaries(db, actor) });
+    // `files` says whether file storage is bound here, so the client offers
+    // attachments, voice notes and room images only where they can work.
+    return json({ conversations: await conversationSummaries(db, actor), files: !!(await collabBucket()) });
   });
 }
 

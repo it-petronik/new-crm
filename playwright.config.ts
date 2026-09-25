@@ -4,7 +4,9 @@ export default defineConfig({
   // The Collaboration Hub suite needs the built Worker in live mode with its
   // Durable Object; it has its own config (playwright.collab.config.ts) and
   // server rather than being skipped here.
-  testIgnore: ["collab/**"],
+  // The no-file-storage variant has its own config too
+  // (playwright.collab-nofiles.config.ts).
+  testIgnore: ["collab/**", "collab-no-files/**"],
   /**
    * The suite runs against `next dev`, which compiles routes on demand. With
    * several workers requesting different routes at once a first hit can take

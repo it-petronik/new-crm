@@ -77,13 +77,17 @@
 				{ "tag": "v1-collab-hub", "new_sqlite_classes": ["CollabHub"] }
 			],
 			// Collaboration V2 files (attachments, voice notes, room images).
-			// Private bucket, reached only through the Worker's authorised
-			// file route — never public, never bound to preview. Create it with
-			// `wrangler r2 bucket create enercore-collab-files` before the
-			// first deploy that includes this block.
-			"r2_buckets": [
-				{ "binding": "COLLAB_FILES", "bucket_name": "enercore-collab-files" }
-			],
+			// NOT BOUND YET: R2 is not enabled on the Cloudflare account. Without
+			// the binding the app hides attach, voice and room-image controls,
+			// uploads answer 503 and file routes 404. To turn files on:
+			//   1. enable R2 in the Cloudflare dashboard;
+			//   2. `wrangler r2 bucket create enercore-collab-files` (private,
+			//      no public URL or custom domain);
+			//   3. uncomment the block below and deploy live.
+			// Never bind it to preview.
+			// "r2_buckets": [
+			// 	{ "binding": "COLLAB_FILES", "bucket_name": "enercore-collab-files" }
+			// ],
 			// 02:23 UTC: purge of unsent uploads (after 1 day) and of files
 			// whose message was deleted more than 30 days ago.
 			// 04:00 UTC (08:00 GST): notification reminders — follow-ups due

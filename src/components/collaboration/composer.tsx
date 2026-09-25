@@ -11,7 +11,7 @@ import {
   type ReplyPreview,
 } from "@/lib/collab";
 import { ACCEPT_ATTRIBUTE, ATTACHMENTS_PER_MESSAGE, ATTACHMENT_LIMITS, formatBytes } from "@/lib/collab-files";
-import { collabFetch, uploadAttachment } from "@/lib/collab-client";
+import { collabFetch, uploadAttachment, useFilesEnabled } from "@/lib/collab-client";
 import { Button } from "../ui/controls";
 import { Avatar } from "../avatar";
 import { AttachmentTray, imageExtras, type PendingUpload } from "./attachments";
@@ -93,7 +93,9 @@ const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer({
   const [recording, setRecording] = useState(false);
   const input = useRef<HTMLTextAreaElement>(null);
   const filePicker = useRef<HTMLInputElement>(null);
-  const canAttach = mode === "send" && !!conversationId;
+  // Files, paste, drop and voice notes need file storage on this deployment.
+  const filesEnabled = useFilesEnabled();
+  const canAttach = mode === "send" && !!conversationId && filesEnabled;
 
   /* ------------------------------------------------------------ typing */
   const typingSentAt = useRef(0);

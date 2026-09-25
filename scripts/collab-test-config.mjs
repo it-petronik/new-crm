@@ -24,8 +24,12 @@ const test = {
   d1_databases: live.d1_databases.map((d) => ({ ...d, migrations_dir: resolve(root, d.migrations_dir) })),
   durable_objects: live.durable_objects,
   migrations: live.migrations,
-  // Local R2 (miniflare) under the same binding; nothing remote.
-  r2_buckets: live.r2_buckets,
+  // Local R2 (miniflare) under the production binding name; nothing remote.
+  // Bound here even while production has no bucket yet, so the file
+  // features stay covered; COLLAB_TEST_NO_R2=1 runs without it, as live does.
+  ...(process.env.COLLAB_TEST_NO_R2 === "1"
+    ? {}
+    : { r2_buckets: live.r2_buckets ?? [{ binding: "COLLAB_FILES", bucket_name: "enercore-collab-files" }] }),
   vars: {
     ...live.vars,
     APP_URL: "http://localhost:8788",
