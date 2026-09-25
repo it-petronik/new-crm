@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { cleanText, isId, MENTION_MAX, MESSAGE_MAX, messageId, validMentions } from "@/lib/collab";
 import { CollabError, collabContext, handle, json, rateLimit, requireRead } from "@/lib/collab-auth";
+import { ATTACHMENTS_PER_MESSAGE } from "@/lib/collab-files";
 import {
+  pendingAttachments,
   findByClientKey,
   findMessage,
   hydrateMessages,
@@ -20,6 +22,7 @@ const send = z
     replyToId: id.nullable().optional(),
     mentionIds: z.array(id).max(MENTION_MAX * 2).default([]),
     clientKey: id.optional(),
+    attachmentIds: z.array(id).max(ATTACHMENTS_PER_MESSAGE).default([]),
   })
   .strict();
 
@@ -74,7 +77,16 @@ export function POST(request: Request, { params }: Params) {
     // After the idempotency check, so retrying a send never counts twice.
     await rateLimit(db, actor, "message");
     const body = cleanText(input.body);
-    if (!body) throw new CollabError(400, "Write a message first.");
+    // Text, files, or both — but not neither.
+    const attachmentIds = [...new Set(input.attachmentIds)];
+    if (!body && !attachmentIds.length) throw new CollabError(400, "Write a message first.");
+    // Every file must be the sender's own pending upload in this
+    // conversation; insertMessage re-applies the same guard atomically.
+    if (attachmentIds.length) {
+      const pending = await pendingAttachments(db, attachmentIds, conversationId, actor.id);
+      if (pending.length !== attachmentIds.length)
+        throw new CollabError(400, "An attachment is no longer available. Remove it and try again.");
+    }
     if (body.length > MESSAGE_MAX)
       throw new CollabError(400, `Messages are at most ${MESSAGE_MAX.toLocaleString()} characters.`);
 
@@ -100,7 +112,7 @@ export function POST(request: Request, { params }: Params) {
       clientKey: input.clientKey ?? null,
     };
     try {
-      await insertMessage(db, row, mentions, now);
+      await insertMessage(db, row, mentions, now, attachmentIds);
     } catch (error) {
       // Two copies of the same send racing: the unique (author, clientKey)
       // index lets exactly one land. The loser returns the winner's message

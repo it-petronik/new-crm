@@ -3,10 +3,18 @@ import { ZodError } from "zod";
 import { currentActor, checkOrigin } from "./auth";
 import { getDb, isPreview, type Database } from "./db";
 import type { Actor } from "./domain";
-import type { ConversationMemberRow, ConversationRow } from "./schema";
-import { inRoomScope, isId } from "./collab";
-import { findConversation, findMembership, findPeople, type PersonRow } from "./collab-data";
 import { recordLoginAttempt } from "./data";
+import { CollabError } from "./collab-access";
+
+// The access rules themselves live in collab-access.ts (no Next.js imports),
+// shared with the Worker's file routes; re-exported so routes keep one import.
+export {
+  CollabError,
+  conversationAccess,
+  requireRead,
+  requireAdmin,
+  type Access,
+} from "./collab-access";
 
 /**
  * Collaboration authorization, in one place.
@@ -24,17 +32,6 @@ import { recordLoginAttempt } from "./data";
  *   thread's company still among the caller's companies.
  * - Administering a room needs owner/admin membership on top of read access.
  */
-
-export class CollabError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-  ) {
-    super(message);
-  }
-}
-
-const notFound = () => new CollabError(404, "Conversation not found.");
 
 export type CollabContext = { actor: Actor; db: Database };
 
@@ -58,77 +55,6 @@ export async function collabContext(request: Request, write: boolean): Promise<C
   return { actor, db };
 }
 
-export type Access = {
-  conversation: ConversationRow;
-  membership: ConversationMemberRow | null;
-  /** The caller may read messages and member details. */
-  canRead: boolean;
-  /** The caller may send, and edit their own messages. */
-  canPost: boolean;
-  /** Owner or admin of a room within scope. */
-  canAdmin: boolean;
-  /** A workspace room within scope that the caller has not joined. */
-  canJoin: boolean;
-  /** Direct messages only: the other participant. */
-  counterpart: PersonRow | null;
-};
-
-export async function conversationAccess(
-  db: Database,
-  actor: Actor,
-  id: unknown,
-): Promise<Access> {
-  if (!isId(id)) throw notFound();
-  const conversation = await findConversation(db, id);
-  if (!conversation) throw notFound();
-  const membership = (await findMembership(db, id, actor.id)) ?? null;
-  const archived = !!conversation.archivedAt;
-
-  if (conversation.kind === "direct") {
-    const canRead = !!membership && actor.companies.includes(conversation.company);
-    let counterpart: PersonRow | null = null;
-    if (canRead) {
-      const otherId = (conversation.directKey ?? "").split(":").find((p) => p !== actor.id);
-      counterpart = otherId ? ((await findPeople(db, [otherId]))[0] ?? null) : null;
-    }
-    // Writing needs the other person to still be active and still in the
-    // company the thread belongs to; history stays readable either way.
-    const canPost =
-      canRead &&
-      !!counterpart &&
-      counterpart.active &&
-      counterpart.companies.includes(conversation.company);
-    return { conversation, membership, canRead, canPost, canAdmin: false, canJoin: false, counterpart };
-  }
-
-  const scoped = inRoomScope(actor, conversation);
-  const canRead = !!membership && scoped;
-  return {
-    conversation,
-    membership,
-    canRead,
-    canPost: canRead && !archived,
-    canAdmin: canRead && (membership?.role === "owner" || membership?.role === "admin"),
-    canJoin: !membership && scoped && conversation.visibility === "workspace" && !archived,
-    counterpart: null,
-  };
-}
-
-/** Read access, or a 404 indistinguishable from a missing conversation. */
-export async function requireRead(db: Database, actor: Actor, id: unknown) {
-  const access = await conversationAccess(db, actor, id);
-  if (!access.canRead) throw notFound();
-  return access;
-}
-
-export async function requireAdmin(db: Database, actor: Actor, id: unknown) {
-  const access = await requireRead(db, actor, id);
-  if (access.conversation.kind !== "room")
-    throw new CollabError(400, "Direct messages have no room settings.");
-  if (!access.canAdmin) throw new CollabError(403, "Only room owners and admins can do that.");
-  return access;
-}
-
 /**
  * Conservative per-person write limits. They exist to stop a script or a
  * stuck client flooding a room, not to slow down anyone typing; reads are not
@@ -139,6 +65,9 @@ export const RATE_LIMITS = {
   message: { max: 30, windowMs: 60_000, error: "You're sending messages too quickly. Wait a moment and try again." },
   room: { max: 10, windowMs: 60 * 60_000, error: "You've created a lot of rooms recently. Try again later." },
   direct: { max: 30, windowMs: 60 * 60_000, error: "You've started a lot of conversations recently. Try again later." },
+  upload: { max: 60, windowMs: 10 * 60_000, error: "You've uploaded a lot of files recently. Wait a few minutes and try again." },
+  reaction: { max: 120, windowMs: 60_000, error: "Too many reactions at once. Wait a moment." },
+  avatar: { max: 10, windowMs: 60 * 60_000, error: "The room image has been changed a lot recently. Try again later." },
 } as const;
 
 export async function rateLimit(db: Database, actor: Actor, kind: keyof typeof RATE_LIMITS) {

@@ -75,7 +75,7 @@ for (const kind of [
     expect(
       await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth),
     ).toBe(true);
-    const footer = await page.locator(".dialog-footer").boundingBox();
+    const footer = await page.locator(".ui-dialog-footer").boundingBox();
     expect(footer!.y + footer!.height).toBeLessThanOrEqual(844);
     await page
       .getByRole("button", { name: "Close dialog", exact: true })

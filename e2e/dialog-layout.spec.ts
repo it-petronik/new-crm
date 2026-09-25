@@ -26,12 +26,12 @@ test("shared dialog retains actions and saves employee fields", async ({
   await page.screenshot({ path: info.outputPath("employee-desktop.png") });
   await page.setViewportSize({ width: 390, height: 720 });
   const heading = await page.locator(".dialog-heading").boundingBox();
-  const footer = await page.locator(".dialog-footer").boundingBox();
+  const footer = await page.locator(".ui-dialog-footer").boundingBox();
   await page.locator(".dialog-body").evaluate((el) => {
     el.scrollTop = el.scrollHeight;
   });
   expect(await page.locator(".dialog-heading").boundingBox()).toEqual(heading);
-  expect(await page.locator(".dialog-footer").boundingBox()).toEqual(footer);
+  expect(await page.locator(".ui-dialog-footer").boundingBox()).toEqual(footer);
   expect(footer!.y + footer!.height).toBeLessThanOrEqual(720);
   await page.screenshot({ path: info.outputPath("employee-mobile.png") });
   await page.getByRole("button", { name: "Save record", exact: true }).click();

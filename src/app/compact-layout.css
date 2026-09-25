@@ -41,38 +41,7 @@
     padding: 16px 20px;
     scrollbar-gutter: stable;
   }
-  .dialog-footer {
-    padding: 10px 20px;
-    align-items: center;
-  }
-  .dialog-footer-actions:not(:empty),
-  .dialog-footer .detail-actions {
-    align-items: center;
-  }
-  .dialog-footer .detail-actions .ui-field {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 10px;
-    font-size: 11px;
-    max-width: none;
-    flex: 0 0 auto;
-  }
-  .dialog-footer .detail-actions .ui-field > label {
-    white-space: nowrap;
-    flex-shrink: 0;
-    margin: 0;
-  }
-  .dialog-footer .print-button {
-    margin: 0;
-  }
-  .dialog-footer .detail-actions .ui-select-trigger {
-    min-width: 170px;
-  }
-  .dialog-footer .form-footer > span {
-    max-width: 45%;
-    line-height: 1.4;
-  }
+
   .modal .form-grid {
     gap: 12px 14px;
     margin-top: 10px;
@@ -126,8 +95,7 @@
     }
   }
   @media (max-width: 600px) {
-    .dialog-heading,
-    .dialog-footer {
+    .dialog-heading {
       padding: 12px 14px;
     }
     .dialog-body {
@@ -136,18 +104,7 @@
     .modal .detail-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
-    .dialog-footer .detail-actions .ui-field {
-      display: grid;
-      gap: 4px;
-      min-width: 0;
-    }
-    .dialog-footer .detail-actions .ui-select-trigger {
-      min-width: 0;
-      max-width: 190px;
-    }
-    .dialog-footer-actions:not(:empty) {
-      gap: 8px;
-    }
+
     .reference-document {
       zoom: 0.5;
     }
@@ -165,8 +122,6 @@
     .modal .form-grid .field-wide {
       grid-column: auto;
     }
-    .dialog-footer .detail-actions .ui-field {
-      font-size: 10px;
-    }
+
   }
 }

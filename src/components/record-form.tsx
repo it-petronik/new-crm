@@ -489,36 +489,30 @@ export default function RecordForm({
             {formError || saveError}
           </p>
         )}
-        <DialogActions>
-          <div className="form-footer">
-            <span>
-              <ShieldCheck size={14} />
+        <DialogActions
+          onCancel={onClose}
+          pending={busy}
+          start={
+            <span className="ui-dialog-note">
+              <ShieldCheck size={14} aria-hidden="true" />
               {actor.name} · Recorded with your company access
             </span>
-            <Button type="button" className="secondary" onClick={onClose}>
-              Cancel
-            </Button>
-            {quoteEditor && section < 2 && (
-              <Button
-                type="button"
-                className="secondary"
-                onClick={() => setSection(section + 1)}
-              >
+          }
+          secondary={
+            quoteEditor && section < 2 && (
+              <Button type="button" className="secondary" onClick={() => setSection(section + 1)}>
                 Next section <ArrowRight size={14} />
               </Button>
-            )}
-            <Button
-              type="submit"
-              form={formId}
-              className="primary"
-              loading={busy}
-              disabled={busy}
-            >
-              {editing ? "Save changes" : "Save record"}
-              <ArrowRight size={15} />
-            </Button>
-          </div>
-        </DialogActions>
+            )
+          }
+          primary={{
+            type: "submit",
+            form: formId,
+            label: editing ? "Save changes" : "Save record",
+            pendingLabel: "Saving…",
+            pending: busy,
+          }}
+        />
       </form>
     </Dialog>
   );

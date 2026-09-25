@@ -93,7 +93,11 @@ export default function ImportDialog({
 
     setProgress(null);
     setResult({ imported, duplicates, failed });
-    await onDone();
+    // Refreshing the list afterwards is best effort: the result above is
+    // already shown, and a failed refresh must not surface as an error.
+    try {
+      await onDone();
+    } catch {}
   }
 
   const skipped = plan ? plan.duplicatesInFile.length + plan.duplicatesExisting.length : 0;
@@ -115,11 +119,13 @@ export default function ImportDialog({
             aria-label="CSV file"
             onChange={(e) => { const f = e.target.files?.[0]; if (f) void choose(f); }}
           />
-          <DialogActions>
-            <Button className="secondary" onClick={() => downloadCsv(exportFilename(company, `${kind}-template`), templateCsv(kind))}>
-              <FileDown size={16} /> Download template
-            </Button>
-          </DialogActions>
+          <DialogActions
+            start={
+              <Button className="secondary" onClick={() => downloadCsv(exportFilename(company, `${kind}-template`), templateCsv(kind))}>
+                <FileDown size={16} /> Download template
+              </Button>
+            }
+          />
           <p className="muted small">
             Columns: {importColumns(kind).map((c) => c.key).join(", ")}
           </p>
@@ -174,19 +180,17 @@ export default function ImportDialog({
             </ul>
           )}
 
-          <DialogActions>
-            <Button className="secondary" onClick={onClose}>Cancel</Button>
-            <Button
-              className="primary"
-              disabled={!plan.valid.length || !!progress}
-              onClick={() => void run()}
-            >
-              <Upload size={16} />
-              {progress
-                ? `Importing ${progress.done} / ${progress.total}`
-                : `Import ${plan.valid.length} records`}
-            </Button>
-          </DialogActions>
+          <DialogActions
+            onCancel={onClose}
+            primary={{
+              label: `Import ${plan.valid.length} records`,
+              pendingLabel: progress ? `Importing ${progress.done} / ${progress.total}` : "Importing…",
+              icon: <Upload size={16} aria-hidden="true" />,
+              pending: !!progress,
+              disabled: !plan.valid.length,
+              onClick: run,
+            }}
+          />
           {!plan.valid.length && (
             <p className="muted small">No row can be imported. Fix the file and try again.</p>
           )}
@@ -203,8 +207,10 @@ export default function ImportDialog({
             <div><dt>Skipped</dt><dd>{plan?.errors.length ?? 0}</dd></div>
             <div><dt>Failed</dt><dd>{result.failed.length}</dd></div>
           </dl>
-          <DialogActions>
-            {(result.failed.length > 0 || (plan?.errors.length ?? 0) > 0) && (
+          <DialogActions
+            cancel={false}
+            primary={{ label: "Done", onClick: onClose }}
+            start={(result.failed.length > 0 || (plan?.errors.length ?? 0) > 0) && (
               <Button
                 className="secondary"
                 onClick={() =>
@@ -220,8 +226,7 @@ export default function ImportDialog({
                 <FileDown size={16} /> Download failures
               </Button>
             )}
-            <Button className="primary" onClick={onClose}>Done</Button>
-          </DialogActions>
+          />
         </div>
       )}
     </Dialog>

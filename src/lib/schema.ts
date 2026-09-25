@@ -174,6 +174,10 @@ export const conversations = sqliteTable(
     // Drives list ordering; NULL until the first message.
     lastMessageAt: integer("lastMessageAt", { mode: "timestamp_ms" }),
     archivedAt: integer("archivedAt", { mode: "timestamp_ms" }),
+    // V2: an uploaded room image, stored in R2 under this opaque key. NULL
+    // means the generated initials avatar. Never image bytes in D1.
+    avatarKey: text("avatarKey"),
+    avatarUpdatedAt: integer("avatarUpdatedAt", { mode: "timestamp_ms" }),
   },
   (table) => [
     uniqueIndex("Conversation_directKey_key").on(table.directKey),
@@ -257,6 +261,84 @@ export const messageMentions = sqliteTable(
   ],
 );
 
+/* ------------------------------------------------------------------------
+ * Collaboration Hub V2 — additive only.
+ * --------------------------------------------------------------------- */
+
+/**
+ * A file attached to a message: metadata only. The bytes live in R2 under an
+ * opaque random `storageKey` (never derived from the user's filename), and
+ * are served only through the authorised file route, which re-checks
+ * conversation access on every request.
+ *
+ * `messageId` is NULL while the upload is pending (picked in the composer but
+ * not yet sent); only the uploader can see a pending attachment, and unsent
+ * ones are purged after a day. Deleting the message sets `deletedAt`, which
+ * makes the file unreachable at once; the R2 object is purged after the
+ * retention window (see purgeAttachments).
+ */
+export const attachments = sqliteTable(
+  "Attachment",
+  {
+    id: text("id").primaryKey(),
+    conversationId: text("conversationId")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    messageId: text("messageId").references(() => messages.id, { onDelete: "cascade" }),
+    uploaderId: text("uploaderId").notNull(),
+    storageKey: text("storageKey").notNull(),
+    // Client-generated preview for images, validated and stored like the file.
+    thumbKey: text("thumbKey"),
+    originalName: text("originalName").notNull(),
+    // Server-determined from the file's bytes, never the browser's claim.
+    mimeType: text("mimeType").notNull(),
+    kind: text("kind").$type<"image" | "pdf" | "document" | "audio">().notNull(),
+    size: integer("size").notNull(),
+    width: integer("width"),
+    height: integer("height"),
+    durationMs: integer("durationMs"),
+    // Order within its message, as the sender arranged the files. Uploads
+    // run in parallel, so upload order is not the order they were picked.
+    position: integer("position"),
+    createdAt: integer("createdAt", { mode: "timestamp_ms" }).notNull(),
+    deletedAt: integer("deletedAt", { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    // A room's media / files browser, newest first (ids are time-ordered).
+    index("Attachment_conversationId_kind_id_idx").on(table.conversationId, table.kind, table.id),
+    index("Attachment_messageId_idx").on(table.messageId),
+    index("Attachment_deletedAt_idx").on(table.deletedAt),
+  ],
+);
+
+/** One row per (message, person, emoji); the primary key forbids duplicates. */
+export const messageReactions = sqliteTable(
+  "MessageReaction",
+  {
+    messageId: text("messageId")
+      .notNull()
+      .references(() => messages.id, { onDelete: "cascade" }),
+    userId: text("userId").notNull(),
+    emoji: text("emoji").notNull(),
+    conversationId: text("conversationId").notNull(),
+    createdAt: integer("createdAt", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.messageId, table.userId, table.emoji] })],
+);
+
+/**
+ * When someone was last connected. Live online/away state is NOT stored
+ * here — the Durable Objects hold it — this row is written only when a
+ * person's final connection closes, so it costs one write per session, not
+ * one per heartbeat.
+ */
+export const collabPresence = sqliteTable("CollabPresence", {
+  userId: text("userId")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  lastSeenAt: integer("lastSeenAt", { mode: "timestamp_ms" }).notNull(),
+});
+
 export type UserRow = typeof users.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;
 export type BusinessRecordRow = typeof businessRecords.$inferSelect;
@@ -265,3 +347,4 @@ export type PasswordResetRow = typeof passwordResets.$inferSelect;
 export type ConversationRow = typeof conversations.$inferSelect;
 export type ConversationMemberRow = typeof conversationMembers.$inferSelect;
 export type MessageRow = typeof messages.$inferSelect;
+export type AttachmentRow = typeof attachments.$inferSelect;

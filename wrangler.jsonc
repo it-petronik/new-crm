@@ -75,7 +75,18 @@
 			},
 			"migrations": [
 				{ "tag": "v1-collab-hub", "new_sqlite_classes": ["CollabHub"] }
-			]
+			],
+			// Collaboration V2 files (attachments, voice notes, room images).
+			// Private bucket, reached only through the Worker's authorised
+			// file route — never public, never bound to preview. Create it with
+			// `wrangler r2 bucket create enercore-collab-files` before the
+			// first deploy that includes this block.
+			"r2_buckets": [
+				{ "binding": "COLLAB_FILES", "bucket_name": "enercore-collab-files" }
+			],
+			// Daily purge of unsent uploads (after 1 day) and of files whose
+			// message was deleted more than 30 days ago.
+			"triggers": { "crons": ["23 2 * * *"] }
 		}
 	}
 }

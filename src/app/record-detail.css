@@ -4,7 +4,7 @@
   .delete-record-dialog .dialog-body > p { line-height: 1.6; }
   .ui-button.danger-button { background: #b42335; border: 1px solid #b42335; color: white; padding: 10px 16px; border-radius: 9px; }
   .ui-button.delete-action { color: #b42335; }
-  .record-detail-dialog .dialog-footer .detail-actions { flex: 1; }
+
   .access-editor-dialog .access-fieldset > .form-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -131,16 +131,12 @@
     font-size: 10px;
     line-height: 1.5;
   }
-  .record-detail-dialog .dialog-footer {
-    min-height: 62px;
-  }
+
   @media (max-width: 600px) {
     .access-editor-dialog .access-fieldset > .form-grid {
       grid-template-columns: 1fr;
     }
-    .record-detail-dialog .dialog-footer {
-      align-items: flex-end;
-    }
+
     .record-context {
       gap: 8px;
     }
@@ -150,17 +146,7 @@
     .record-detail-dialog .detail-grid {
       gap: 12px;
     }
-    .record-detail-dialog .dialog-footer .detail-actions {
-      flex-direction: row;
-    }
-    .record-detail-dialog .dialog-footer .detail-actions .ui-field {
-      display: flex;
-      flex-direction: row;
-      gap: 8px;
-    }
-    .record-detail-dialog .dialog-footer .ui-select-trigger {
-      width: 145px;
-    }
+
     .record-detail-dialog .record-activity .form-grid {
       grid-template-columns: 1fr;
     }

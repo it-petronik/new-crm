@@ -24,7 +24,17 @@ const test = {
   d1_databases: live.d1_databases.map((d) => ({ ...d, migrations_dir: resolve(root, d.migrations_dir) })),
   durable_objects: live.durable_objects,
   migrations: live.migrations,
-  vars: { ...live.vars, APP_URL: "http://localhost:8788" },
+  // Local R2 (miniflare) under the same binding; nothing remote.
+  r2_buckets: live.r2_buckets,
+  vars: {
+    ...live.vars,
+    APP_URL: "http://localhost:8788",
+    // Presence expiry in seconds rather than minutes, so the suite can watch
+    // a dead tab expire. Production uses the defaults in collab-hub.ts.
+    COLLAB_PRESENCE_HEARTBEAT_MS: "1500",
+    COLLAB_PRESENCE_STALE_MS: "5000",
+    COLLAB_PRESENCE_TTL_MS: "6000",
+  },
 };
 if (test.vars.APP_MODE !== "production") throw new Error("env.live must be production mode");
 writeFileSync(out, JSON.stringify(test, null, 2));

@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CollabEvent, CollabSummary } from "./collab";
+import type { AttachmentView, CollabEvent, CollabSummary, PresenceView } from "./collab";
+import { businessDate, businessTime, businessToday } from "./gst";
 
 /* ------------------------------------------------------------------ http */
 
@@ -86,6 +87,8 @@ class LiveChannel {
       this.everOpened = true;
       this.attempts = 0;
       this.setState("live");
+      // Tell this person's hub whether this tab is in use (presence).
+      this.sendActivity();
       this.ping = setInterval(() => {
         if (socket.readyState === WebSocket.OPEN) socket.send("ping");
       }, 45_000);
@@ -141,7 +144,49 @@ class LiveChannel {
     this.connect();
   }
 
+  /* ------------------------------------------------------ activity */
+
+  private activity: "active" | "idle" = "active";
+  private idleTimer: ReturnType<typeof setTimeout> | null = null;
+  private tracking = false;
+
+  /** The only message a client sends: this tab's own activity. */
+  private sendActivity() {
+    const socket = this.socket;
+    if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "activity", state: this.activity }));
+  }
+
+  private setActivity(next: "active" | "idle") {
+    if (this.activity === next) return;
+    this.activity = next;
+    this.sendActivity();
+  }
+
+  /**
+   * Away detection that does not need fine-grained tracking: a tab is idle
+   * when it is hidden, or after five minutes without input; any interaction
+   * makes it active again. Only CHANGES are sent.
+   */
+  private trackActivity() {
+    if (this.tracking || typeof window === "undefined") return;
+    this.tracking = true;
+    const IDLE_MS = 5 * 60_000;
+    const bump = () => {
+      if (document.visibilityState !== "visible") return;
+      this.setActivity("active");
+      if (this.idleTimer) clearTimeout(this.idleTimer);
+      this.idleTimer = setTimeout(() => this.setActivity("idle"), IDLE_MS);
+    };
+    for (const type of ["pointerdown", "keydown", "wheel", "touchstart", "focus"])
+      window.addEventListener(type, bump, { passive: true });
+    document.addEventListener("visibilitychange", () =>
+      document.visibilityState === "visible" ? bump() : this.setActivity("idle"),
+    );
+    bump();
+  }
+
   subscribe(listener: Listener) {
+    this.trackActivity();
     this.listeners.add(listener);
     this.connect();
     return () => {
@@ -249,4 +294,143 @@ export function useCollabSummary(enabled: boolean) {
   }, [enabled, refresh]);
   useCollabEvents(enabled, refresh, refresh);
   return { summary, refresh };
+}
+
+/* -------------------------------------------------------------- presence */
+
+/**
+ * One presence store per tab: looked up in batches through the authorised
+ * presence API (which answers only for people the viewer may see), then kept
+ * live by presence events. No polling; a reconnect refreshes what is known.
+ */
+const presenceMap = new Map<string, PresenceView>();
+const presenceListeners = new Set<() => void>();
+const presenceWanted = new Set<string>();
+let presenceTimer: ReturnType<typeof setTimeout> | null = null;
+let presenceSubscribed = false;
+
+function notifyPresence() {
+  for (const l of presenceListeners) l();
+}
+
+function fetchPresence(ids: string[]) {
+  if (!ids.length) return;
+  for (let i = 0; i < ids.length; i += 200) {
+    const batch = ids.slice(i, i + 200);
+    collabFetch<{ presence: Record<string, PresenceView> }>(`/presence?ids=${batch.join(",")}`)
+      .then(({ presence }) => {
+        for (const [id, view] of Object.entries(presence)) presenceMap.set(id, view);
+        notifyPresence();
+      })
+      .catch(() => {});
+  }
+}
+
+function ensurePresenceChannel() {
+  if (presenceSubscribed) return;
+  presenceSubscribed = true;
+  const channel = live();
+  channel.subscribe((event) => {
+    if (event.type !== "presence") return;
+    presenceMap.set(event.userId, { status: event.status, lastSeenAt: event.lastSeenAt });
+    notifyPresence();
+  });
+  channel.onReconnect(() => fetchPresence([...presenceMap.keys()]));
+}
+
+/** Presence for these people; fetches what is not yet known. */
+export function usePresence(ids: string[], enabled = true) {
+  const [, force] = useState(0);
+  const key = [...new Set(ids)].sort().join(",");
+  useEffect(() => {
+    if (!enabled) return;
+    const rerender = () => force((n) => n + 1);
+    presenceListeners.add(rerender);
+    ensurePresenceChannel();
+    const missing = key.split(",").filter((id) => id && !presenceMap.has(id) && !presenceWanted.has(id));
+    if (missing.length) {
+      for (const id of missing) presenceWanted.add(id);
+      if (presenceTimer) clearTimeout(presenceTimer);
+      presenceTimer = setTimeout(() => {
+        presenceTimer = null;
+        const batch = [...presenceWanted];
+        presenceWanted.clear();
+        fetchPresence(batch);
+      }, 120);
+    }
+    return () => void presenceListeners.delete(rerender);
+  }, [key, enabled]);
+  return (id: string): PresenceView | undefined => presenceMap.get(id);
+}
+
+/**
+ * "Online", "Away", or when offline a useful last activity:
+ * "Last seen 4 min ago", "Last seen 2:35 pm" (today, GST), "Last seen
+ * yesterday", "Last seen 25 Sep".
+ */
+export function presenceLabel(view: PresenceView | undefined) {
+  if (!view) return "";
+  if (view.status === "online") return "Online";
+  if (view.status === "away") return "Away";
+  if (!view.lastSeenAt) return "Offline";
+  const at = new Date(view.lastSeenAt);
+  const minutes = Math.round((Date.now() - at.getTime()) / 60_000);
+  if (minutes < 1) return "Last seen just now";
+  if (minutes < 60) return `Last seen ${minutes} min ago`;
+  if (businessToday(at) === businessToday()) return `Last seen ${businessTime(at)}`;
+  if (businessToday(at) === businessToday(new Date(Date.now() - 86_400_000))) return "Last seen yesterday";
+  return `Last seen ${businessDate(at)}`;
+}
+
+/* ---------------------------------------------------------------- uploads */
+
+/**
+ * Uploads one file for a message not yet sent, with progress. XHR rather
+ * than fetch because fetch cannot report upload progress. The browser sends
+ * the Origin header, which the route checks.
+ */
+export function uploadAttachment(
+  conversationId: string,
+  file: Blob & { name?: string },
+  extras: { name?: string; thumbnail?: Blob | null; width?: number; height?: number; durationMs?: number },
+  onProgress: (fraction: number) => void,
+): { promise: Promise<AttachmentView>; abort: () => void } {
+  const xhr = new XMLHttpRequest();
+  const promise = new Promise<AttachmentView>((resolve, reject) => {
+    const form = new FormData();
+    form.append("file", file, extras.name ?? file.name ?? "file");
+    if (extras.thumbnail) form.append("thumbnail", extras.thumbnail, "thumbnail.jpg");
+    if (extras.width) form.append("width", String(extras.width));
+    if (extras.height) form.append("height", String(extras.height));
+    if (extras.durationMs !== undefined) form.append("durationMs", String(Math.round(extras.durationMs)));
+    xhr.open("POST", `/api/collab/conversations/${conversationId}/attachments`);
+    xhr.withCredentials = true;
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
+    xhr.onload = () => {
+      let data: { attachment?: AttachmentView; error?: string } = {};
+      try {
+        data = JSON.parse(xhr.responseText);
+      } catch {}
+      if (xhr.status >= 200 && xhr.status < 300 && data.attachment) resolve(data.attachment);
+      else reject(new CollabRequestError(xhr.status, data.error || "Upload failed."));
+    };
+    xhr.onerror = () => reject(new CollabRequestError(0, "Upload failed. Check your connection."));
+    xhr.onabort = () => reject(new CollabRequestError(0, "Upload cancelled."));
+    xhr.send(form);
+  });
+  return { promise, abort: () => xhr.abort() };
+}
+
+/** Uploads a room image (already cropped/scaled by the caller). */
+export async function uploadRoomAvatar(conversationId: string, image: Blob) {
+  const form = new FormData();
+  form.append("image", image, "room.jpg");
+  const response = await fetch(`/api/collab/conversations/${conversationId}/avatar`, {
+    method: "POST",
+    body: form,
+    credentials: "same-origin",
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new CollabRequestError(response.status, (data as { error?: string }).error || "Upload failed.");
+  return data;
 }

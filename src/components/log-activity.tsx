@@ -113,14 +113,16 @@ export default function LogActivity({
 
       {error && <div className="form-error" role="alert"><span>{error}</span></div>}
 
-      <DialogActions>
-        <Button className="secondary" type="button" disabled={saving} onClick={onClose}>
-          Cancel
-        </Button>
-        <Button className="primary" type="button" disabled={saving} onClick={() => void save()}>
-          <Check size={16} /> {saving ? "Saving…" : "Log activity"}
-        </Button>
-      </DialogActions>
+      <DialogActions
+        onCancel={onClose}
+        primary={{
+          label: "Log activity",
+          pendingLabel: "Saving…",
+          icon: <Check size={16} aria-hidden="true" />,
+          pending: saving,
+          onClick: save,
+        }}
+      />
     </Dialog>
   );
 }

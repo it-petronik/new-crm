@@ -50,3 +50,55 @@ export async function publish(userIds: string[], event: CollabEvent) {
   if (hub.ctx?.waitUntil) hub.ctx.waitUntil(delivery);
   else await delivery;
 }
+
+/* -------------------------------------------------------------- presence */
+
+/**
+ * The shared presence directory: one CollabHub instance under a reserved
+ * name, which each person's own hub updates when their aggregate status
+ * changes. The name is not a user id, so no socket can ever connect to it.
+ */
+// Must match the name the hubs use (src/realtime/collab-hub.ts).
+export const PRESENCE_DIRECTORY = "presence-directory";
+
+export type LiveStatus = { status: "online" | "away" | "offline"; at: number };
+
+/** Live status for these people; offline for anyone the directory lacks. */
+export async function livePresence(userIds: string[]): Promise<Record<string, LiveStatus>> {
+  const hub = await hubContext();
+  if (!hub || !userIds.length) return {};
+  try {
+    const response = await hub.namespace
+      .get(hub.namespace.idFromName(PRESENCE_DIRECTORY))
+      .fetch("https://collab-hub/directory/get", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userIds }),
+      });
+    return response.ok ? ((await response.json()) as Record<string, LiveStatus>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Asks the typist's own hub whether this typing event may go out (see
+ * CollabHub.typingGate). Without the hub, allow — there is nobody to deliver
+ * to anyway.
+ */
+export async function typingAllowed(userId: string, conversationId: string, state: "start" | "stop") {
+  const hub = await hubContext();
+  if (!hub) return true;
+  try {
+    const response = await hub.namespace
+      .get(hub.namespace.idFromName(userId))
+      .fetch("https://collab-hub/typing-gate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId, state }),
+      });
+    return response.ok ? ((await response.json()) as { allow: boolean }).allow : true;
+  } catch {
+    return true;
+  }
+}

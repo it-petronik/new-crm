@@ -39,7 +39,11 @@ export function GET(request: Request, { params }: Params) {
       if (!summary) throw new CollabError(404, "Conversation not found.");
       const detail: ConversationDetail = {
         conversation: summary,
-        members: await listMembers(db, c.id),
+        // A member's companies are shown only where the viewer shares them.
+        members: (await listMembers(db, c.id)).map((m) => ({
+          ...m,
+          companies: (m.companies ?? []).filter((co) => actor.companies.includes(co)),
+        })),
         canAdmin: access.canAdmin,
       };
       return json(detail);

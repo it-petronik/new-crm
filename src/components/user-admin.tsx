@@ -283,21 +283,20 @@ export default function UserAdmin({
               again — if you lose it, generate a new link.
             </p>
             <Input readOnly value={resetLink.link} aria-label="Reset link" onFocus={(e) => e.currentTarget.select()} />
-            <DialogActions>
-              <Button
-                className="primary"
-                onClick={async () => {
+            <DialogActions
+              cancel="Close"
+              primary={{
+                label: copied ? "Copied" : "Copy link",
+                onClick: async () => {
                   try {
                     await navigator.clipboard.writeText(resetLink.link);
                     setCopied(true);
                   } catch {
                     setCopied(false);
                   }
-                }}
-              >
-                {copied ? "Copied" : "Copy link"}
-              </Button>
-            </DialogActions>
+                },
+              }}
+            />
             <p className="muted small">
               Using it signs {resetLink.name} out of every device.
             </p>
@@ -558,34 +557,29 @@ export default function UserAdmin({
                   {error}
                 </p>
               )}
-              <DialogActions>
-                <div className="form-footer">
-                  <span>
-                    <ShieldCheck size={14} />
-                    {preview
-                      ? "Saved only in this browser"
-                      : "Changes are audited"}
+              <DialogActions
+                pending={busy}
+                start={
+                  <span className="ui-dialog-note">
+                    <ShieldCheck size={14} aria-hidden="true" />
+                    {preview ? "Saved only in this browser" : "Changes are audited"}
                   </span>
-                  {review && (
-                    <Button
-                      type="button"
-                      className="secondary"
-                      disabled={busy}
-                      onClick={() => setReview(false)}
-                    >
+                }
+                secondary={
+                  review && (
+                    <Button type="button" className="secondary" disabled={busy} onClick={() => setReview(false)}>
                       Back to edit
                     </Button>
-                  )}
-                  <Button
-                    type="submit"
-                    form="user-access-form"
-                    className="primary"
-                    loading={busy}
-                  >
-                    {review ? "Confirm access" : "Review changes"}
-                  </Button>
-                </div>
-              </DialogActions>
+                  )
+                }
+                primary={{
+                  type: "submit",
+                  form: "user-access-form",
+                  label: review ? "Confirm access" : "Review changes",
+                  pendingLabel: "Saving…",
+                  pending: busy,
+                }}
+              />
             </form>
           </Dialog>
         )}

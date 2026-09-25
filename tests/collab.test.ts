@@ -123,9 +123,11 @@ test("no collaboration code renders raw HTML", () => {
 
 /* --------------------------------------------------------- the gateway */
 
-type Row = { userId: string; expiresAt: number; active: number; role: string } | null;
+type Row = {
+  id: string; name: string; expiresAt: number; active: number; role: string; companies: string; branches: string;
+} | null;
 function gatewayEnv(row: Row, overrides: Record<string, unknown> = {}) {
-  const forwarded: Request[] = [];
+  const forwarded: { url: string; headers: Headers }[] = [];
   return {
     forwarded,
     env: {
@@ -135,8 +137,8 @@ function gatewayEnv(row: Row, overrides: Record<string, unknown> = {}) {
       COLLAB_HUB: {
         idFromName: (name: string) => name,
         get: (id: unknown) => ({
-          fetch: async (request: Request) => {
-            forwarded.push(request);
+          fetch: async (url: string, init?: RequestInit) => {
+            forwarded.push({ url, headers: new Headers(init?.headers) });
             return new Response(`hub:${String(id)}`);
           },
         }),
@@ -147,7 +149,10 @@ function gatewayEnv(row: Row, overrides: Record<string, unknown> = {}) {
 }
 const upgrade = (headers: Record<string, string>) =>
   new Request("https://crm.example/api/collab/socket", { headers: { Upgrade: "websocket", ...headers } });
-const live: Row = { userId: "u-real-0001", expiresAt: Date.now() + 60_000, active: 1, role: "Sales Manager" };
+const live: Row = {
+  id: "u-real-0001", name: "Real Person", expiresAt: Date.now() + 60_000, active: 1, role: "Sales Manager",
+  companies: '["Petronik"]', branches: "[]",
+};
 
 test("gateway: authenticates, then routes only to the caller's own hub", async () => {
   const { env, forwarded } = gatewayEnv(live);
@@ -177,6 +182,9 @@ test("gateway: refuses preview, bad origin, no/unknown/expired session, inactive
     ["inactive", { ...live!, active: 0 }, origin, {}, 401],
     ["invalid role", { ...live!, role: "Superuser" }, origin, {}, 401],
     ["no binding", live, origin, { COLLAB_HUB: undefined }, 503],
+    // The presence directory is a hub under a reserved name; no session may
+    // ever be routed there.
+    ["reserved hub name", { ...live!, id: "presence-directory" }, origin, {}, 401],
   ];
   for (const [name, row, headers, overrides, status] of cases) {
     const { env, forwarded } = gatewayEnv(row, overrides);
@@ -212,15 +220,30 @@ class FakeSocket {
 function hub(sessionRow: { expiresAt: number; active: number } | null = { expiresAt: Date.now() + 3_600_000, active: 1 }) {
   const sockets: FakeSocket[] = [];
   let lookups = 0;
+  let writes = 0;
+  const pings = new Map<FakeSocket, Date>();
+  const alarms: number[] = [];
   (globalThis as any).WebSocketPair = class {
     0 = new FakeSocket();
     1 = new FakeSocket();
   };
   (globalThis as any).WebSocketRequestResponsePair = class {};
+  const store = new Map<string, unknown>();
   const state = {
     acceptWebSocket: (s: FakeSocket) => sockets.push(s),
     getWebSockets: () => sockets.filter((s) => s.closed === null),
     setWebSocketAutoResponse: () => {},
+    getWebSocketAutoResponseTimestamp: (s: FakeSocket) => pings.get(s) ?? null,
+    storage: {
+      setAlarm: async (t: number) => void alarms.push(t),
+      deleteAlarm: async () => void alarms.push(-1),
+      get: async (key: string | string[]) =>
+        Array.isArray(key) ? new Map(key.filter((k) => store.has(k)).map((k) => [k, store.get(k)])) : store.get(key),
+      put: async (key: string | Record<string, unknown>, value?: unknown) => {
+        if (typeof key === "string") store.set(key, value);
+        else for (const [k, v] of Object.entries(key)) store.set(k, v);
+      },
+    },
   };
   const env = {
     DB: {
@@ -230,11 +253,24 @@ function hub(sessionRow: { expiresAt: number; active: number } | null = { expire
             lookups++;
             return sessionRow;
           },
+          run: async () => {
+            writes++;
+            return {};
+          },
+          all: async () => ({ results: [] }),
         }),
       }),
     },
   };
-  return { instance: new CollabHub(state as never, env as never), sockets, lookups: () => lookups };
+  return {
+    instance: new CollabHub(state as never, env as never),
+    sockets,
+    lookups: () => lookups,
+    writes: () => writes,
+    store,
+    pings,
+    alarms,
+  };
 }
 
 const connect = (h: CollabHub, headers: Record<string, string>) =>
@@ -273,12 +309,43 @@ test("hub: publishes to live sessions, closes expired and revoked ones", async (
   assert.equal(lookups(), 1);
 });
 
-test("hub: caps sockets per person and ignores client messages", async () => {
-  const { instance, sockets } = hub();
+test("hub: caps sockets per person; a client can only report its own activity", async () => {
+  const { instance, sockets, store } = hub();
   for (let i = 0; i < 14; i++)
     await connect(instance, { "X-Collab-User": "u-1-000000", "X-Collab-Session": `s${i}`, "X-Collab-Expires": String(Date.now() + 60_000) });
-  assert.ok(sockets.filter((s) => s.closed === null).length <= 12);
-  assert.equal(instance.webSocketMessage(), undefined);
+  const open = sockets.filter((s) => s.closed === null);
+  assert.ok(open.length <= 12);
+  assert.equal(store.get("status"), "online");
+
+  // Anything but an activity report is ignored: nothing is echoed or relayed.
+  const before = open.map((s) => s.sent.length);
+  for (const junk of ['{"type":"message.created","conversationId":"x"}', "not json", '{"type":"activity","state":"root"}', "x".repeat(500)])
+    await instance.webSocketMessage(open[0] as never, junk);
+  assert.deepEqual(open.map((s) => s.sent.length), before);
+  assert.equal(store.get("status"), "online");
+
+  // Every tab idle → away; one tab active again → online.
+  for (const s of open) await instance.webSocketMessage(s as never, '{"type":"activity","state":"idle"}');
+  assert.equal(store.get("status"), "away");
+  await instance.webSocketMessage(open[0] as never, '{"type":"activity","state":"active"}');
+  assert.equal(store.get("status"), "online");
+
+  // Closing tabs one by one: offline only when the last one goes. (Once the
+  // one active tab closes, the rest are idle, so the person is away.)
+  for (const [i, s] of open.entries()) {
+    s.closed = 1000;
+    await instance.webSocketClose(s as never, 1000, "");
+    assert.equal(store.get("status"), i === open.length - 1 ? "offline" : "away");
+  }
+});
+
+test("hub: repeated typing events are dropped at the recipient", async () => {
+  const { instance, sockets } = hub();
+  await connect(instance, { "X-Collab-User": "u-1-000000", "X-Collab-Session": "a", "X-Collab-Expires": String(Date.now() + 60_000) });
+  const typing = JSON.stringify({ type: "typing", conversationId: "c-1-000000", userId: "u-2-000000", name: "B", state: "start" });
+  for (let i = 0; i < 20; i++)
+    await instance.fetch(new Request("https://collab-hub/publish", { method: "POST", body: typing }));
+  assert.equal(sockets[0].sent.filter((m) => m.includes('"typing"')).length, 1);
 });
 
 /* ------------------------------------------------ preview-mode refusal */
@@ -297,4 +364,100 @@ test("every collaboration API refuses preview mode before anything else", async 
   } finally {
     process.env.APP_MODE = previous;
   }
+});
+
+/* ------------------------------------------------------ presence expiry */
+
+test("hub: a dead tab expires without taking a live device offline; D1 written once", async () => {
+  const { instance, sockets, store, pings, alarms, writes } = hub();
+  const now = Date.now();
+  for (const s of ["laptop", "phone"])
+    await connect(instance, { "X-Collab-User": "u-1-000000", "X-Collab-Session": s, "X-Collab-Expires": String(now + 3_600_000) });
+  const [laptop, phone] = sockets;
+  assert.equal(store.get("status"), "online");
+  assert.ok(alarms.some((t) => t > now), "a heartbeat is scheduled while connected");
+
+  // The laptop vanished without a close: no ping for 200 s. The phone pings.
+  (laptop.attachment as any).connectedAt = now - 200_000;
+  (phone.attachment as any).connectedAt = now - 200_000;
+  pings.set(phone, new Date(now - 10_000));
+  await instance.alarm();
+  assert.equal(laptop.closed, 1001, "the dead tab is closed");
+  assert.equal(phone.closed, null);
+  assert.equal(store.get("status"), "online", "the live device keeps its owner online");
+  assert.equal(writes(), 0, "no D1 write while still online");
+
+  // Then the phone dies too: offline, last seen at its final ping, one write.
+  pings.set(phone, new Date(now - 200_000));
+  await instance.alarm();
+  assert.equal(phone.closed, 1001);
+  assert.equal(store.get("status"), "offline");
+  assert.equal(writes(), 1);
+  assert.equal(alarms.at(-1), -1, "the heartbeat stops when nobody is connected");
+
+  // Further heartbeats (none are scheduled, but if one fired) write nothing.
+  await instance.alarm();
+  assert.equal(writes(), 1);
+});
+
+test("directory: an unconfirmed online entry expires to offline at its last heartbeat", async () => {
+  const { instance } = hub();
+  const now = Date.now();
+  const set = (userId: string, status: string, at: number, expiresAt: number | null) =>
+    instance.fetch(new Request("https://collab-hub/directory/set", { method: "POST", body: JSON.stringify({ userId, status, at, expiresAt }) }));
+  await set("u-fresh-0001", "online", now, now + 60_000);
+  await set("u-dead-00001", "online", now - 400_000, now - 220_000); // its hub stopped beating
+  await set("u-away-00001", "away", now, now + 60_000);
+  await set("u-gone-00001", "offline", now - 5_000, null);
+  const response = await instance.fetch(
+    new Request("https://collab-hub/directory/get", {
+      method: "POST",
+      body: JSON.stringify({ userIds: ["u-fresh-0001", "u-dead-00001", "u-away-00001", "u-gone-00001", "u-none-00001"] }),
+    }),
+  );
+  const out = (await response.json()) as Record<string, { status: string; at: number }>;
+  assert.equal(out["u-fresh-0001"].status, "online");
+  assert.deepEqual(out["u-dead-00001"], { status: "offline", at: now - 400_000 });
+  assert.equal(out["u-away-00001"].status, "away");
+  assert.equal(out["u-gone-00001"].status, "offline");
+  assert.equal(out["u-none-00001"], undefined, "unknown people are simply absent");
+});
+
+test("typing gate: one start per conversation per 2 s, stop always allowed", async () => {
+  const { instance } = hub();
+  const gate = async (conversationId: string, state: string) =>
+    ((await (await instance.fetch(new Request("https://collab-hub/typing-gate", { method: "POST", body: JSON.stringify({ conversationId, state }) }))).json()) as { allow: boolean }).allow;
+  assert.equal(await gate("c-a-000000", "start"), true);
+  for (let i = 0; i < 10; i++) assert.equal(await gate("c-a-000000", "start"), false);
+  assert.equal(await gate("c-b-000000", "start"), true, "per conversation");
+  assert.equal(await gate("c-a-000000", "stop"), true);
+});
+
+test("ZIP and other archives are not accepted", async () => {
+  const { detectFile } = await import("../src/lib/collab-files");
+  const zip = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0, 0, 0, 0]);
+  assert.equal(detectFile(zip, "files.zip"), null);
+});
+
+/* ------------------------------------------------------------ last seen */
+
+test("last-seen wording: relative when recent, GST clock today, then days", async () => {
+  const { presenceLabel } = await import("../src/lib/collab-client");
+  const { businessTime, businessToday, businessDate } = await import("../src/lib/gst");
+  const ago = (ms: number) => ({ status: "offline" as const, lastSeenAt: new Date(Date.now() - ms).toISOString() });
+  assert.equal(presenceLabel({ status: "online", lastSeenAt: null }), "Online");
+  assert.equal(presenceLabel({ status: "away", lastSeenAt: null }), "Away");
+  assert.equal(presenceLabel({ status: "offline", lastSeenAt: null }), "Offline");
+  assert.equal(presenceLabel(ago(20_000)), "Last seen just now");
+  assert.equal(presenceLabel(ago(4 * 60_000)), "Last seen 4 min ago");
+  // Two hours ago: a GST clock time if still today in Dubai, else yesterday.
+  const twoHours = new Date(Date.now() - 2 * 3600_000);
+  assert.equal(
+    presenceLabel(ago(2 * 3600_000)),
+    businessToday(twoHours) === businessToday() ? `Last seen ${businessTime(twoHours)}` : "Last seen yesterday",
+  );
+  const threeDays = new Date(Date.now() - 3 * 86_400_000);
+  assert.equal(presenceLabel(ago(3 * 86_400_000)), `Last seen ${businessDate(threeDays)}`);
+  // Clock times are 12-hour with am/pm, never a bare 24-hour time.
+  assert.match(businessTime(new Date("2026-09-25T10:35:00Z")), /^2:35 pm$/);
 });

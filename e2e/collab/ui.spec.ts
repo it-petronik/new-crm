@@ -73,6 +73,22 @@ test("a room from creation to archive, with two people live", async ({ browser }
   await sendFrom(op, "Second note");
   await expect(message(mp, "Second note")).toBeVisible();
 
+  // The emoji picker stays open for several picks, each inserted at the
+  // caret, and typing afterwards continues from there.
+  await composer(mp).fill("ab");
+  await composer(mp).press("ArrowLeft"); // caret between a and b
+  await mp.getByRole("button", { name: "Insert emoji" }).click();
+  const picker = mp.getByRole("dialog", { name: "Emoji" });
+  await expect(picker).toBeVisible();
+  for (const e of ["😀", "😂", "👍"]) await picker.getByRole("button", { name: `Insert ${e}` }).click();
+  await expect(picker).toBeVisible();
+  await expect(composer(mp)).toBeFocused();
+  await composer(mp).pressSequentially("!");
+  await expect(composer(mp)).toHaveValue("a😀😂👍!b");
+  await mp.keyboard.press("Escape");
+  await expect(picker).toBeHidden();
+  await composer(mp).fill("");
+
   // Mention through the autocomplete.
   await composer(mp).fill("");
   await composer(mp).pressSequentially("@Petra G");
@@ -138,8 +154,10 @@ test("a room from creation to archive, with two people live", async ({ browser }
   await expect(mp.getByRole("listitem").filter({ hasText: "Launch crew" })).toHaveCount(0);
   await expect(details.getByText("Petra Group35")).toHaveCount(0);
 
-  // Archive: history stays, the composer becomes read-only.
-  await details.getByRole("button", { name: "Archive" }).click();
+  // Archive lives in Room settings, as its destructive (left) action; the
+  // confirmation then puts Archive on the right as the confirmed act.
+  await details.getByRole("button", { name: "Settings" }).click();
+  await op.getByRole("dialog", { name: "Room settings" }).getByRole("button", { name: "Archive room" }).click();
   await op.getByRole("dialog", { name: "Archive room?" }).getByRole("button", { name: "Archive" }).click();
   await expect(op.getByText("This room is archived. Messages are read-only.")).toBeVisible();
   await expect(composer(op)).toHaveCount(0);

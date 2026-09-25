@@ -1,0 +1,231 @@
+/* ===========================================================================
+   FORM SYSTEM — the single owner of how inputs, fields, field shells and
+   dialog footers look. Imported after layout-system.css so it is authoritative;
+   component and page stylesheets must not restyle these.
+
+   One rule for focus: a control shows ONE restrained ring — its own border
+   colour plus one box-shadow — and nothing else. The global
+   `:where(...):focus-visible` ring (tokens.css) is replaced, never added to;
+   a control inside a field shell (search boxes, the message composer) shows
+   no ring of its own, because the shell shows it. Error uses the same shape
+   in the danger tone.
+   ======================================================================== */
+
+:root {
+  --f-h: 40px;                 /* every text-like control */
+  --f-h-sm: 34px;              /* toolbars, filters, pagination */
+  --f-pad-x: 12px;
+  --f-radius: 8px;
+  --f-font: 0.875rem;
+
+  --f-bg: var(--e-surface);
+  --f-bg-muted: var(--e-surface-sunken);
+  --f-border: var(--e-border);
+  --f-border-hover: color-mix(in srgb, var(--e-text) 22%, var(--e-border));
+  --f-text: var(--e-text);
+  --f-placeholder: var(--e-text-muted);
+
+  --f-accent: var(--brand-action, var(--e-accent));
+  --f-focus-border: color-mix(in srgb, var(--f-accent) 62%, var(--e-border));
+  --f-focus-ring: 0 0 0 3px color-mix(in srgb, var(--f-accent) 15%, transparent);
+  --f-error: var(--e-danger);
+  --f-error-ring: 0 0 0 3px color-mix(in srgb, var(--e-danger) 14%, transparent);
+
+  /* Spacing, used by every form. */
+  --f-label-gap: 6px;          /* label → control, control → message */
+  --f-field-gap: 16px;         /* field → field */
+  --f-section-gap: 24px;       /* section → section */
+}
+@media (max-width: 720px) {
+  /* A comfortable touch target, and 16px text so iOS does not zoom the page
+     on focus (which would be a layout jump). */
+  :root { --f-h: 44px; --f-h-sm: 40px; --f-font: 1rem; }
+}
+
+/* --------------------------------------------------------------- controls */
+:is(.ui-input, .ui-textarea, .ui-select-trigger, .ui-date-trigger) {
+  min-height: var(--f-h);
+  padding: 0 var(--f-pad-x);
+  border: 1px solid var(--f-border);
+  border-radius: var(--f-radius);
+  background: var(--f-bg);
+  color: var(--f-text);
+  font-size: var(--f-font);
+  line-height: 1.4;
+  outline: none;
+  box-shadow: none;
+  transition: border-color var(--e-transition), box-shadow var(--e-transition), background var(--e-transition);
+}
+.ui-input { height: var(--f-h); }
+.ui-textarea { padding-block: 9px; min-height: calc(var(--f-h) * 2); resize: vertical; }
+:is(.ui-input, .ui-textarea)::placeholder { color: var(--f-placeholder); opacity: 1; }
+
+:is(.ui-input, .ui-textarea, .ui-select-trigger, .ui-date-trigger):hover:not(:disabled) {
+  border-color: var(--f-border-hover);
+}
+:is(.ui-input, .ui-textarea, .ui-select-trigger, .ui-date-trigger):is(:focus, :focus-visible),
+.ui-select-trigger[data-state="open"] {
+  border-color: var(--f-focus-border);
+  box-shadow: var(--f-focus-ring);
+  outline: none;
+}
+
+/* Error: one border and one ring, in the danger tone. */
+:is(.ui-input, .ui-textarea, .ui-select-trigger, .ui-date-trigger):is([aria-invalid="true"], :user-invalid),
+.ui-field.has-error :is(.ui-input, .ui-textarea, .ui-select-trigger, .ui-date-trigger) {
+  border-color: var(--f-error);
+}
+:is(.ui-input, .ui-textarea, .ui-select-trigger, .ui-date-trigger):is([aria-invalid="true"], :user-invalid):focus,
+.ui-field.has-error :is(.ui-input, .ui-textarea, .ui-select-trigger, .ui-date-trigger):focus {
+  box-shadow: var(--f-error-ring);
+}
+
+:is(.ui-input, .ui-textarea, .ui-select-trigger, .ui-date-trigger):disabled {
+  background: var(--f-bg-muted);
+  color: var(--e-text-muted);
+  border-color: var(--e-border-muted);
+  cursor: not-allowed;
+  opacity: 1;
+}
+:is(.ui-input, .ui-textarea):read-only:not(:disabled) {
+  background: var(--f-bg-muted);
+  color: var(--e-text-secondary);
+}
+:is(.ui-input, .ui-textarea):read-only:not(:disabled):focus {
+  border-color: var(--f-border-hover);
+  box-shadow: none;
+}
+
+/* Compact controls in toolbars and filters: same look, shorter. */
+:is(.status-filter, .pagination-controls, .insight-filters, .list-query-controls) .ui-select-trigger,
+:is(.list-query-controls) .ui-input {
+  min-height: var(--f-h-sm);
+  height: var(--f-h-sm);
+  font-size: var(--e-secondary);
+}
+
+/* ------------------------------------------------------------------ fields */
+.ui-field { gap: var(--f-label-gap); }
+.ui-field-label {
+  min-height: 0;
+  font-size: var(--e-meta);
+  font-weight: var(--e-weight-medium);
+  color: var(--e-text-secondary);
+  line-height: 1.3;
+}
+.ui-field-message { margin: 0; font-size: var(--e-meta); }
+
+/* Stacks and grids of fields share one rhythm. */
+.ui-form-stack { display: grid; gap: var(--f-field-gap); }
+.ui-form-stack > .ui-form-section + .ui-form-section { margin-top: calc(var(--f-section-gap) - var(--f-field-gap)); }
+.form-grid,
+.modal .form-grid { gap: var(--f-field-gap); margin-top: 0; }
+.modal .dialog-body > * + .form-grid,
+.modal .dialog-body > .form-grid + * { margin-top: var(--f-section-gap); }
+
+/* A label beside its control, for single inline settings (e.g. a record's
+   status in the dialog footer). */
+.ui-inline-field.ui-field { flex-direction: row; align-items: center; gap: 10px; }
+.ui-inline-field .ui-field-label { white-space: nowrap; }
+.ui-inline-field .ui-select-trigger { min-width: 11rem; }
+
+/* ----------------------------------------------------------- field shells
+   A shell is a control-looking box holding a bare control plus icons or
+   buttons: the search boxes, the company switcher, the message composer. The
+   shell owns the border and the single focus ring (via :focus-within); the
+   control inside draws nothing. */
+.ui-field-shell,
+.global-search,
+.company-switch.ui-field {
+  border: 1px solid var(--f-border);
+  border-radius: var(--f-radius);
+  background: var(--f-bg);
+  transition: border-color var(--e-transition), box-shadow var(--e-transition);
+}
+.ui-field-shell:hover,
+.global-search:hover,
+.company-switch.ui-field:hover { border-color: var(--f-border-hover); }
+.ui-field-shell:focus-within,
+.global-search:focus-within,
+.company-switch.ui-field:focus-within {
+  border-color: var(--f-focus-border);
+  box-shadow: var(--f-focus-ring);
+}
+.ui-field-bare,
+.global-search .ui-input,
+.company-switch .ui-select-trigger {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+.ui-field-bare:is(:focus, :focus-visible),
+.global-search .ui-input:is(:focus, :focus-visible),
+.company-switch .ui-select-trigger:is(:focus, :focus-visible, [data-state="open"]) {
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* ============================================================ DIALOG FOOTER
+   Laid out only here, from the zones <DialogActions> renders:
+
+     [start: contextual / destructive]        [Cancel] [secondary] [Primary]
+
+   The two zones keep their order at every width: on a narrow screen the
+   start zone wraps above, and the right-hand group stays in one row with the
+   primary last, so Save and Delete never swap sides. */
+.ui-dialog-footer {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  padding: 12px 22px calc(12px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--e-border);
+  background: var(--e-surface);
+}
+.ui-dialog-actions-start,
+.ui-dialog-actions-end {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.ui-dialog-actions-start { flex-wrap: wrap; flex: 1 1 auto; }
+.ui-dialog-actions-start:empty { display: none; }
+.ui-dialog-actions-end { flex: 0 0 auto; margin-left: auto; }
+.ui-dialog-footer :is(.ui-button.primary, .ui-button.secondary, .ui-button.danger-button) {
+  min-height: var(--f-h);
+  margin: 0;
+  white-space: nowrap;
+}
+.ui-dialog-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--e-meta);
+  color: var(--e-text-muted);
+  min-width: 0;
+}
+
+/* The primary action: stable width across Save / Saving…, centred label. */
+.ui-primary-action { min-width: 7.5rem; justify-content: center; }
+.ui-action-label { display: inline-grid; }
+.ui-action-label > span { grid-area: 1 / 1; text-align: center; }
+.ui-action-label > span[aria-hidden="true"] { visibility: hidden; }
+.ui-primary-action[aria-busy="true"] { cursor: progress; }
+
+@media (max-width: 560px) {
+  .ui-dialog-footer { padding-inline: 14px; }
+  .ui-dialog-actions-start { flex-basis: 100%; }
+  .ui-dialog-note { display: none; }
+  .ui-dialog-actions-start:not(:has(> :not(.ui-dialog-note))) { display: none; }
+  /* The right-hand group spans the width, buttons sharing it evenly — still
+     Cancel first and the primary last. */
+  .ui-dialog-actions-end { flex: 1 1 100%; }
+  .ui-dialog-actions-end > .ui-button { flex: 1 1 0; min-width: 0; }
+  .ui-inline-field.ui-field { flex: 1 1 100%; justify-content: space-between; }
+}
+@media print {
+  .ui-dialog-footer { display: none !important; }
+}

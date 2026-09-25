@@ -25,6 +25,53 @@ export type MemberRole = "owner" | "admin" | "member";
 
 export type Person = { id: string; name: string; role: string };
 
+/* ------------------------------------------------------------------- V2 */
+
+export type PresenceStatus = "online" | "away" | "offline";
+export type PresenceView = { status: PresenceStatus; lastSeenAt: string | null };
+
+export type AttachmentKind = "image" | "pdf" | "document" | "audio";
+export type AttachmentView = {
+  id: string;
+  kind: AttachmentKind;
+  name: string;
+  mimeType: string;
+  size: number;
+  width: number | null;
+  height: number | null;
+  durationMs: number | null;
+  /** Authorised, same-origin URLs; each request re-checks access. */
+  url: string;
+  thumbUrl: string | null;
+  downloadUrl: string;
+  createdAt: string;
+};
+
+export type ReactionView = { emoji: string; userIds: string[] };
+
+/** Quick reactions shown on hover; the full set is EMOJI_SET. */
+export const QUICK_REACTIONS = ["👍", "❤️", "😂", "🎉", "👀"];
+/**
+ * Every emoji the composer offers and the only ones a reaction may use: a
+ * reaction is stored text, so it is limited to a known set rather than
+ * accepting arbitrary strings.
+ */
+export const EMOJI_SET = [
+  "👍", "👏", "🙏", "🙌", "👌", "✅", "✔️", "❌",
+  "😀", "😄", "😂", "🙂", "😉", "😊", "😍", "🤔",
+  "😅", "😮", "😢", "😬", "🤝", "💪", "🎉", "🔥",
+  "⭐", "💡", "📌", "📎", "📞", "📦", "🚚", "⏰",
+  "❤️", "👀", "🚀", "💯", "⚠️", "ℹ️", "➡️", "🙋",
+];
+
+export const attachmentUrls = (id: string, hasThumb: boolean) => ({
+  url: `/api/collab/files/${id}`,
+  thumbUrl: hasThumb ? `/api/collab/files/${id}?thumb=1` : null,
+  downloadUrl: `/api/collab/files/${id}?download=1`,
+});
+
+export const roomAvatarUrl = (id: string, version: number) => `/api/collab/rooms/${id}/avatar?v=${version}`;
+
 export type ConversationSummary = {
   id: string;
   kind: ConversationKind;
@@ -48,6 +95,8 @@ export type ConversationSummary = {
   memberCount: number;
   /** False when the reader may read but not write (archived, inactive DM). */
   canPost: boolean;
+  /** Rooms with an uploaded image: a cache-busting version. */
+  avatarVersion: number | null;
 };
 
 export type DiscoverableRoom = {
@@ -62,6 +111,8 @@ export type DiscoverableRoom = {
 export type ConversationMemberView = Person & {
   memberRole: MemberRole;
   active: boolean;
+  /** Only the companies the viewer shares with this person. */
+  companies?: string[];
 };
 
 export type ConversationDetail = {
@@ -89,6 +140,8 @@ export type MessageView = {
   replyTo: ReplyPreview | null;
   mentions: { id: string; name: string }[];
   clientKey: string | null;
+  attachments: AttachmentView[];
+  reactions: ReactionView[];
 };
 
 export type MessagePage = {
@@ -107,6 +160,8 @@ export type MentionItem = {
 
 export type CollabSummary = { unread: number; mentions: number };
 
+export type AttachmentPage = { items: (AttachmentView & { messageId: string; authorName: string })[]; nextBefore: string | null };
+
 /** Everything the realtime channel can say. Always about one conversation. */
 export type CollabEvent =
   | { type: "message.created"; conversationId: string; message: MessageView }
@@ -114,7 +169,11 @@ export type CollabEvent =
   | { type: "message.deleted"; conversationId: string; messageId: string }
   | { type: "conversation.changed"; conversationId: string }
   | { type: "conversation.removed"; conversationId: string }
-  | { type: "read"; conversationId: string; lastReadMessageId: string };
+  | { type: "read"; conversationId: string; lastReadMessageId: string }
+  | { type: "typing"; conversationId: string; userId: string; name: string; state: "start" | "stop" }
+  | { type: "reaction"; conversationId: string; messageId: string; reactions: ReactionView[] }
+  // Presence is about a person, not a conversation; conversationId is "".
+  | { type: "presence"; conversationId: ""; userId: string; status: PresenceStatus; lastSeenAt: string | null };
 
 /* ------------------------------------------------------------------ text */
 

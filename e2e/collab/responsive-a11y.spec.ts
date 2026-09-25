@@ -157,7 +157,12 @@ test("meaning is carried by text and labels, not colour alone", async ({ page })
   await expect(message(page, "one more").locator(".collab-mention.is-me")).toHaveText(`@${viewer.person.name}`);
   // The live indicator is labelled; the composer and send button are named.
   await expect(page.getByRole("img", { name: /^(Live|Connecting…|Reconnecting…)$/ })).toBeVisible();
+  // Empty composer offers the microphone; with text, Send.
+  const box = page.getByRole("textbox", { name: "Message", exact: true });
+  await expect(page.getByRole("button", { name: "Record voice message" })).toBeVisible();
+  await box.fill("draft");
   await expect(page.getByRole("button", { name: "Send message" })).toBeVisible();
+  await box.fill("");
   // Member controls in the details panel are named per person.
   await page.getByRole("button", { name: "Show details" }).click();
   await expect(page.getByRole("button", { name: /^Actions for Amir Abudhabi5$/ })).toBeVisible();

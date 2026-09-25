@@ -51,18 +51,7 @@
 .ui-field-message.is-error { color: var(--danger, #d9534f); }
 .ui-field-message svg { flex: none; }
 
-/* Restrained: a border and a message, not a red wash. */
-.ui-field.has-error input,
-.ui-field.has-error select,
-.ui-field.has-error textarea,
-.ui-field.has-error .ui-password input {
-  border-color: var(--danger, #d9534f);
-}
-.ui-field.has-error input:focus,
-.ui-field.has-error select:focus,
-.ui-field.has-error textarea:focus {
-  outline-color: var(--danger, #d9534f);
-}
+/* Field error borders and rings are owned by form-system.css. */
 
 /* Form-level failure, distinct from a single field's message. */
 .form-error {

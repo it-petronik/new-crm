@@ -1,16 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { Archive, ArchiveRestore, LogOut, MoreHorizontal, Settings2, UserPlus, X } from "lucide-react";
+import { LogOut, MoreHorizontal, Settings2, UserPlus, X } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
 import type { ConversationDetail, ConversationMemberView } from "@/lib/collab";
 import type { Actor } from "@/lib/domain";
 import { companyName } from "@/lib/company-name";
-import { collabFetch } from "@/lib/collab-client";
+import { collabFetch, presenceLabel, usePresence } from "@/lib/collab-client";
 import { Button, DialogPresence } from "../ui/controls";
 import { Avatar } from "../avatar";
 import { Skeleton } from "../ui/skeleton";
 import { AddMembersDialog, ConfirmDialog, EditRoomDialog } from "./dialogs";
+import { PersonAvatar, ProfilePopover } from "./presence";
+import { RoomAvatar } from "./room-avatar";
+import { DetailsMedia } from "./media-panel";
 
 const roleLabel = { owner: "Owner", admin: "Admin", member: "" } as const;
 
@@ -26,6 +29,7 @@ export default function Details({
   onChanged,
   onLeft,
   onMessage,
+  onManageAccess,
 }: {
   detail: ConversationDetail | null;
   actor: Actor;
@@ -33,7 +37,9 @@ export default function Details({
   onChanged: () => void;
   onLeft: () => void;
   onMessage: (userId: string) => void;
+  onManageAccess?: () => void;
 }) {
+  const presenceOf = usePresence(detail?.members.map((m) => m.id) ?? [], !!detail);
   const [dialog, setDialog] = useState<
     | { kind: "add" }
     | { kind: "edit" }
@@ -65,10 +71,29 @@ export default function Details({
             <X size={16} />
           </Button>
         </div>
-        <div className="collab-details-body">
-          <Skeleton w="60%" h={14} />
-          <Skeleton w="90%" h={11} />
-          <Skeleton w="40%" h={11} />
+        {/* Mirrors the real panel: title, description, two facts, then
+            the member list, so nothing moves when the details arrive. */}
+        <div className="collab-details-body collab-details-skeleton">
+          <section className="collab-details-section">
+            <Skeleton w="55%" h={14} />
+            <Skeleton w="90%" h={11} />
+            <div className="collab-facts">
+              <Skeleton w="70%" h={11} />
+              <Skeleton w="60%" h={11} />
+            </div>
+          </section>
+          <section className="collab-details-section">
+            <Skeleton w="35%" h={13} />
+            {[0, 1, 2].map((i) => (
+              <div className="collab-member-row" key={i}>
+                <Skeleton w={28} h={28} r={999} />
+                <span className="collab-member-name">
+                  <Skeleton w="65%" h={11} />
+                  <Skeleton w="40%" h={10} />
+                </span>
+              </div>
+            ))}
+          </section>
         </div>
       </aside>
     );
@@ -88,16 +113,41 @@ export default function Details({
       </div>
       <div className="collab-details-body">
         {direct ? (
-          <div className="collab-profile">
-            <Avatar name={c.title} size={56} />
-            <b>{c.title}</b>
-            <small>{c.counterpart?.role}</small>
-            {c.counterpart && !c.counterpart.active && <span className="e-badge tone-neutral">Inactive</span>}
-          </div>
+          <>
+            <div className="collab-profile">
+              <PersonAvatar name={c.title} size={64} presence={c.counterpart ? presenceOf(c.counterpart.id) : undefined} />
+              <b>{c.title}</b>
+              <small>{c.counterpart?.role}</small>
+              {c.counterpart && !c.counterpart.active ? (
+                <span className="e-badge tone-neutral">Inactive</span>
+              ) : (
+                c.counterpart && <span className="collab-profile-status">{presenceLabel(presenceOf(c.counterpart.id))}</span>
+              )}
+            </div>
+            <DetailsMedia conversationId={c.id} />
+          </>
         ) : (
           <>
+            <div className="collab-room-card">
+              <RoomAvatar room={c} size={64} />
+              <b>{c.title}</b>
+              <small>
+                {detail.members.length} {detail.members.length === 1 ? "member" : "members"}
+                {(() => {
+                  const online = detail.members.filter((m) => presenceOf(m.id)?.status === "online").length;
+                  return online ? ` · ${online} online` : "";
+                })()}
+              </small>
+            </div>
             <section className="collab-details-section">
-              <h4>{c.title}</h4>
+              <div className="collab-details-subhead">
+                <h4>About</h4>
+                {detail.canAdmin && (
+                  <Button className="secondary compact" onClick={() => setDialog({ kind: "edit" })}>
+                    <Settings2 size={14} aria-hidden="true" /> Settings
+                  </Button>
+                )}
+              </div>
               {c.description && <p className="collab-details-desc">{c.description}</p>}
               <dl className="collab-facts">
                 <div>
@@ -115,20 +165,6 @@ export default function Details({
                   </div>
                 )}
               </dl>
-              {detail.canAdmin && (
-                <div className="collab-details-actions">
-                  <Button className="secondary compact" onClick={() => setDialog({ kind: "edit" })}>
-                    <Settings2 size={14} /> Settings
-                  </Button>
-                  <Button
-                    className="secondary compact"
-                    onClick={() => setDialog({ kind: "archive", archived: !c.archived })}
-                  >
-                    {c.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
-                    {c.archived ? "Restore" : "Archive"}
-                  </Button>
-                </div>
-              )}
             </section>
             <section className="collab-details-section">
               <div className="collab-details-subhead">
@@ -137,7 +173,7 @@ export default function Details({
                 </h4>
                 {detail.canAdmin && !c.archived && (
                   <Button className="secondary compact" onClick={() => setDialog({ kind: "add" })}>
-                    <UserPlus size={14} /> Add
+                    <UserPlus size={14} aria-hidden="true" /> Add
                   </Button>
                 )}
               </div>
@@ -149,14 +185,31 @@ export default function Details({
                     m.memberRole !== "owner" &&
                     (m.memberRole === "member" || isOwner);
                   return (
-                    <li key={m.id}>
-                      <Avatar name={m.name} size={28} />
+                    <li key={m.id} className="collab-member-row">
+                      <ProfilePopover
+                        person={m}
+                        presence={presenceOf(m.id)}
+                        meId={actor.id}
+                        onMessage={onMessage}
+                        onManageAccess={onManageAccess}
+                      >
+                        <button type="button" className="collab-avatar-button" aria-label={`Profile of ${m.name}`}>
+                          <PersonAvatar name={m.name} size={28} presence={m.active ? presenceOf(m.id) : undefined} />
+                        </button>
+                      </ProfilePopover>
                       <span className="collab-member-name">
                         {m.name}
                         {m.id === actor.id && <em> (you)</em>}
-                        <small>{[m.role, m.active ? null : "Inactive"].filter(Boolean).join(" · ")}</small>
+                        <small>
+                          {[m.role, m.active ? presenceLabel(presenceOf(m.id)) || null : "Inactive"].filter(Boolean).join(" · ")}
+                        </small>
                       </span>
-                      {roleLabel[m.memberRole] && <span className="e-badge tone-info">{roleLabel[m.memberRole]}</span>}
+                      {/* Fixed columns: the badge and the actions keep their
+                          place whether or not a row has them. */}
+                      <span className="collab-member-badge">
+                        {roleLabel[m.memberRole] && <span className="e-badge tone-info is-sm">{roleLabel[m.memberRole]}</span>}
+                      </span>
+                      {!(manageable || (m.id !== actor.id && m.active)) && <span aria-hidden="true" />}
                       {(manageable || (m.id !== actor.id && m.active)) && (
                         <Popover.Root>
                           <Popover.Trigger asChild>
@@ -216,11 +269,7 @@ export default function Details({
                 })}
               </ul>
             </section>
-            <section className="collab-details-section">
-              <Button className="secondary compact collab-leave" onClick={() => setDialog({ kind: "leave" })}>
-                <LogOut size={14} /> Leave room
-              </Button>
-            </section>
+            <DetailsMedia conversationId={c.id} />
           </>
         )}
         {error && (
@@ -229,6 +278,15 @@ export default function Details({
           </p>
         )}
       </div>
+      {/* Leaving is the panel's one exit action: always in the same place,
+          pinned below the scrolling content, styled as destructive. */}
+      {!direct && (
+        <div className="collab-details-foot">
+          <Button className="secondary delete-action collab-leave" onClick={() => setDialog({ kind: "leave" })}>
+            <LogOut size={15} aria-hidden="true" /> Leave room
+          </Button>
+        </div>
+      )}
 
       <DialogPresence>
         {dialog?.kind === "add" && (
@@ -244,6 +302,8 @@ export default function Details({
         {dialog?.kind === "edit" && (
           <EditRoomDialog
             conversation={c}
+            onImageChanged={onChanged}
+            onArchive={() => setDialog({ kind: "archive", archived: !c.archived })}
             onClose={() => setDialog(null)}
             onSaved={() => {
               setDialog(null);

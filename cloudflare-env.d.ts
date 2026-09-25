@@ -1,4 +1,4 @@
-import type { D1Database, DurableObjectNamespace } from "@cloudflare/workers-types";
+import type { D1Database, DurableObjectNamespace, R2Bucket } from "@cloudflare/workers-types";
 
 /**
  * Bindings and variables available to the Worker at runtime. The Cloudflare
@@ -10,6 +10,8 @@ declare global {
     DB: D1Database;
     /** Collaboration Hub realtime relay; live environment only. */
     COLLAB_HUB?: DurableObjectNamespace;
+    /** Collaboration files (R2); live environment only. */
+    COLLAB_FILES?: R2Bucket;
     APP_MODE?: string;
     APP_URL?: string;
     NODE_ENV?: string;

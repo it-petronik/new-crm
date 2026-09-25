@@ -162,12 +162,7 @@
 .kanban-title i {
   background: var(--brand-action);
 }
-.ui-input:focus,
-.ui-textarea:focus,
-.ui-select-trigger:focus,
-.ui-date-trigger:focus {
-  border-color: var(--brand-action);
-}
+/* Input focus is owned by form-system.css (one restrained ring). */
 .stat-card:hover,
 .collection-card:hover,
 .lead-card:hover {

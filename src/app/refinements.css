@@ -62,13 +62,7 @@
   gap: 16px 20px;
   margin-top: 20px;
 }
-.modal .ui-textarea {
-  min-height: 76px;
-}
-.modal .form-footer {
-  margin-top: 20px;
-  padding-top: 18px;
-}
+
 .modal .detail-grid {
   padding: 20px 0;
   gap: 20px;
@@ -245,7 +239,6 @@
     .kanban-column,
     .line-editor,
     .record-note,
-    .detail-actions,
     .segmented,
     .table-scroll th,
     .unit-tag,
@@ -356,7 +349,6 @@
     .settings-body p,
     .settings-body dt,
     .settings-row .muted,
-    .form-footer > span,
     .detail-grid span,
     .detail-notes p,
     .record-note small,

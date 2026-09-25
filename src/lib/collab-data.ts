@@ -1,16 +1,24 @@
 import { and, asc, desc, eq, gt, inArray, isNull, lt, lte, ne, sql } from "drizzle-orm";
 import type { Database } from "./d1";
 import {
+  attachments,
+  collabPresence,
   conversations,
   conversationMembers,
   messages,
   messageMentions,
+  messageReactions,
   users,
+  type AttachmentRow,
   type ConversationRow,
   type MessageRow,
 } from "./schema";
 import {
+  attachmentUrls,
   excerpt,
+  type AttachmentKind,
+  type AttachmentView,
+  type ReactionView,
   MENTION_PAGE,
   MESSAGE_PAGE,
   UNREAD_CAP,
@@ -81,6 +89,7 @@ export async function listMembers(db: Database, conversationId: string): Promise
       active: users.active,
       memberRole: conversationMembers.role,
       joinedAt: conversationMembers.joinedAt,
+      companies: users.companies,
     })
     .from(conversationMembers)
     .innerJoin(users, eq(users.id, conversationMembers.userId))
@@ -303,6 +312,7 @@ export async function hydrateMessages(db: Database, rows: MessageRow[]): Promise
           .all()
       : Promise.resolve([] as { messageId: string; id: string; name: string }[]),
   ]);
+  const [files, reactions] = await Promise.all([messageAttachments(db, live), messageReactionMap(db, live)]);
   const people = new Map(
     (await findPeople(db, [...rows.map((r) => r.authorId), ...replies.map((r) => r.authorId)])).map(
       (p) => [p.id, p],
@@ -340,8 +350,189 @@ export async function hydrateMessages(db: Database, rows: MessageRow[]): Promise
         ? []
         : mentionRows.filter((m) => m.messageId === r.id).map(({ id, name }) => ({ id, name })),
       clientKey: r.clientKey,
+      // A deleted message shows neither its files nor its reactions.
+      attachments: r.deletedAt ? [] : (files.get(r.id) ?? []),
+      reactions: r.deletedAt ? [] : (reactions.get(r.id) ?? []),
     };
   });
+}
+
+/* ----------------------------------------------------------- attachments */
+
+export function attachmentView(a: AttachmentRow): AttachmentView {
+  return {
+    id: a.id,
+    kind: a.kind,
+    name: a.originalName,
+    mimeType: a.mimeType,
+    size: a.size,
+    width: a.width,
+    height: a.height,
+    durationMs: a.durationMs,
+    createdAt: a.createdAt.toISOString(),
+    ...attachmentUrls(a.id, !!a.thumbKey),
+  };
+}
+
+/** Metadata only — never bytes — for the given messages, in upload order. */
+async function messageAttachments(db: Database, messageIds: string[]) {
+  const map = new Map<string, AttachmentView[]>();
+  if (!messageIds.length) return map;
+  const rows = await db
+    .select()
+    .from(attachments)
+    .where(and(inArray(attachments.messageId, messageIds), isNull(attachments.deletedAt)))
+    .orderBy(asc(attachments.position), asc(attachments.id))
+    .all();
+  for (const row of rows) {
+    const list = map.get(row.messageId!) ?? [];
+    list.push(attachmentView(row));
+    map.set(row.messageId!, list);
+  }
+  return map;
+}
+
+export const findAttachment = (db: Database, id: string) =>
+  db.select().from(attachments).where(eq(attachments.id, id)).get();
+
+export const insertAttachment = (db: Database, row: typeof attachments.$inferInsert) =>
+  db.insert(attachments).values(row).run();
+
+/** Pending uploads by this person in this conversation, for linking on send. */
+export const pendingAttachments = (db: Database, ids: string[], conversationId: string, uploaderId: string) =>
+  ids.length
+    ? db
+        .select()
+        .from(attachments)
+        .where(
+          and(
+            inArray(attachments.id, ids),
+            eq(attachments.conversationId, conversationId),
+            eq(attachments.uploaderId, uploaderId),
+            isNull(attachments.messageId),
+            isNull(attachments.deletedAt),
+          ),
+        )
+        .all()
+    : Promise.resolve([] as AttachmentRow[]);
+
+/**
+ * A room's media or files, newest first, from live messages only, paged by
+ * attachment id (time-ordered). Never loads the whole room.
+ */
+export async function pageAttachments(
+  db: Database,
+  conversationId: string,
+  kinds: AttachmentKind[],
+  before: string | undefined,
+  limit: number,
+) {
+  const rows = await db
+    .select({ attachment: attachments, authorId: messages.authorId })
+    .from(attachments)
+    .innerJoin(messages, eq(messages.id, attachments.messageId))
+    .where(
+      and(
+        eq(attachments.conversationId, conversationId),
+        inArray(attachments.kind, kinds),
+        isNull(attachments.deletedAt),
+        isNull(messages.deletedAt),
+        before ? lt(attachments.id, before) : undefined,
+      ),
+    )
+    .orderBy(desc(attachments.id))
+    .limit(limit + 1)
+    .all();
+  const people = new Map((await findPeople(db, rows.map((r) => r.authorId))).map((p) => [p.id, p.name]));
+  return {
+    items: rows.slice(0, limit).map((r) => ({
+      ...attachmentView(r.attachment),
+      messageId: r.attachment.messageId!,
+      authorName: people.get(r.authorId) ?? "Former member",
+    })),
+    nextBefore: rows.length > limit ? rows[limit - 1].attachment.id : null,
+  };
+}
+
+/** Unsent uploads and the files of deleted messages past their retention. */
+export async function purgeableAttachments(db: Database, now: number, limit = 200) {
+  const pendingBefore = new Date(now - PENDING_RETENTION_MS);
+  const deletedBefore = new Date(now - DELETED_RETENTION_MS);
+  return db
+    .select()
+    .from(attachments)
+    .where(
+      sql`(${attachments.messageId} IS NULL AND ${attachments.createdAt} < ${pendingBefore.getTime()})
+        OR (${attachments.deletedAt} IS NOT NULL AND ${attachments.deletedAt} < ${deletedBefore.getTime()})`,
+    )
+    .limit(limit)
+    .all();
+}
+export const PENDING_RETENTION_MS = 24 * 3600_000;
+export const DELETED_RETENTION_MS = 30 * 24 * 3600_000;
+
+export const deleteAttachmentRows = (db: Database, ids: string[]) =>
+  ids.length ? db.delete(attachments).where(inArray(attachments.id, ids)).run() : Promise.resolve();
+
+export const discardPendingAttachment = (db: Database, id: string, now: Date) =>
+  db
+    .update(attachments)
+    .set({ deletedAt: now })
+    .where(and(eq(attachments.id, id), isNull(attachments.messageId)))
+    .run();
+
+/* ------------------------------------------------------------- reactions */
+
+async function messageReactionMap(db: Database, messageIds: string[]) {
+  const map = new Map<string, ReactionView[]>();
+  if (!messageIds.length) return map;
+  const rows = await db
+    .select()
+    .from(messageReactions)
+    .where(inArray(messageReactions.messageId, messageIds))
+    .orderBy(asc(messageReactions.createdAt))
+    .all();
+  for (const row of rows) {
+    const list = map.get(row.messageId) ?? [];
+    const existing = list.find((r) => r.emoji === row.emoji);
+    if (existing) existing.userIds.push(row.userId);
+    else list.push({ emoji: row.emoji, userIds: [row.userId] });
+    map.set(row.messageId, list);
+  }
+  return map;
+}
+
+export async function reactionsFor(db: Database, messageId: string) {
+  return (await messageReactionMap(db, [messageId])).get(messageId) ?? [];
+}
+
+/** Adds or removes one person's emoji; the primary key prevents duplicates. */
+export async function setReaction(
+  db: Database,
+  row: { messageId: string; userId: string; emoji: string; conversationId: string },
+  on: boolean,
+) {
+  if (on)
+    await db.insert(messageReactions).values({ ...row, createdAt: new Date() }).onConflictDoNothing().run();
+  else
+    await db
+      .delete(messageReactions)
+      .where(
+        and(
+          eq(messageReactions.messageId, row.messageId),
+          eq(messageReactions.userId, row.userId),
+          eq(messageReactions.emoji, row.emoji),
+        ),
+      )
+      .run();
+}
+
+/* -------------------------------------------------------------- presence */
+
+export async function lastSeen(db: Database, userIds: string[]) {
+  if (!userIds.length) return new Map<string, Date>();
+  const rows = await db.select().from(collabPresence).where(inArray(collabPresence.userId, userIds)).all();
+  return new Map(rows.map((r) => [r.userId, r.lastSeenAt]));
 }
 
 export async function messagePage(
@@ -360,11 +551,28 @@ export async function insertMessage(
   message: { id: string; conversationId: string; authorId: string; body: string; replyToId: string | null; clientKey: string | null },
   mentionIds: string[],
   now: Date,
+  attachmentIds: string[] = [],
 ) {
-  // One batch: the message, its mentions, the conversation's activity time
-  // and the author's own read cursor either all land or none do.
+  // One batch: the message, its mentions, its attachments, the conversation's
+  // activity time and the author's own read cursor all land or none do. The
+  // attachment link is guarded to the author's own pending uploads in this
+  // conversation, so it cannot claim anyone else's file.
   await db.batch([
     db.insert(messages).values({ ...message, createdAt: now }),
+    ...attachmentIds.map((id, position) =>
+      db
+        .update(attachments)
+        .set({ messageId: message.id, position })
+        .where(
+          and(
+            eq(attachments.id, id),
+            eq(attachments.conversationId, message.conversationId),
+            eq(attachments.uploaderId, message.authorId),
+            isNull(attachments.messageId),
+            isNull(attachments.deletedAt),
+          ),
+        ),
+    ),
     ...mentionIds.map((userId) =>
       db.insert(messageMentions).values({
         messageId: message.id,
@@ -404,11 +612,18 @@ export async function editMessage(
   ]);
 }
 
-/** Soft delete: the row stays for reply context, the words do not. */
+/**
+ * Soft delete: the row stays for reply context; the words, mentions and
+ * reactions go, and the attachments become unreachable at once (the file
+ * route refuses them). Their R2 objects are purged after the retention
+ * window by the scheduled purge — see purgeableAttachments.
+ */
 export async function softDeleteMessage(db: Database, id: string, now: Date) {
   await db.batch([
     db.update(messages).set({ body: "", deletedAt: now }).where(eq(messages.id, id)),
     db.delete(messageMentions).where(eq(messageMentions.messageId, id)),
+    db.delete(messageReactions).where(eq(messageReactions.messageId, id)),
+    db.update(attachments).set({ deletedAt: now }).where(and(eq(attachments.messageId, id), isNull(attachments.deletedAt))),
   ]);
 }
 
@@ -527,7 +742,9 @@ export const setMemberRole = (db: Database, conversationId: string, userId: stri
 export const updateConversation = (
   db: Database,
   id: string,
-  values: Partial<Pick<ConversationRow, "name" | "description" | "visibility" | "archivedAt" | "updatedAt">>,
+  values: Partial<
+    Pick<ConversationRow, "name" | "description" | "visibility" | "archivedAt" | "updatedAt" | "avatarKey" | "avatarUpdatedAt">
+  >,
 ) => db.update(conversations).set(values).where(eq(conversations.id, id)).run();
 
 /* -------------------------------------------------------------- mentions */

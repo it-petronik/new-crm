@@ -10,7 +10,7 @@ import BusinessClock from "./business-clock";
 import { KpiStrip, PipelineHealth, OperationsSnapshot } from "./executive-panels";
 import MyDay from "./my-day";
 import QuickAdd from "./quick-add";
-import { SkeletonDashboard, SkeletonMyDay, SkeletonList, SkeletonRegion, SkeletonListRow } from "./ui/skeleton";
+import { SkeletonDashboard, SkeletonMyDay, SkeletonList } from "./ui/skeleton";
 import { FollowUpMenu } from "./follow-up-control";
 import ImportDialog from "./import-dialog";
 import { salaryAttributes } from "@/lib/salary";
@@ -125,23 +125,13 @@ import { workspaceNotifications } from "@/lib/notifications";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useCollabSummary } from "@/lib/collab-client";
+import { HubSkeleton } from "./collaboration/skeletons";
 
 // Loaded only when someone opens Collaboration, so the rest of the CRM does
 // not carry it. The skeleton keeps the three-pane shape while it arrives.
 const CollaborationHub = dynamic(() => import("./collaboration/collaboration-hub"), {
   ssr: false,
-  loading: () => (
-    <SkeletonRegion label="Loading collaboration">
-      <div className="collab collab-loading">
-        <div className="collab-sidebar">
-          {Array.from({ length: 6 }, (_, i) => (
-            <SkeletonListRow key={i} />
-          ))}
-        </div>
-        <div className="collab-main" />
-      </div>
-    </SkeletonRegion>
-  ),
+  loading: () => <HubSkeleton />,
 });
 const icons: Record<Module, LucideIcon> = {
   overview: LayoutDashboard,
@@ -998,7 +988,13 @@ export default function Workspace({
                   onAppearance={() => openView("appearance")}
                 />
               )}
-              {view === "collaboration" && <CollaborationHub actor={actor} preview={preview} />}
+              {view === "collaboration" && (
+                <CollaborationHub
+                  actor={actor}
+                  preview={preview}
+                  onManageAccess={canManageUsers(actor) ? () => openView("access") : undefined}
+                />
+              )}
               {view === "appearance" && <AppearancePage />}
               {view === "notifications" && (
                 <NotificationsPage
@@ -1660,7 +1656,9 @@ export default function Workspace({
             actor={actor}
             existing={records}
             onClose={() => setImporting(false)}
-            onDone={reload}
+            // Preview has no server records to reload; its imports write
+            // nothing (the API refuses), so there is nothing to refresh.
+            onDone={preview ? async () => {} : reload}
           />
         )}
       </DialogPresence>
@@ -1669,10 +1667,19 @@ export default function Workspace({
         <p className="muted">{companyName(deleting.company)} · {deleting.id}</p>
         <p>{deletionReason(deleting, data.records) || "This removes the record from the workspace. Its audit history is retained. It will not delete related records."}</p>
         {mutationError && <p className="error" role="alert">{mutationError}</p>}
-        <DialogActions><div className="form-footer">
-          <Button className="secondary" disabled={busy} onClick={() => { setSelected(deleting); setDeleting(null); }}>Cancel</Button>
-          {!deletionReason(deleting, data.records) && <Button className="danger-button" disabled={busy} loading={busy} onClick={deleteRecord}>Delete record</Button>}
-        </div></DialogActions>
+        {/* A confirmation: Delete is the act being confirmed, so it is the
+            primary (danger) action on the right. When deletion is blocked
+            there is nothing to confirm and the footer is just Close. */}
+        <DialogActions
+          onCancel={() => { setSelected(deleting); setDeleting(null); }}
+          pending={busy}
+          cancel={deletionReason(deleting, data.records) ? "Close" : "Cancel"}
+          primary={
+            deletionReason(deleting, data.records)
+              ? undefined
+              : { label: "Delete record", pendingLabel: "Deleting…", tone: "danger", pending: busy, onClick: deleteRecord }
+          }
+        />
       </Dialog>}</DialogPresence>
       {prompt && (
         <div className="after-action" role="status">
@@ -2603,20 +2610,7 @@ function Detail({
           </Button>
         </span>
       </div>
-      {r.kind === "quotations" && (
-        <>
-          <DialogActions>
-            <Button
-              className="secondary print-button"
-              onClick={() => window.print()}
-            >
-              <Download size={16} />
-              Print / Save PDF
-            </Button>
-          </DialogActions>
-          <QuotationDocument record={r} />
-        </>
-      )}
+      {r.kind === "quotations" && <QuotationDocument record={r} />}
       {r.kind !== "quotations" && (
         <>
           <div
@@ -2683,53 +2677,54 @@ function Detail({
           )}
         </>
       )}
-      {writable && (
-        <DialogActions>
-          <div className="detail-actions">
-            <div className="detail-edit-actions">
-            <Button className="secondary" disabled={busy} onClick={onEdit}>Edit record</Button>
-            <Button className="secondary delete-action" disabled={busy} onClick={onDelete}>Delete</Button>
-            </div>
-            <Field>
-              Update status
-              <Select
-                value={r.status}
-                disabled={busy}
-                onChange={(e) => onUpdate(e.target.value)}
-              >
-                {(isCashEntry(r) ? ["Recorded", "Cancelled"] : stages[r.kind]).map((s) => (
-                  <option key={s}>{s}</option>
-                ))}
-              </Select>
-            </Field>
-            {r.kind === "leads" && (
-              <Button className="primary" onClick={onQuote}>
-                Create quotation <ArrowRight size={15} />
+      {/* One footer for the whole detail view (see DialogActions):
+          destructive and contextual controls on the left, then Close, Edit
+          and the record's next workflow step — its primary — on the right. */}
+      <DialogActions
+        cancel="Close"
+        pending={busy}
+        start={
+          <>
+            {writable && (
+              <Button className="secondary delete-action" disabled={busy} onClick={onDelete}>
+                Delete
               </Button>
             )}
-            {r.kind === "quotations" && r.status === "Approved" && (
-              <Button
-                className="primary"
-                disabled={busy}
-                onClick={() => onUpdate("Accepted")}
-              >
-                Accept & create order <ArrowRight size={15} />
+            {(r.kind === "quotations" || (r.kind === "accounts" && !isCashEntry(r))) && (
+              <Button className="secondary print-button" onClick={() => window.print()}>
+                <Download size={16} aria-hidden="true" />
+                Print / Save PDF
               </Button>
             )}
-          </div>
-        </DialogActions>
-      )}
-      {r.kind === "accounts" && !isCashEntry(r) && (
-        <DialogActions>
-          <Button
-            className="secondary print-button"
-            onClick={() => window.print()}
-          >
-            <Download size={16} />
-            Print / Save PDF
-          </Button>
-        </DialogActions>
-      )}
+            {writable && (
+              <Field className="ui-inline-field">
+                Update status
+                <Select value={r.status} disabled={busy} onChange={(e) => onUpdate(e.target.value)}>
+                  {(isCashEntry(r) ? ["Recorded", "Cancelled"] : stages[r.kind]).map((s) => (
+                    <option key={s}>{s}</option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+          </>
+        }
+        secondary={
+          writable && (r.kind === "leads" || (r.kind === "quotations" && r.status === "Approved")) && (
+            <Button className="secondary" disabled={busy} onClick={onEdit}>
+              Edit record
+            </Button>
+          )
+        }
+        primary={
+          !writable
+            ? undefined
+            : r.kind === "leads"
+              ? { label: "Create quotation", icon: <ArrowRight size={15} aria-hidden="true" />, onClick: onQuote }
+              : r.kind === "quotations" && r.status === "Approved"
+                ? { label: "Accept & create order", pending: busy, onClick: () => onUpdate("Accepted") }
+                : { label: "Edit record", disabled: busy, onClick: onEdit }
+        }
+      />
       <RecordActivity
         record={r}
         writable={writable}

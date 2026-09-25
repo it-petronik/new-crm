@@ -29,30 +29,9 @@
   .modal .ui-field {
     min-width: 0;
   }
-  .modal .ui-input,
-  .modal .ui-select-trigger,
-  .modal .ui-date-trigger {
-    min-height: 40px;
-    height: 40px;
-    padding-top: 8px;
-    padding-bottom: 8px;
-  }
-  .modal .ui-textarea {
-    min-height: 64px;
-  }
-  .modal .form-footer {
-    position: sticky;
-    bottom: -24px;
-    z-index: 5;
-    background: var(--surface);
-    padding: 14px 0;
-    margin-top: 16px;
-    border-top: 1px solid var(--line);
-    gap: 8px;
-  }
-  .modal .form-footer > span {
-    font-size: 11px;
-  }
+  /* Control sizes inside dialogs come from form-system.css, the same as
+     everywhere else. */
+
   .modal .detail-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 14px;
@@ -66,9 +45,7 @@
     margin: 12px 0;
     padding: 14px;
   }
-  .modal .detail-actions {
-    margin-top: 16px;
-  }
+
   .modal .record-activity {
     margin-top: 16px;
     padding-top: 14px;
@@ -223,14 +200,7 @@
     .modal .form-grid {
       gap: 12px;
     }
-    .modal .form-footer {
-      bottom: -16px;
-      flex-wrap: wrap;
-      padding: 12px 0;
-    }
-    .modal .form-footer > span {
-      display: none;
-    }
+
     .form-sections {
       gap: 4px;
     }

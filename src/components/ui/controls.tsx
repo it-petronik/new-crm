@@ -450,11 +450,140 @@ export function DialogPresence({ children }: { children: ReactNode }) {
   );
 }
 
-const DialogFooterContext = createContext<HTMLElement | null>(null);
-export function DialogActions({ children }: { children: ReactNode }) {
-  const target = useContext(DialogFooterContext);
-  return target ? createPortal(children, target) : null;
+/* ---------------------------------------------------------------------------
+   Dialog footer
+
+   Every dialog's actions go through <DialogActions>, so footers are laid out
+   by one component rather than by each page's CSS. The rule:
+
+     [start: contextual / destructive]            [Cancel] [secondary] [Primary]
+
+   - The primary action (Save, Create, Update, Import, Confirm) is always the
+     rightmost and visually strongest button.
+   - Cancel sits immediately left of the right-hand group. With no primary
+     action it reads "Close" and is the only right-hand button.
+   - A destructive action that is NOT what the dialog is for — Delete on a
+     record editor, Archive in room settings — goes in `start`, on the far
+     left, away from the confirm button so it cannot be hit by habit.
+   - A confirmation dialog whose whole purpose is the destructive act ("Delete
+     message?") passes that act as the PRIMARY with tone "danger": it is the
+     confirmation, so it takes the primary position, right of Cancel.
+
+   Wrapping on narrow screens keeps this order; the right-hand group is never
+   reordered, so Save and Delete cannot swap sides between breakpoints.
+   ------------------------------------------------------------------------ */
+
+type DialogFooterState = {
+  target: HTMLElement | null;
+  onClose: () => void;
+  register: () => () => void;
+};
+const DialogFooterContext = createContext<DialogFooterState | null>(null);
+
+export type DialogPrimaryAction = {
+  label: ReactNode;
+  /** Shown while `pending`, e.g. "Saving…". Width is reserved for both. */
+  pendingLabel?: ReactNode;
+  onClick?: () => unknown;
+  type?: "button" | "submit";
+  /** Submits this form (by id) when the footer is portalled outside it. */
+  form?: string;
+  pending?: boolean;
+  disabled?: boolean;
+  tone?: "primary" | "danger";
+  icon?: ReactNode;
+};
+
+/**
+ * The dialog's primary button: the strongest, with a width that does not
+ * change between "Save" and "Saving…", and a guard against double submission
+ * — a second click while the first is still running does nothing, whether or
+ * not the caller tracks a pending flag.
+ */
+export function PrimaryAction({ action }: { action: DialogPrimaryAction }) {
+  const [running, setRunning] = useState(false);
+  const busy = !!action.pending || running;
+  return (
+    <Button
+      type={action.type ?? "button"}
+      form={action.form}
+      className={cx(action.tone === "danger" ? "danger-button" : "primary", "ui-primary-action")}
+      disabled={action.disabled || busy}
+      aria-busy={busy || undefined}
+      onClick={
+        action.onClick
+          ? async () => {
+              if (busy) return;
+              const result = action.onClick!();
+              if (result && typeof (result as Promise<unknown>).then === "function") {
+                setRunning(true);
+                try {
+                  await result;
+                } finally {
+                  setRunning(false);
+                }
+              }
+            }
+          : undefined
+      }
+    >
+      {action.icon}
+      <span className="ui-action-label" data-pending={busy || undefined}>
+        <span aria-hidden={busy || undefined}>{action.label}</span>
+        {action.pendingLabel && <span aria-hidden={!busy || undefined}>{action.pendingLabel}</span>}
+      </span>
+    </Button>
+  );
 }
+
+export function DialogActions({
+  start,
+  secondary,
+  primary,
+  cancel,
+  onCancel,
+  pending,
+}: {
+  /** Left: contextual or destructive actions (Delete, Archive, Print…). */
+  start?: ReactNode;
+  /** Right, before the primary: e.g. Back, "Save and add details". */
+  secondary?: ReactNode;
+  /** Rightmost. Omit for an informational dialog (Cancel becomes Close). */
+  primary?: DialogPrimaryAction;
+  /** Label for the cancel button, or false for none. */
+  cancel?: string | false;
+  /** Defaults to closing the dialog. */
+  onCancel?: () => void;
+  /** Freezes Cancel and secondary actions while the primary is running. */
+  pending?: boolean;
+}) {
+  const footer = useContext(DialogFooterContext);
+  const register = footer?.register;
+  useEffect(() => register?.(), [register]);
+  if (!footer?.target) return null;
+  const cancelLabel = cancel === false ? null : (cancel ?? (primary ? "Cancel" : "Close"));
+  return createPortal(
+    <>
+      <div className="ui-dialog-actions-start">{start}</div>
+      <div className="ui-dialog-actions-end">
+        {cancelLabel && (
+          <Button
+            type="button"
+            className="secondary"
+            disabled={pending || primary?.pending}
+            onClick={onCancel ?? footer.onClose}
+          >
+            {cancelLabel}
+          </Button>
+        )}
+        {secondary}
+        {primary && <PrimaryAction action={primary} />}
+      </div>
+    </>,
+    footer.target,
+  );
+}
+
 export function Dialog({
   title,
   children,
@@ -468,6 +597,13 @@ export function Dialog({
 }) {
   const present = useContext(PresenceContext);
   const [footer, setFooter] = useState<HTMLDivElement | null>(null);
+  // How many <DialogActions> are mounted. With none, the dialog supplies its
+  // own Close so every dialog can be dismissed from the footer.
+  const [actions, setActions] = useState(0);
+  const register = useRef(() => {
+    setActions((n) => n + 1);
+    return () => setActions((n) => n - 1);
+  }).current;
   const opener = useRef<HTMLElement | null>(
     typeof document === "undefined"
       ? null
@@ -503,18 +639,20 @@ export function Dialog({
               <X size={18} />
             </Button>
           </div>
-          <DialogFooterContext.Provider value={footer}>
+          <DialogFooterContext.Provider value={{ target: footer, onClose, register }}>
             <div className="dialog-body">{children}</div>
           </DialogFooterContext.Provider>
-          <div className="dialog-footer">
-            <div className="dialog-footer-actions" ref={setFooter} />
-            <Button
-              type="button"
-              className="secondary dialog-default-close"
-              onClick={onClose}
-            >
-              Close
-            </Button>
+          <div className="ui-dialog-footer" ref={setFooter}>
+            {actions === 0 && (
+              <>
+                <div className="ui-dialog-actions-start" />
+                <div className="ui-dialog-actions-end">
+                  <Button type="button" className="secondary" onClick={onClose}>
+                    Close
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>

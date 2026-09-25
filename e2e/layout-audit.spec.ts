@@ -52,7 +52,7 @@ for (const [module, action] of forms) {
     await page.getByRole("button", { name: action, exact: true }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
-    await expect(page.locator(".dialog-footer")).toBeVisible();
+    await expect(page.locator(".ui-dialog-footer")).toBeVisible();
     await expect(page.locator(".dialog-body")).toHaveCSS("overflow-y", "auto");
     expect(
       await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth),

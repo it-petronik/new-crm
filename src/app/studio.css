@@ -460,17 +460,7 @@ h1,
   border-color: var(--line);
   border-radius: 8px;
 }
-.ui-input:focus,
-.ui-textarea:focus,
-.ui-select-trigger:focus,
-.ui-date-trigger:focus {
-  border-color: #8098f2;
-  box-shadow: var(--focus);
-}
-.ui-input:read-only,
-[data-theme="dark"] .ui-input:read-only {
-  background: var(--soft);
-}
+/* Input focus and read-only states are owned by form-system.css. */
 .ui-select-option[data-highlighted],
 .ui-select-option[data-state="checked"],
 [data-theme="dark"]
@@ -496,16 +486,14 @@ h1,
 .segmented,
 .line-editor,
 .record-note,
-.detail-actions,
 .table-scroll th,
 [data-theme="dark"]
   :is(
     .unit-tag,
-    .segmented,
-    .line-editor,
-    .record-note,
-    .detail-actions,
-    .table-scroll th
+.segmented,
+.line-editor,
+.record-note,
+.table-scroll th
   ) {
   background: var(--soft);
   color: var(--muted);
@@ -654,7 +642,6 @@ h1,
 .collection-bottom,
 .settings-body p,
 .settings-body dt,
-.form-footer > span,
 .detail-grid span,
 .detail-notes p,
 .record-note small,

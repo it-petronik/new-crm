@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Hash, Search, Users, X } from "lucide-react";
+import { Archive, ArchiveRestore, Check, Hash, Search, Users, X } from "lucide-react";
 import {
   ROOM_DESCRIPTION_MAX,
   ROOM_NAME_MAX,
@@ -13,10 +13,12 @@ import {
 } from "@/lib/collab";
 import type { Actor } from "@/lib/domain";
 import { companyName } from "@/lib/company-name";
-import { collabFetch } from "@/lib/collab-client";
+import { collabFetch, usePresence } from "@/lib/collab-client";
+import { PersonAvatar } from "./presence";
 import { Button, Dialog, DialogActions, Field, Input, Select, Textarea } from "../ui/controls";
 import { Avatar } from "../avatar";
-import { SkeletonListRow } from "../ui/skeleton";
+import { PersonRowSkeleton } from "./skeletons";
+import { RoomAvatarEditor } from "./room-avatar";
 
 /* ------------------------------------------------------------ people picker */
 
@@ -74,6 +76,7 @@ function PeoplePicker({
     onChange(selected.some((s) => s.id === p.id) ? selected.filter((s) => s.id !== p.id) : [...selected, p]);
   };
   const shown = (results ?? []).filter((p) => !exclude.includes(p.id));
+  const presenceOf = usePresence(shown.map((p) => p.id));
 
   return (
     <div className="collab-picker">
@@ -102,9 +105,9 @@ function PeoplePicker({
       <ul className="collab-picker-list" aria-label="People">
         {results === null ? (
           <>
-            <li><SkeletonListRow /></li>
-            <li><SkeletonListRow /></li>
-            <li><SkeletonListRow /></li>
+            <li><PersonRowSkeleton /></li>
+            <li><PersonRowSkeleton /></li>
+            <li><PersonRowSkeleton /></li>
           </>
         ) : shown.length ? (
           shown.map((p) => {
@@ -117,7 +120,7 @@ function PeoplePicker({
                   aria-pressed={on}
                   onClick={() => toggle(p)}
                 >
-                  <Avatar name={p.name} size={30} />
+                  <PersonAvatar name={p.name} size={30} presence={presenceOf(p.id)} />
                   <span>
                     {p.name}
                     <small>{p.role}</small>
@@ -336,11 +339,9 @@ export function NewRoomDialog({
         <PeoplePicker query={scopeQuery} multiple selected={members} onChange={setMembers} />
         {error && <p className="form-error" role="alert">{error}</p>}
       </div>
-      <DialogActions>
-        <Button className="primary" loading={busy} onClick={() => void create()}>
-          Create room
-        </Button>
-      </DialogActions>
+      <DialogActions
+        primary={{ label: "Create room", pendingLabel: "Creating…", pending: busy, onClick: create }}
+      />
     </Dialog>
   );
 }
@@ -389,8 +390,8 @@ export function BrowseRoomsDialog({
       <ul className="collab-browse">
         {rooms === null ? (
           <>
-            <li><SkeletonListRow /></li>
-            <li><SkeletonListRow /></li>
+            <li><PersonRowSkeleton /></li>
+            <li><PersonRowSkeleton /></li>
           </>
         ) : shown.length ? (
           shown.map((r) => (
@@ -460,11 +461,16 @@ export function AddMembersDialog({
         onChange={setSelected}
       />
       {error && <p className="form-error" role="alert">{error}</p>}
-      <DialogActions>
-        <Button className="primary" loading={busy} disabled={!selected.length} onClick={() => void add()}>
-          <Users size={15} /> Add {selected.length ? selected.length : ""}
-        </Button>
-      </DialogActions>
+      <DialogActions
+        primary={{
+          label: selected.length ? `Add ${selected.length}` : "Add people",
+          pendingLabel: "Adding…",
+          icon: <Users size={15} aria-hidden="true" />,
+          pending: busy,
+          disabled: !selected.length,
+          onClick: add,
+        }}
+      />
     </Dialog>
   );
 }
@@ -475,10 +481,16 @@ export function EditRoomDialog({
   conversation,
   onClose,
   onSaved,
+  onArchive,
+  onImageChanged,
 }: {
   conversation: ConversationSummary;
   onClose: () => void;
   onSaved: () => void;
+  /** The room image saves on its own, immediately. */
+  onImageChanged: () => void;
+  /** Opens the archive/restore confirmation; the destructive, left action. */
+  onArchive: () => void;
 }) {
   const [name, setName] = useState(conversation.title);
   const [description, setDescription] = useState(conversation.description ?? "");
@@ -508,6 +520,7 @@ export function EditRoomDialog({
   return (
     <Dialog title="Room settings" onClose={onClose} className="dialog-compact collab-dialog">
       <div className="collab-form">
+        <RoomAvatarEditor room={conversation} onChanged={onImageChanged} />
         <Field error={trimmed ? nameError : ""}>
           Room name
           <Input value={name} maxLength={ROOM_NAME_MAX} onChange={(e) => setName(e.target.value)} autoFocus />
@@ -530,11 +543,16 @@ export function EditRoomDialog({
         </Field>
         {error && <p className="form-error" role="alert">{error}</p>}
       </div>
-      <DialogActions>
-        <Button className="primary" loading={busy} onClick={() => void save()}>
-          Save
-        </Button>
-      </DialogActions>
+      <DialogActions
+        pending={busy}
+        start={
+          <Button className="secondary delete-action" disabled={busy} onClick={onArchive}>
+            {conversation.archived ? <ArchiveRestore size={15} aria-hidden="true" /> : <Archive size={15} aria-hidden="true" />}
+            {conversation.archived ? "Restore room" : "Archive room"}
+          </Button>
+        }
+        primary={{ label: "Save changes", pendingLabel: "Saving…", pending: busy, onClick: save }}
+      />
     </Dialog>
   );
 }
@@ -556,26 +574,12 @@ export function ConfirmDialog({
   onConfirm: () => Promise<void> | void;
   onClose: () => void;
 }) {
-  const [busy, setBusy] = useState(false);
+  // A confirmation: the act being confirmed is the primary (danger when
+  // destructive), right of Cancel. PrimaryAction guards double submission.
   return (
     <Dialog title={title} onClose={onClose} className="dialog-compact collab-dialog">
       <p className="collab-dialog-text">{body}</p>
-      <DialogActions>
-        <Button
-          className={destructive ? "danger-button" : "primary"}
-          loading={busy}
-          onClick={async () => {
-            setBusy(true);
-            try {
-              await onConfirm();
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          {action}
-        </Button>
-      </DialogActions>
+      <DialogActions primary={{ label: action, tone: destructive ? "danger" : "primary", onClick: onConfirm }} />
     </Dialog>
   );
 }

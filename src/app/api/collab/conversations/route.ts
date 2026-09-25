@@ -137,6 +137,8 @@ export function POST(request: Request) {
       updatedAt: now,
       lastMessageAt: null,
       archivedAt: null,
+      avatarKey: null,
+      avatarUpdatedAt: null,
     };
     await createConversation(db, row, [
       { userId: actor.id, role: "owner" },

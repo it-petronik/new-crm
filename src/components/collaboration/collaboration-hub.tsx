@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AtSign, Compass, Hash, Lock, MessageSquarePlus, Plus, RotateCcw, Search } from "lucide-react";
+import { AtSign, Compass, Hash, MessageSquarePlus, Plus, RotateCcw, Search } from "lucide-react";
 import type {
   CollabEvent,
   ConversationDetail,
@@ -12,11 +12,14 @@ import type {
 import { excerpt, UNREAD_CAP } from "@/lib/collab";
 import type { Actor } from "@/lib/domain";
 import { companyName } from "@/lib/company-name";
-import { collabFetch, CollabRequestError, useCollabEvents, useLiveState } from "@/lib/collab-client";
+import { collabFetch, CollabRequestError, useCollabEvents, useLiveState, usePresence } from "@/lib/collab-client";
 import { Button, DialogPresence, Input } from "../ui/controls";
-import { SkeletonListRow } from "../ui/skeleton";
+import { ConversationListSkeleton } from "./skeletons";
 import { Avatar } from "../avatar";
 import Thread from "./thread";
+import { PersonAvatar } from "./presence";
+import { RoomAvatar } from "./room-avatar";
+import type { PresenceView } from "@/lib/collab";
 import Details from "./details";
 import { BrowseRoomsDialog, NewDirectDialog, NewRoomDialog } from "./dialogs";
 import { MessageText, listStamp } from "./message-text";
@@ -51,8 +54,65 @@ function writeSelection(id: string | null) {
  * desktop; list → full-screen thread on mobile. Loaded on demand, so none of
  * this reaches people who never open it.
  */
-export default function CollaborationHub({ actor, preview }: { actor: Actor; preview: boolean }) {
+/*
+ * MEETINGS (V3) — design notes, not implemented.
+ *
+ * The thread header keeps an actions group (.collab-thread-actions) whose
+ * start is reserved for [voice call] [video meeting]; adding them needs no
+ * layout change. Recommended architecture is documented in
+ * docs/COLLABORATION-MEETINGS.md: a managed SFU + TURN provider (Cloudflare
+ * Realtime/Calls or LiveKit first), with our Worker issuing short-lived,
+ * per-conversation join tokens only after the same conversationAccess check
+ * every other Collaboration route uses. No raw mesh WebRTC.
+ */
+
+const FOCUS_KEY = "enercore-collab-focus";
+
+export default function CollaborationHub({
+  actor,
+  preview,
+  onManageAccess,
+}: {
+  actor: Actor;
+  preview: boolean;
+  /** Administrators only: opens Access control from a profile card. */
+  onManageAccess?: () => void;
+}) {
   const enabled = !preview;
+  /* ---------------------------------------------------------- focus mode
+     An application layout mode, not browser fullscreen: the CRM sidebar
+     folds away and the hub takes almost the whole viewport, keeping the top
+     bar. Remembered on this device only. */
+  const [focus, setFocus] = useState(false);
+  useEffect(() => {
+    try {
+      setFocus(localStorage.getItem(FOCUS_KEY) === "1");
+    } catch {}
+  }, []);
+  const toggleFocus = useCallback(() => {
+    setFocus((f) => {
+      try {
+        localStorage.setItem(FOCUS_KEY, f ? "0" : "1");
+      } catch {}
+      return !f;
+    });
+  }, []);
+  useEffect(() => {
+    const root = document.documentElement;
+    if (focus && enabled) root.dataset.collabFocus = "true";
+    else delete root.dataset.collabFocus;
+    return () => void delete root.dataset.collabFocus;
+  }, [focus, enabled]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.altKey && e.shiftKey && e.code === "KeyF") {
+        e.preventDefault();
+        toggleFocus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [toggleFocus]);
   const live = useLiveState(enabled);
   const [conversations, setConversations] = useState<ConversationSummary[] | null>(null);
   const [listError, setListError] = useState(false);
@@ -179,6 +239,8 @@ export default function CollaborationHub({ actor, preview }: { actor: Actor; pre
 
   const onEvent = useCallback(
     (event: CollabEvent) => {
+      // Presence, typing and reactions change nothing in the list.
+      if (event.type === "presence" || event.type === "typing" || event.type === "reaction") return;
       const id = event.conversationId;
       if (event.type === "message.created") {
         const m = event.message;
@@ -330,6 +392,11 @@ export default function CollaborationHub({ actor, preview }: { actor: Actor; pre
   }, [conversations, filter, query]);
 
   const selected = conversations?.find((c) => c.id === selectedId) ?? null;
+  // Presence for the people in direct messages, shown on their avatars.
+  const presenceOf = usePresence(
+    (conversations ?? []).flatMap((c) => (c.counterpart ? [c.counterpart.id] : [])),
+    enabled,
+  );
 
   /* ------------------------------------------------------------- render */
 
@@ -410,11 +477,7 @@ export default function CollaborationHub({ actor, preview }: { actor: Actor; pre
               }}
             />
           ) : conversations === null ? (
-            <div aria-busy="true" aria-label="Loading conversations">
-              {Array.from({ length: 6 }, (_, i) => (
-                <SkeletonListRow key={i} />
-              ))}
-            </div>
+            <ConversationListSkeleton />
           ) : listError && !conversations.length ? (
             <div className="collab-empty">
               <p>Couldn&apos;t load conversations.</p>
@@ -432,7 +495,13 @@ export default function CollaborationHub({ actor, preview }: { actor: Actor; pre
             />
           ) : (
             visible.map((c) => (
-              <ConversationRow key={c.id} c={c} active={c.id === selectedId} onOpen={() => open(c.id)} />
+              <ConversationRow
+                key={c.id}
+                c={c}
+                active={c.id === selectedId}
+                presence={c.counterpart ? presenceOf(c.counterpart.id) : undefined}
+                onOpen={() => open(c.id)}
+              />
             ))
           )}
         </div>
@@ -454,6 +523,10 @@ export default function CollaborationHub({ actor, preview }: { actor: Actor; pre
             }}
             onToggleDetails={() => setDetailsOpen((o) => !o)}
             onRead={onRead}
+            focus={focus}
+            onToggleFocus={toggleFocus}
+            onMessagePerson={(userId) => void messagePerson(userId)}
+            onManageAccess={onManageAccess}
           />
         ) : joinable ? (
           <div className="collab-empty collab-join">
@@ -508,6 +581,7 @@ export default function CollaborationHub({ actor, preview }: { actor: Actor; pre
             writeSelection(null);
           }}
           onMessage={(userId) => void messagePerson(userId)}
+          onManageAccess={onManageAccess}
         />
       )}
 
@@ -537,7 +611,17 @@ export default function CollaborationHub({ actor, preview }: { actor: Actor; pre
 
 /* ------------------------------------------------------------------ rows */
 
-function ConversationRow({ c, active, onOpen }: { c: ConversationSummary; active: boolean; onOpen: () => void }) {
+function ConversationRow({
+  c,
+  active,
+  presence,
+  onOpen,
+}: {
+  c: ConversationSummary;
+  active: boolean;
+  presence?: PresenceView;
+  onOpen: () => void;
+}) {
   const unread = c.unread > 0;
   const preview = c.lastMessage
     ? `${c.lastMessage.mine ? "You" : c.kind === "room" ? c.lastMessage.authorName.split(" ")[0] : ""}${
@@ -561,13 +645,7 @@ function ConversationRow({ c, active, onOpen }: { c: ConversationSummary; active
       aria-current={active ? "true" : undefined}
       onClick={onOpen}
     >
-      {c.kind === "direct" ? (
-        <Avatar name={c.title} size={34} />
-      ) : (
-        <span className="collab-room-icon" aria-hidden="true">
-          {c.visibility === "private" ? <Lock size={14} /> : <Hash size={15} />}
-        </span>
-      )}
+      {c.kind === "direct" ? <PersonAvatar name={c.title} size={34} presence={presence} /> : <RoomAvatar room={c} size={34} />}
       <span className="collab-row-main">
         <span className="collab-row-top">
           <b>{c.title}</b>
@@ -669,14 +747,7 @@ function MentionsList({
   onOpen: (item: MentionItem) => void;
   onMore: () => void;
 }) {
-  if (!data)
-    return (
-      <div aria-busy="true" aria-label="Loading mentions">
-        {Array.from({ length: 4 }, (_, i) => (
-          <SkeletonListRow key={i} />
-        ))}
-      </div>
-    );
+  if (!data) return <ConversationListSkeleton rows={4} label="Loading mentions" />;
   if (!data.items.length)
     return (
       <div className="collab-empty is-compact">

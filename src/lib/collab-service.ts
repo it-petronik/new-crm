@@ -1,7 +1,7 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { Database } from "./d1";
 import type { Actor } from "./domain";
-import { conversationMembers, messages, users } from "./schema";
+import { attachments, conversationMembers, messages, users } from "./schema";
 import {
   excerpt,
   inRoomScope,
@@ -42,6 +42,21 @@ export async function conversationSummaries(
       : Promise.resolve([]),
   ]);
   const authors = new Map((await findPeople(db, lastRows.map((m) => m.authorId))).map((p) => [p.id, p]));
+  // A message that is only a file previews as the file, not as blank text.
+  const lastFiles = lastIds.length
+    ? await db
+        .select({ messageId: attachments.messageId, kind: attachments.kind, name: attachments.originalName })
+        .from(attachments)
+        .where(and(inArray(attachments.messageId, lastIds), isNull(attachments.deletedAt)))
+        .all()
+    : [];
+  const fileExcerpt = (messageId: string) => {
+    const files = lastFiles.filter((f) => f.messageId === messageId);
+    if (!files.length) return "";
+    if (files.every((f) => f.kind === "image")) return files.length > 1 ? `📷 ${files.length} photos` : "📷 Photo";
+    if (files[0].kind === "audio") return "🎤 Voice message";
+    return files.length > 1 ? `📎 ${files.length} files` : `📎 ${files[0].name}`;
+  };
   const lastById = new Map(lastRows.map((m) => [m.id, m]));
   return rows.map((row) => {
     const last = row.lastMessageId ? lastById.get(row.lastMessageId) : undefined;
@@ -51,7 +66,7 @@ export async function conversationSummaries(
       last
         ? {
             authorName: authors.get(last.authorId)?.name ?? "Former member",
-            excerpt: last.deletedAt ? "Message deleted" : excerpt(last.body, 90),
+            excerpt: last.deletedAt ? "Message deleted" : excerpt(last.body, 90) || fileExcerpt(last.id),
             mine: last.authorId === actor.id,
           }
         : null,
@@ -90,6 +105,7 @@ function toSummary(
       : null,
     memberCount: row.memberCount,
     canPost,
+    avatarVersion: c.avatarKey && c.avatarUpdatedAt ? c.avatarUpdatedAt.getTime() : null,
   };
 }
 

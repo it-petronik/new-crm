@@ -203,18 +203,24 @@ export default function QuickAdd({
           </div>
         )}
 
-        {/* DialogActions portals its children into the dialog footer, which
-            places them outside this <form> in the DOM. An implicit submit
-            button therefore would not submit, so both actions call save
-            directly. Enter still works: the form's onSubmit is intact. */}
-        <DialogActions>
-          <Button className="secondary" type="button" disabled={busy} onClick={() => void save(true)}>
-            Save and add details
-          </Button>
-          <Button className="primary" type="button" disabled={busy} onClick={() => void save(false)}>
-            <Plus size={16} /> {busy ? "Saving…" : `Save ${profile.noun.toLowerCase()}`}
-          </Button>
-        </DialogActions>
+        {/* DialogActions portals into the dialog footer, outside this <form>
+            in the DOM, so the actions call save directly rather than relying
+            on an implicit submit. Enter still works: onSubmit is intact. */}
+        <DialogActions
+          pending={busy}
+          secondary={
+            <Button className="secondary" type="button" disabled={busy} onClick={() => void save(true)}>
+              Save and add details
+            </Button>
+          }
+          primary={{
+            label: `Save ${profile.noun.toLowerCase()}`,
+            pendingLabel: "Saving…",
+            icon: <Plus size={16} aria-hidden="true" />,
+            pending: busy,
+            onClick: () => save(false),
+          }}
+        />
       </form>
     </Dialog>
   );

@@ -45,6 +45,12 @@ export const people: TestPerson[] = [
   // DM targets for the rate-limit test only, so exhausting the limit never
   // gives anyone else's test an unexpected conversation.
   ...range(32).map((i) => person(`rl${i}`, `Rana Limit${i}`, ["Petronik"], [])),
+  // Collaboration V2 suites.
+  ...range(30).map((i) => person(`v${i}`, `Vera Two${i}`, ["Petronik"], [])),
+  ...range(4).map((i) => person(`vd${i}`, `Vic Dubai${i}`, ["Petronik"], ["Dubai"])),
+  ...range(4).map((i) => person(`vf${i}`, `Val Afrilube${i}`, ["Afrilube"], [])),
+  // V2 browser suites.
+  ...range(16).map((i) => person(`w${i}`, `Wes Browser${i}`, ["Petronik"], [])),
 ];
 
 export const byKey = (key: string) => {

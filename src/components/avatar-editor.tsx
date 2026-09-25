@@ -110,10 +110,7 @@ function Cropper({
           onChange={(event) => setZoom(Number(event.target.value))}
         />
       </label>
-      <DialogActions>
-        {/* The shared dialog already supplies Close, so only Save is added. */}
-        <Button className="primary" disabled={!image} onClick={save}>Save picture</Button>
-      </DialogActions>
+      <DialogActions primary={{ label: "Save picture", disabled: !image, onClick: save }} />
     </>
   );
 }

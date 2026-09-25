@@ -110,6 +110,13 @@ test("signing out ends live delivery on the next event after revalidation", asyn
   const [owner, member] = await Promise.all(["pg28", "pg29"].map(Client.login));
   const room = await owner.createRoom({ members: ["pg29"] });
   const ws = await openSocket(member.cookie);
+  // A real client pings every 45 s; keep this one alive the same way, so it
+  // is ended by session revalidation (4401), not pruned as a dead tab.
+  const alive = setInterval(() => {
+    try {
+      ws.ws.send("ping");
+    } catch {}
+  }, 1000);
   // Sign out: the session row is deleted, the socket is still open.
   expect((await member.request("DELETE", "/api/auth")).status).toBe(200);
   // Within the revalidation window the hub has not re-checked yet; the
@@ -118,5 +125,6 @@ test("signing out ends live delivery on the next event after revalidation", asyn
   await new Promise((r) => setTimeout(r, 62_000));
   await owner.send(room.id, "after sign-out");
   expect(await ws.closed).toBe(4401);
+  clearInterval(alive);
   expect(ws.events.some((e) => e.type === "message.created" && e.message.body === "after sign-out")).toBe(false);
 });
