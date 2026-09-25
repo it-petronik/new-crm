@@ -43,6 +43,13 @@
       "when": 1790353536942,
       "tag": "0005_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1790369706817,
+      "tag": "0006_meetings",
+      "breakpoints": true
     }
   ]
 }

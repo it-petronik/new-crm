@@ -22,6 +22,7 @@ import { RoomAvatar } from "./room-avatar";
 import type { PresenceView } from "@/lib/collab";
 import Details from "./details";
 import { useOverflowFade } from "@/lib/use-overflow-fade";
+import { useConversationMeetings } from "@/lib/meeting-client";
 import { BrowseRoomsDialog, NewDirectDialog, NewRoomDialog } from "./dialogs";
 import { MessageText, listStamp } from "./message-text";
 
@@ -58,15 +59,10 @@ function writeSelection(id: string | null) {
  * this reaches people who never open it.
  */
 /*
- * MEETINGS (V3) — design notes, not implemented.
- *
- * The thread header keeps an actions group (.collab-thread-actions) whose
- * start is reserved for [voice call] [video meeting]; adding them needs no
- * layout change. Recommended architecture is documented in
- * docs/COLLABORATION-MEETINGS.md: a managed SFU + TURN provider (Cloudflare
- * Realtime/Calls or LiveKit first), with our Worker issuing short-lived,
- * per-conversation join tokens only after the same conversationAccess check
- * every other Collaboration route uses. No raw mesh WebRTC.
+ * MEETINGS (V3): the header's call / meeting actions, the in-progress banner
+ * and the details panel's Meetings section come from components/meetings;
+ * the meeting itself renders above the whole workspace (MeetingLayer).
+ * Architecture and setup: docs/COLLABORATION-MEETINGS.md.
  */
 
 const FOCUS_KEY = "enercore-collab-focus";
@@ -125,6 +121,8 @@ export default function CollaborationHub({
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [jumpTo, setJumpTo] = useState<string | null>(null);
+  // The open conversation's meetings: header actions, banner and details.
+  const meetings = useConversationMeetings(selectedId, enabled);
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
   const [joinable, setJoinable] = useState<DiscoverableRoom | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -263,7 +261,7 @@ export default function CollaborationHub({
       // Presence, typing and reactions change nothing in the list.
       if (event.type === "presence" || event.type === "typing" || event.type === "reaction") return;
       // CRM-wide notifications share the channel but are not about the list.
-      if (event.type.startsWith("notification.")) return;
+      if (event.type.startsWith("notification.") || event.type.startsWith("meeting.")) return;
       const id = event.conversationId;
       if (event.type === "message.created") {
         const m = event.message;
@@ -554,6 +552,7 @@ export default function CollaborationHub({
             onToggleFocus={toggleFocus}
             onMessagePerson={(userId) => void messagePerson(userId)}
             onManageAccess={onManageAccess}
+            meetings={meetings.meetings}
           />
         ) : joinable ? (
           <div className="collab-empty collab-join">
@@ -609,6 +608,7 @@ export default function CollaborationHub({
           }}
           onMessage={(userId) => void messagePerson(userId)}
           onManageAccess={onManageAccess}
+          meetings={meetings.meetings}
         />
       )}
 

@@ -363,9 +363,22 @@ function ensurePresenceChannel() {
   if (presenceSubscribed) return;
   presenceSubscribed = true;
   const channel = live();
+  let meetingRefresh: ReturnType<typeof setTimeout> | null = null;
   channel.subscribe((event) => {
+    // Someone joined or left a meeting this person can see: "In a meeting"
+    // may have changed for people already shown, so refresh them (coalesced).
+    if (event.type.startsWith("meeting.")) {
+      if (meetingRefresh) clearTimeout(meetingRefresh);
+      meetingRefresh = setTimeout(() => fetchPresence([...presenceMap.keys()]), 800);
+      return;
+    }
     if (event.type !== "presence") return;
-    presenceMap.set(event.userId, { status: event.status, lastSeenAt: event.lastSeenAt });
+    const previous = presenceMap.get(event.userId);
+    presenceMap.set(event.userId, {
+      status: event.status,
+      lastSeenAt: event.lastSeenAt,
+      inMeeting: event.status === "offline" ? false : previous?.inMeeting,
+    });
     notifyPresence();
   });
   channel.onReconnect(() => fetchPresence([...presenceMap.keys()]));
@@ -403,6 +416,7 @@ export function usePresence(ids: string[], enabled = true) {
  */
 export function presenceLabel(view: PresenceView | undefined) {
   if (!view) return "";
+  if (view.inMeeting && view.status !== "offline") return "In a meeting";
   if (view.status === "online") return "Online";
   if (view.status === "away") return "Away";
   if (!view.lastSeenAt) return "Offline";

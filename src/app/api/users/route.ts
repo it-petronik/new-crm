@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { notifyAccount } from "@/lib/notify";
+import { evictFromMeetings } from "@/lib/meeting-service";
 import { z } from "zod";
 import { hashPassword } from "@/lib/password";
 import { getDb } from "@/lib/db";
@@ -191,6 +192,9 @@ export async function PATCH(request: Request) {
       },
       after: changes,
     });
+    // Deactivated or moved out of scope: disconnected from any meeting they
+    // may no longer read (a fresh join token is already refused).
+    await evictFromMeetings(db, body.id);
     // The person is told what happened to their account, never how to
     // exploit it: no roles of others, no tokens. They read it on their
     // next sign-in (their sessions were just revoked).

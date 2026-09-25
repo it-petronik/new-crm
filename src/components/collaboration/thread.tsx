@@ -30,6 +30,8 @@ import { Button, Dialog, DialogActions, DialogPresence } from "../ui/controls";
 import { Skeleton } from "../ui/skeleton";
 import { Avatar } from "../avatar";
 import Composer, { type ComposerHandle } from "./composer";
+import { MeetingActions, MeetingBanner } from "../meetings/meeting-controls";
+import type { MeetingView } from "@/lib/meetings";
 import { Lightbox, MessageAttachments, PdfPreview, type LightboxItem } from "./attachments";
 import { ReactionChips, ReactionPicker } from "./reactions";
 import { PersonAvatar, ProfilePopover } from "./presence";
@@ -59,6 +61,7 @@ export default function Thread({
   onToggleFocus,
   onMessagePerson,
   onManageAccess,
+  meetings,
 }: {
   conversation: ConversationSummary;
   members: ConversationMemberView[];
@@ -74,6 +77,8 @@ export default function Thread({
   onToggleFocus: () => void;
   onMessagePerson: (userId: string) => void;
   onManageAccess?: () => void;
+  /** This conversation's meetings (live, upcoming, recent). */
+  meetings: MeetingView[];
 }) {
   const composer = useRef<ComposerHandle>(null);
   const [typers, setTypers] = useState<Map<string, { name: string; until: number }>>(new Map());
@@ -545,10 +550,10 @@ export default function Thread({
                   .join(" · ")}
           </p>
         </div>
-        {/* Header actions. Future call controls ([voice call] [video
-            meeting]) slot in at the start of this group without changing
-            the layout; see docs in collaboration-hub.tsx. */}
+        {/* Header actions: calls / meetings first, then live state, focus
+            and details. */}
         <div className="collab-thread-actions">
+          <MeetingActions conversation={conversation} meetings={meetings} />
           <span className={`collab-live is-${live}`} role="img" title={liveLabel(live)} aria-label={liveLabel(live)} />
           <Button
             className="icon-button collab-focus-toggle"
@@ -570,6 +575,7 @@ export default function Thread({
         </div>
       </header>
 
+      <MeetingBanner meetings={meetings} />
       {conversation.archived && (
         <div className="collab-banner" role="status">
           <Archive size={14} aria-hidden="true" /> This room is archived.

@@ -9,6 +9,7 @@
  */
 
 import type { NotificationEvent } from "./notification-types";
+import type { MeetingEvent } from "./meetings";
 
 export const MESSAGE_MAX = 4000;
 export const ROOM_NAME_MIN = 2;
@@ -30,7 +31,16 @@ export type Person = { id: string; name: string; role: string };
 /* ------------------------------------------------------------------- V2 */
 
 export type PresenceStatus = "online" | "away" | "offline";
-export type PresenceView = { status: PresenceStatus; lastSeenAt: string | null };
+export type PresenceView = {
+  status: PresenceStatus;
+  lastSeenAt: string | null;
+  /**
+   * In a live meeting right now. Never says WHICH meeting: that is only
+   * visible to readers of the meeting's conversation, through the meeting
+   * itself.
+   */
+  inMeeting?: boolean;
+};
 
 export type AttachmentKind = "image" | "pdf" | "document" | "audio";
 export type AttachmentView = {
@@ -176,8 +186,10 @@ export type CollabEvent =
   | { type: "reaction"; conversationId: string; messageId: string; reactions: ReactionView[] }
   // Presence is about a person, not a conversation; conversationId is "".
   | { type: "presence"; conversationId: ""; userId: string; status: PresenceStatus; lastSeenAt: string | null }
-  // The same channel carries the CRM-wide notification inbox.
-  | NotificationEvent;
+  // The same channel carries the CRM-wide notification inbox…
+  | NotificationEvent
+  // …and meeting signalling (the media itself goes through the provider).
+  | MeetingEvent;
 
 /* ------------------------------------------------------------------ text */
 

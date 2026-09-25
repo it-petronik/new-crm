@@ -124,6 +124,8 @@ import { formatMoney, formatMoneyCompact, totalsByCurrency, describeTotals } fro
 import { recentRecords, rememberRecord, pinnedIds, togglePin, resolveVisible } from "@/lib/workspace-prefs";
 import { NotificationsPage, NotificationToasts } from "./notification-center";
 import AssignDialog from "./assign-dialog";
+import MeetingLayer from "./meetings/meeting-layer";
+import { openPrejoin } from "@/lib/meeting-client";
 import { useNotifications, claimAlert, showDesktop } from "@/lib/notifications-client";
 import { badgeCount, moduleForKind, titleWithCount, type NotificationView, type NotificationPreferences } from "@/lib/notification-types";
 import Link from "next/link";
@@ -558,6 +560,8 @@ export default function Workspace({
       const query = `?c=${encodeURIComponent(target.conversationId)}${target.messageId ? `&m=${encodeURIComponent(target.messageId)}` : ""}`;
       return openView("collaboration", query);
     }
+    // A meeting opens its pre-join screen; joining re-checks access.
+    if (target.kind === "meeting") return openPrejoin(target.meetingId);
     let record = data.records.find((r) => r.id === target.recordId && !r.deletedAt) ?? null;
     if (!record) {
       try {
@@ -589,6 +593,8 @@ export default function Workspace({
     if (!(await claimAlert(actor.id, n.id))) return;
     const t = n.target;
     if (document.visibilityState === "visible") {
+      // A ringing call already shows its own answer card.
+      if (n.type === "meeting.invited") return;
       const place = placeRef.current;
       const inConversation =
         t?.kind === "conversation" &&
@@ -1775,6 +1781,7 @@ export default function Workspace({
           />
         )}
       </DialogPresence>
+      {!preview && <MeetingLayer meId={actor.id} />}
       <NotificationToasts
         toasts={alerts}
         preferences={inbox.preferences}

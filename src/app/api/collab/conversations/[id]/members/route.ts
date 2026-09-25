@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { evictFromMeetings } from "@/lib/meeting-service";
 import { inRoomScope, isId, ROOM_MEMBER_MAX } from "@/lib/collab";
 import {
   CollabError,
@@ -143,6 +144,8 @@ export function DELETE(request: Request, { params }: Params) {
 
     await publish([userId], { type: "conversation.removed", conversationId });
     await announceChange(db, conversationId);
+    // No longer a member: disconnected from this conversation's meeting too.
+    await evictFromMeetings(db, userId, conversationId);
     return json({ ok: true });
   });
 }

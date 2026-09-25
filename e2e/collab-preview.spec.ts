@@ -28,3 +28,17 @@ test("the Collaboration page explains preview instead of breaking", async ({ pag
   await expect(page).toHaveURL(/\/collaboration/);
   await expect(page.getByText("Collaboration is part of the live workspace.")).toBeVisible();
 });
+
+test("meetings refuse preview mode: no creation, no join tokens, no provider webhook", async ({ request, baseURL }) => {
+  const origin = { Origin: baseURL!, "Content-Type": "application/json" };
+  const id = "0000000001aaaaaaaaaaaa";
+  const calls = [
+    request.get(`/api/collab/conversations/${id}/meetings`),
+    request.post(`/api/collab/conversations/${id}/meetings`, { headers: origin, data: { mode: "now", media: "video" } }),
+    request.get(`/api/collab/meetings/${id}`),
+    request.post(`/api/collab/meetings/${id}/join`, { headers: origin, data: {} }),
+    request.post(`/api/collab/meetings/${id}/end`, { headers: origin, data: {} }),
+  ];
+  for (const response of await Promise.all(calls)) expect(response.status()).toBe(409);
+  expect((await request.post("/api/meetings/webhook", { data: "{}" })).status()).toBe(404);
+});

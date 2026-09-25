@@ -79,3 +79,31 @@ export const businessStampShort = (at: Date | string) => {
 /** Milliseconds until the next minute turns, so a clock ticks on the minute. */
 export const msToNextMinute = (at: Date = new Date()) =>
   60_000 - (at.getSeconds() * 1000 + at.getMilliseconds());
+
+/**
+ * A business date and time (`2026-09-25`, `14:30`) as an exact instant,
+ * read as Dubai time. The zone's offset is asked of Intl for that moment,
+ * never assumed, so the result is right whatever the reader's device says.
+ */
+export function businessInstant(date: string, time: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) return null;
+  const asUtc = new Date(`${date}T${time}:00Z`);
+  if (Number.isNaN(asUtc.getTime())) return null;
+  const offset = (at: Date) => {
+    const name = new Intl.DateTimeFormat("en-US", { timeZone: BUSINESS_TIME_ZONE, timeZoneName: "longOffset" })
+      .formatToParts(at)
+      .find((p) => p.type === "timeZoneName")?.value ?? "GMT";
+    const m = /GMT([+-])(\d{2}):?(\d{2})?/.exec(name);
+    return m ? (m[1] === "-" ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3] ?? 0)) : 0;
+  };
+  // Local wall time minus the zone's offset at (approximately) that moment.
+  const first = new Date(asUtc.getTime() - offset(asUtc) * 60_000);
+  return new Date(asUtc.getTime() - offset(first) * 60_000);
+}
+
+/** The business `HH:MM` of an instant (24-hour, for a time input). */
+export function businessClock(at: Date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: BUSINESS_TIME_ZONE, hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(at);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "00";
+  return `${get("hour")}:${get("minute")}`;
+}

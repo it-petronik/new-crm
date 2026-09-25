@@ -45,6 +45,18 @@ const chunks = <T>(list: T[], size = CHUNK) =>
 
 export const RETENTION_DAYS = 120;
 
+/**
+ * Ids are time-ordered, and the inbox is "newest first" by id. Two
+ * notifications created in the same millisecond would otherwise share a
+ * time prefix and order by their random suffix, so each id takes a
+ * strictly later millisecond than the last one this instance issued.
+ */
+let lastIdTime = 0;
+function nextIdTime(now: number) {
+  lastIdTime = Math.max(now, lastIdTime + 1);
+  return lastIdTime;
+}
+
 export function toPerson(row: UserRow): Person {
   return {
     id: row.id,
@@ -88,11 +100,11 @@ export async function createNotifications(db: Database, drafts: NotificationDraf
   const inserted: NotificationRow[] = [];
   for (const group of chunks(drafts, 10)) {
     const rows = await Promise.all(
-      group.map((d, i) =>
+      group.map((d) =>
         db
           .insert(notifications)
           .values({
-            id: messageId(now + inserted.length + i),
+            id: messageId(nextIdTime(now)),
             recipientId: d.recipientId,
             actorId: d.actorId,
             type: d.type,
@@ -141,7 +153,14 @@ export async function createNotifications(db: Database, drafts: NotificationDraf
  */
 async function redact(db: Database, actor: Actor, rows: NotificationView[], source: NotificationRow[]) {
   const recordIds = [...new Set(source.filter((r) => targetFor(r)?.kind === "record").map((r) => r.entityId))];
-  const conversationIds = [...new Set(source.filter((r) => r.entityType === "conversation").map((r) => r.conversationId ?? r.entityId))];
+  // Meetings inherit their conversation's access, so they are checked the same way.
+  const conversationIds = [
+    ...new Set(
+      source
+        .filter((r) => r.entityType === "conversation" || r.entityType === "meeting")
+        .map((r) => r.conversationId ?? r.entityId),
+    ),
+  ];
   const messageIds = [...new Set(source.map((r) => r.messageId).filter((id): id is string => !!id))];
 
   const readable = new Set<string>();
@@ -176,7 +195,7 @@ async function redact(db: Database, actor: Actor, rows: NotificationView[], sour
       !target ||
       target.kind === "profile" ||
       (target.kind === "record" && readable.has(target.recordId)) ||
-      (target.kind === "conversation" && reachable.has(target.conversationId));
+      ((target.kind === "conversation" || target.kind === "meeting") && reachable.has(target.conversationId));
     if (!allowed) return { ...item, body: "No longer available to you.", target: null, needsAction: false };
     if (row.messageId && deletedMessages.has(row.messageId)) return { ...item, body: "Message deleted" };
     return item;

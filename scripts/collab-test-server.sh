@@ -25,6 +25,12 @@ npx wrangler d1 migrations apply enercore-crm --local --config "$CONFIG" --persi
 npx tsx scripts/collab-test-seed.ts > "$PERSIST/seed.sql"
 npx wrangler d1 execute enercore-crm --local --config "$CONFIG" --persist-to "$PERSIST/state" --file "$PERSIST/seed.sql" > /dev/null
 
-exec npx wrangler dev --local --port 8788 --config "$CONFIG" \
+# A LiveKit dev server on this machine for the meeting tests (its webhook
+# calls the Worker below). Stopped with this script.
+livekit-server --config scripts/livekit-dev.yaml > "$PERSIST/livekit.log" 2>&1 &
+LIVEKIT_PID=$!
+trap 'kill $LIVEKIT_PID 2>/dev/null' EXIT INT TERM
+
+npx wrangler dev --local --port 8788 --config "$CONFIG" \
   --persist-to "$PERSIST/state" \
   --show-interactive-dev-session=false

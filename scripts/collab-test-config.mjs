@@ -38,6 +38,12 @@ const test = {
     COLLAB_PRESENCE_HEARTBEAT_MS: "1500",
     COLLAB_PRESENCE_STALE_MS: "5000",
     COLLAB_PRESENCE_TTL_MS: "6000",
+    // Meetings against a LiveKit dev server on this machine, started by
+    // collab-test-server.sh. "devkey"/"secret" are the dev server's public
+    // defaults, not credentials; production reads its own Worker secrets.
+    LIVEKIT_URL: "ws://127.0.0.1:7880",
+    LIVEKIT_API_KEY: "devkey",
+    LIVEKIT_API_SECRET: "secret-for-local-livekit-dev-server-only",
   },
 };
 if (test.vars.APP_MODE !== "production") throw new Error("env.live must be production mode");

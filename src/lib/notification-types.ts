@@ -17,6 +17,8 @@ export type NotificationPriority = "normal" | "important" | "urgent";
 export type NotificationTarget =
   | { kind: "record"; recordKind: Kind; recordId: string }
   | { kind: "conversation"; conversationId: string; messageId: string | null }
+  // Opens the meeting's pre-join screen (never joins by itself).
+  | { kind: "meeting"; meetingId: string; conversationId: string }
   | { kind: "profile" };
 
 export type NotificationView = {
@@ -77,6 +79,8 @@ export function targetFor(row: {
 }): NotificationTarget | null {
   if (RECORD_KINDS.includes(row.entityType))
     return { kind: "record", recordKind: row.entityType as Kind, recordId: row.entityId };
+  if (row.entityType === "meeting" && row.conversationId)
+    return { kind: "meeting", meetingId: row.entityId, conversationId: row.conversationId };
   if (row.entityType === "conversation")
     return { kind: "conversation", conversationId: row.conversationId ?? row.entityId, messageId: row.messageId };
   if (row.entityType === "account") return { kind: "profile" };
@@ -95,4 +99,6 @@ export const ACTION_TYPES = new Set([
   "payment.overdue",
   "followup.overdue",
   "chat.mention",
+  "meeting.invited",
+  "meeting.reminder",
 ]);

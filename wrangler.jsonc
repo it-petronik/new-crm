@@ -93,7 +93,9 @@
 			// 04:00 UTC (08:00 GST): notification reminders — follow-ups due
 			// or overdue, expiring quotations, overdue payments, late
 			// shipments and tickets — plus notification retention.
-			"triggers": { "crons": ["23 2 * * *", "0 4 * * *"] }
+			// Every 5 minutes: "meeting starts in 10 minutes" reminders and
+			// closing meetings everyone has left.
+			"triggers": { "crons": ["23 2 * * *", "0 4 * * *", "*/5 * * * *"] }
 		}
 	}
 }

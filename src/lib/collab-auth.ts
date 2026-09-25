@@ -68,6 +68,7 @@ export const RATE_LIMITS = {
   upload: { max: 60, windowMs: 10 * 60_000, error: "You've uploaded a lot of files recently. Wait a few minutes and try again." },
   reaction: { max: 120, windowMs: 60_000, error: "Too many reactions at once. Wait a moment." },
   avatar: { max: 10, windowMs: 60 * 60_000, error: "The room image has been changed a lot recently. Try again later." },
+  meeting: { max: 20, windowMs: 60 * 60_000, error: "You've started a lot of meetings recently. Try again later." },
 } as const;
 
 export async function rateLimit(db: Database, actor: Actor, kind: keyof typeof RATE_LIMITS) {

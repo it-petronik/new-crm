@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { LogOut, MoreHorizontal, Settings2, UserPlus, X } from "lucide-react";
+import { MeetingsSection } from "../meetings/meeting-controls";
+import type { MeetingView } from "@/lib/meetings";
 import * as Popover from "@radix-ui/react-popover";
 import type { ConversationDetail, ConversationMemberView } from "@/lib/collab";
 import type { Actor } from "@/lib/domain";
@@ -30,7 +32,9 @@ export default function Details({
   onLeft,
   onMessage,
   onManageAccess,
+  meetings,
 }: {
+  meetings: MeetingView[];
   detail: ConversationDetail | null;
   actor: Actor;
   onClose: () => void;
@@ -124,6 +128,7 @@ export default function Details({
                 c.counterpart && <span className="collab-profile-status">{presenceLabel(presenceOf(c.counterpart.id))}</span>
               )}
             </div>
+            <MeetingsSection meetings={meetings} conversation={c} meId={actor.id} />
             <DetailsMedia conversationId={c.id} />
           </>
         ) : (
@@ -269,6 +274,7 @@ export default function Details({
                 })}
               </ul>
             </section>
+            <MeetingsSection meetings={meetings} conversation={c} meId={actor.id} />
             <DetailsMedia conversationId={c.id} />
           </>
         )}

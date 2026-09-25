@@ -1,63 +1,106 @@
-# Meetings (V3) — recommended architecture
+# Collaboration Meetings (V3)
 
-Not implemented. This records the design so V3 needs no redesign of V2.
+Voice calls, video meetings and screen sharing inside Collaboration, on a
+managed SFU with TURN (LiveKit Cloud). Enercore never carries audio or
+video; it decides **who may join**, issues short-lived join tokens, and
+shows the experience.
 
-## Requirements
+## Provider
 
-- 1-to-1 audio and video calls, and group meetings;
-- screen sharing, mute and camera controls, a participant list;
-- join and leave, and meeting links;
-- possibly recording later.
+LiveKit Cloud. It gives Enercore:
 
-It must work on desktop and mobile browsers, and be reliable across
-corporate NATs and firewalls.
+- a managed SFU with TURN;
+- simulcast and adaptive streams;
+- screen share;
+- browser SDK and React hooks;
+- server-signed JWTs that Workers can mint with WebCrypto;
+- webhooks;
+- optional recording (Egress) later.
 
-## Why not mesh WebRTC
+Raw mesh WebRTC is not used.
 
-Peer-to-peer mesh sends every participant's media to every other participant.
-It breaks down beyond three or four people, drains mobile devices, and fails
-behind symmetric NAT without TURN. Production group meetings need three parts:
+## Access
 
-- **SFU:** a selective forwarding unit, so each client uploads once and the
-  server forwards the streams;
-- **TURN:** relay for restrictive networks;
-- **signalling:** room state, offers and answers, and presence.
+A meeting belongs to one conversation (room or DM) and has no rules of its
+own. Every endpoint resolves the meeting, then runs `requireRead` on its
+conversation. That checks:
 
-## Options
+- a session for an active account;
+- current membership;
+- company/branch scope.
 
-| Option | Fit | Notes |
-| --- | --- | --- |
-| **Cloudflare Realtime (Calls/SFU + TURN)** | Best infrastructure fit | Runs where the CRM already runs. SFU and TURN are managed; we'd build the meeting UI and signalling (our Durable Objects already do realtime). Check the current free allowance and pricing before committing. |
-| **LiveKit (Cloud or self-hosted)** | Best developer experience | Open-source SFU with good React SDKs, screen share, recording (Egress) and server-issued access tokens. There's a free Cloud tier to start, and it can be self-hosted later. |
-| Daily | Fastest to ship | Hosted, with a prebuilt UI available, and a generous free tier. Less control, and a third party processes the media. |
-| Jitsi | Self-hosted, free | Heavy to operate well; access control is harder to integrate. |
+Anything else is a 404. `POST /api/collab/meetings/:id/join` issues a
+10-minute, single-room, single-person token (identity = user id) only after
+those checks. Removing someone from a room, deactivating them or moving
+them out of scope also disconnects them from a live meeting
+(`evictFromMeetings`), and they cannot obtain a new token.
 
-**Recommendation:**
+## Data (migration 0006, additive)
 
-1. Prototype with **LiveKit Cloud** for speed and SDK quality, keeping its token
-   server inside our Worker.
-2. Evaluate **Cloudflare Realtime** in parallel. If its SDK and pricing hold up,
-   prefer it for the single-vendor footprint.
-3. Either way, provider-specific code stays behind one small module, so the
-   choice can be reversed.
+- `Meeting`: conversation, organiser, title, instant/scheduled, video/voice,
+  status (scheduled/live/ended/cancelled), times, a random provider room
+  name, `reminderSentAt`.
+- `MeetingAttendance`: who joined and left. It drives history and
+  "In a meeting".
 
-## Access control (non-negotiable)
+No media state is stored.
 
-- Meetings belong to a conversation: `/api/collab/conversations/:id/meeting`.
-- The Worker issues a short-lived join token (at most 10 minutes, single room,
-  identity equal to the user id) **only** after the same `conversationAccess`
-  check every Collaboration route uses. That means an active account, current
-  membership, and company/branch scope.
-- Meeting links carry no power by themselves: opening one still requires sign-in
-  and the access check. Removed members can't obtain new tokens; kicking a
-  participant also revokes them at the SFU.
-- "Meeting started" and "ended" events use the existing realtime audience.
-- The provider sees media and display names only, never CRM data.
+## Flow
 
-## UI slot
+1. **Start.** Room → Start meeting (video / voice / schedule). DM → Voice call
+   / Video call. One live meeting per conversation: starting while one
+   runs opens that one.
+2. **Signal.** `meeting.started` / `.updated` / `.ended` go to readers of the
+   conversation. `meeting.invited` rings the other side of a DM call.
+   Notifications cover:
+   - started;
+   - scheduled;
+   - calling you;
+   - starts in 10 minutes (cron `*/5`).
 
-- The thread header's `.collab-thread-actions` group is where [voice call] and
-  [video meeting] go, before the focus and details toggles. No layout change is
-  needed.
-- A meeting opens as its own full-viewport surface, like focus mode, with the
-  thread available alongside it.
+   None of them go to the person who acted.
+3. **Pre-join.** Camera preview, device choice, mic level, on/off toggles.
+   Nothing connects until **Join**.
+4. **In the meeting.**
+   - stage (screen share, or the active speaker in speaker view) and a
+     responsive grid;
+   - controls: mic, camera, flip (phones), share, people, chat, more
+     (layout, devices, end for everyone), leave;
+   - chat is the conversation itself;
+   - host mute/remove goes through the server.
+5. **End.**
+   - the organiser, a room admin or either side of a call can end it for
+     everyone;
+   - LiveKit's `room_finished` webhook also ends it;
+   - the sweep closes meetings idle for 10 minutes or running over 12 hours.
+
+## Setup (production)
+
+1. Create a LiveKit Cloud project and note its URL (`wss://<project>.livekit.cloud`).
+2. Create an API key and secret for it.
+3. Set the Worker secrets. They never go in git, D1, `NEXT_PUBLIC_*` or the
+   client:
+
+   ```
+   npx wrangler secret put LIVEKIT_URL --env live
+   npx wrangler secret put LIVEKIT_API_KEY --env live
+   npx wrangler secret put LIVEKIT_API_SECRET --env live
+   ```
+
+4. In the LiveKit project, add the webhook
+   `https://crm.enercore.ae/api/meetings/webhook`. It is signed with the
+   same key, and Enercore verifies the signature and body hash.
+5. Apply migration 0006 and deploy (this adds the `*/5` cron).
+
+Without these settings, meetings show "Meetings aren't set up yet". Preview
+never has meetings.
+
+## Recording (not implemented)
+
+Add it later through LiveKit Egress. It must have:
+
+- an explicit on-screen recording indicator for everyone;
+- a start/stop limited to managers;
+- a storage decision (for example the private R2 bucket);
+- a retention policy;
+- recordings served only through the same conversation access check.

@@ -12,21 +12,23 @@ const config: NextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           {
             key: "Permissions-Policy",
-            // Voice notes record from this site's own pages; no embedded frame
-            // or other origin may use the microphone, and camera/geolocation
-            // stay off entirely.
-            value: "camera=(), microphone=(self), geolocation=()",
+            // Voice notes and meetings use the microphone, meetings the camera
+            // and screen sharing — from this site's own pages only; no
+            // embedded frame or other origin may. Geolocation stays off.
+            value: "camera=(self), microphone=(self), display-capture=(self), geolocation=()",
           },
           {
             key: "Content-Security-Policy",
-            // Deliberately no third-party script or connect origins. Cloudflare
+            // Deliberately no third-party scripts. Cloudflare
             // Web Analytics is not used by this app; the beacon seen in the
             // console (static.cloudflareinsights.com) is injected by the
             // zone's automatic Web Analytics setting and is correctly blocked
             // here. Turn that injection off in the Cloudflare dashboard rather
-            // than widening this policy.
+            // than widening this policy. The only third-party connections are
+            // the meeting provider's own origins (LiveKit Cloud signalling
+            // and region discovery); media flows over WebRTC, not fetch.
             value:
-              "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self'; connect-src 'self' wss://crm.enercore.ae; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+              "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self'; connect-src 'self' wss://crm.enercore.ae wss://*.livekit.cloud https://*.livekit.cloud; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
           },
         ],
       },

@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { sqliteTable, text, integer, index, uniqueIndex, primaryKey } from "drizzle-orm/sqlite-core";
 
 /**
@@ -411,7 +412,73 @@ export const notificationPreferences = sqliteTable("NotificationPreference", {
   updatedAt: integer("updatedAt", { mode: "timestamp_ms" }).notNull(),
 });
 
+/* ------------------------------------------------------------------------
+ * Collaboration Meetings (V3) — additive only.
+ *
+ * A meeting belongs to one conversation and inherits its access: nobody can
+ * join a meeting they could not read the conversation of. Audio and video
+ * never touch D1; the managed provider (LiveKit) carries the media and holds
+ * the live room state. These rows are only what the CRM needs to show and
+ * authorise: what exists, when, and who took part.
+ * --------------------------------------------------------------------- */
+
+export const meetings = sqliteTable(
+  "Meeting",
+  {
+    id: text("id").primaryKey(),
+    conversationId: text("conversationId")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    createdBy: text("createdBy").notNull(),
+    title: text("title").notNull(),
+    // "instant": started now; "scheduled": has a start time.
+    kind: text("kind").$type<"instant" | "scheduled">().notNull(),
+    // What joining offers first: a voice call starts with the camera off.
+    media: text("media").$type<"video" | "voice">().notNull(),
+    status: text("status").$type<"scheduled" | "live" | "ended" | "cancelled">().notNull(),
+    scheduledAt: integer("scheduledAt", { mode: "timestamp_ms" }),
+    durationMin: integer("durationMin"),
+    startedAt: integer("startedAt", { mode: "timestamp_ms" }),
+    endedAt: integer("endedAt", { mode: "timestamp_ms" }),
+    // The provider's room name: random, never derived from anything guessable.
+    providerRoom: text("providerRoom").notNull(),
+    reminderSentAt: integer("reminderSentAt", { mode: "timestamp_ms" }),
+    createdAt: integer("createdAt", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    index("Meeting_conversationId_createdAt_idx").on(table.conversationId, table.createdAt),
+    index("Meeting_status_scheduledAt_idx").on(table.status, table.scheduledAt),
+    uniqueIndex("Meeting_providerRoom_key").on(table.providerRoom),
+    // The database itself allows at most ONE live meeting per conversation:
+    // two people pressing Start at the same moment get one meeting, never
+    // two (the loser's insert is ignored and it joins the winner's).
+    uniqueIndex("Meeting_one_live_per_conversation").on(table.conversationId).where(sql`"status" = 'live'`),
+  ],
+);
+
+/**
+ * Who took part, for history and for "In a meeting". Updated from the
+ * provider's webhooks (joined / left), never from the browser.
+ */
+export const meetingAttendance = sqliteTable(
+  "MeetingAttendance",
+  {
+    meetingId: text("meetingId")
+      .notNull()
+      .references(() => meetings.id, { onDelete: "cascade" }),
+    userId: text("userId").notNull(),
+    joinedAt: integer("joinedAt", { mode: "timestamp_ms" }).notNull(),
+    // NULL while connected.
+    leftAt: integer("leftAt", { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.meetingId, table.userId] }),
+    index("MeetingAttendance_userId_leftAt_idx").on(table.userId, table.leftAt),
+  ],
+);
+
 export type UserRow = typeof users.$inferSelect;
+export type MeetingRow = typeof meetings.$inferSelect;
 export type NotificationRow = typeof notifications.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;
 export type BusinessRecordRow = typeof businessRecords.$inferSelect;
