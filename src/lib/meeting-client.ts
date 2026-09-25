@@ -73,6 +73,7 @@ export const sessionFromGrant = (grant: JoinGrant): RoomSession => ({
   identity: grant.identity,
   host: grant.host,
   guest: false,
+  canRecord: grant.canRecord,
 });
 export const enterRoom = (meetingId: string, grant: JoinGrant, choices: JoinChoices) =>
   set({ phase: "room", meetingId, session: sessionFromGrant(grant), choices });

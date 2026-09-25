@@ -6,7 +6,13 @@ import { join } from "node:path";
 
 const signIn = async (page: Page, who: string) => {
   await page.goto("/login");
-  await page.getByRole("button", { name: new RegExp(`${who}@enercore.test`) }).click();
+  const account = page.getByRole("button", { name: new RegExp(`${who}@enercore.test`) });
+  await account.waitFor();
+  // Hydrated (a click before React attaches does nothing), then really signed
+  // in: the login page has its own h1, so wait to leave it first.
+  await page.waitForFunction(() => [...document.querySelectorAll("button")].some((b) => Object.keys(b).some((k) => k.startsWith("__react"))));
+  await account.click();
+  await page.waitForURL((url) => !url.pathname.startsWith("/login"));
   await page.getByRole("heading", { level: 1 }).first().waitFor();
 };
 

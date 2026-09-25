@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   LiveKitRoom,
   RoomAudioRenderer,
@@ -190,6 +190,19 @@ function Stage({ session, notice, setNotice }: { session: RoomSession; notice: s
   const speaking = useSpeakingParticipants();
   const [panel, setPanel] = useState<"people" | "chat" | null>(null);
   const [more, setMore] = useState(false);
+  // The More menu closes on Escape or a click anywhere outside it.
+  const moreRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!more) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMore(false);
+    const onDown = (e: PointerEvent) => !moreRef.current?.contains(e.target as Node) && setMore(false);
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onDown);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onDown);
+    };
+  }, [more]);
   const [confirm, setConfirm] = useState<"end" | "record" | null>(null);
   const [busy, setBusy] = useState(false);
   const [layout, setLayout] = useState<"gallery" | "speaker">("gallery");
@@ -468,7 +481,7 @@ function Stage({ session, notice, setNotice }: { session: RoomSession; notice: s
             <span>Chat</span>
           </Button>
         )}
-        <div className="meet-more">
+        <div className="meet-more" ref={moreRef}>
           <Button className={`meet-control${more ? " is-active" : ""}`} aria-expanded={more} aria-label="More options" onClick={() => setMore(!more)}>
             <MoreHorizontal size={20} />
             <span>More</span>
@@ -492,11 +505,17 @@ function Stage({ session, notice, setNotice }: { session: RoomSession; notice: s
                   onChange={(id) => void run("camera", () => cameras.setActiveMediaDevice(id))}
                 />
               </div>
-              {moderator && (
-                <button type="button" role="menuitem" onClick={() => (setMore(false), setConfirm("record"))}>
-                  <Circle size={16} aria-hidden="true" /> {recording ? "Stop recording" : "Record meeting"}
-                </button>
-              )}
+              {moderator &&
+                (session.canRecord || recording ? (
+                  <button type="button" role="menuitem" onClick={() => (setMore(false), setConfirm("record"))}>
+                    <Circle size={16} aria-hidden="true" /> {recording ? "Stop recording" : "Record meeting"}
+                  </button>
+                ) : (
+                  // Plainly unavailable until cloud recording storage is set up.
+                  <button type="button" role="menuitem" disabled aria-disabled="true" title="Cloud recording isn't set up for this workspace.">
+                    <Circle size={16} aria-hidden="true" /> Recording isn&apos;t set up
+                  </button>
+                ))}
               {moderator && (
                 <button type="button" role="menuitem" className="is-danger" onClick={() => (setMore(false), setConfirm("end"))}>
                   <Square size={16} aria-hidden="true" /> End meeting for everyone

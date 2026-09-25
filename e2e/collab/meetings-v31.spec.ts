@@ -350,6 +350,19 @@ test("guest in a private window: waiting room, admit, camera and mic, decline; t
   await host.page.locator(".meet-person.is-waiting", { hasText: "Dan Declined" }).getByRole("button", { name: "Decline" }).click();
   await expect(s.getByRole("heading", { name: "The host didn't let you in" })).toBeVisible({ timeout: 15_000 });
 
+  // Recording isn't configured here: plainly unavailable, never a live control.
+  const more = host.page.getByRole("button", { name: "More options" });
+  await more.click();
+  await expect(host.page.getByRole("menuitem", { name: "Recording isn't set up" })).toBeDisabled();
+  await expect(host.page.getByRole("menuitem", { name: "Record meeting" })).toHaveCount(0);
+  // The More menu closes on Escape and on a click outside it.
+  await host.page.keyboard.press("Escape");
+  await expect(host.page.locator(".meet-menu")).toHaveCount(0);
+  await more.click();
+  await expect(host.page.locator(".meet-menu")).toBeVisible();
+  await host.page.locator(".meet-stage").click({ position: { x: 5, y: 5 } });
+  await expect(host.page.locator(".meet-menu")).toHaveCount(0);
+
   // The guest leaves; the host ends it.
   await g.getByRole("button", { name: "Leave meeting" }).click();
   await expect(g.getByRole("heading", { name: "You left the meeting" })).toBeVisible();

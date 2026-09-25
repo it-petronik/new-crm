@@ -51,6 +51,7 @@ const toSession = (grant: GuestGrant): RoomSession => ({
   identity: grant.identity,
   host: false,
   guest: true,
+  canRecord: false,
 });
 
 export default function GuestJoin({ token }: { token: string }) {

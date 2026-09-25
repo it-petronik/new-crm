@@ -59,6 +59,8 @@ export type JoinGrant = {
   meeting: MeetingView;
   identity: string;
   host: boolean;
+  /** Cloud recording is configured and this person may start it. */
+  canRecord: boolean;
 };
 
 /** Realtime meeting signalling. `conversationId` is "" for a standalone meeting. */
@@ -198,6 +200,8 @@ export type RoomSession = {
   identity: string;
   host: boolean;
   guest: boolean;
+  /** Cloud recording is configured and this person may start it. */
+  canRecord: boolean;
 };
 
 export const RELATED_KINDS = ["leads", "customers", "quotations", "orders"] as const;

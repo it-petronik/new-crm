@@ -2,7 +2,7 @@ import { CollabError, collabContext, handle, json } from "@/lib/collab-auth";
 import { goLive } from "@/lib/meeting-data";
 import { meetingStarted, requireMeeting, viewFor } from "@/lib/meeting-service";
 import { joinToken } from "@/lib/livekit";
-import { providerConfig } from "@/lib/livekit-config";
+import { providerConfig, recordingSetup } from "@/lib/livekit-config";
 import { JOIN_TOKEN_TTL_S, joinable, type JoinGrant } from "@/lib/meetings";
 
 type Params = { params: Promise<{ id: string }> };
@@ -47,6 +47,7 @@ export function POST(request: Request, { params }: Params) {
       meeting: await viewFor(db, actor, row, canManage),
       identity: actor.id,
       host: canManage,
+      canRecord: canManage && !!(await recordingSetup()),
     };
     return json(grant);
   });
