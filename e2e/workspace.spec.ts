@@ -1,9 +1,19 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+
+/**
+ * The preview's default account is the MD, whose home is the executive
+ * dashboard. Its title and the Needs attention panel — which absorbed the
+ * former "Your daily focus" banner — are what mark the home as loaded.
+ */
+async function expectExecutiveHome(page: Page) {
+  await expect(page.getByRole("heading", { name: "Group dashboard", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Needs attention", level: 2 })).toBeVisible();
+}
 test("self-service retains workspace state without document navigation", async ({
   page,
 }) => {
   await page.goto("/");
-  await expect(page.getByText("Your daily focus")).toBeVisible();
+  await expectExecutiveHome(page);
   await page.getByRole("combobox", { name: "Company", exact: true }).click();
   await page.getByRole("option", { name: "PETRONIK FZCO", exact: true }).click();
   let documentRequests = 0;
@@ -51,7 +61,7 @@ test("theme persists and self-service shares workspace navigation", async ({
 }) => {
   await page.emulateMedia({ colorScheme: "light" });
   await page.goto("/");
-  await expect(page.getByText("Your daily focus")).toBeVisible();
+  await expectExecutiveHome(page);
   await page
     .getByRole("button", { name: "Switch to dark mode", exact: true })
     .click();
@@ -75,7 +85,7 @@ test("theme persists and self-service shares workspace navigation", async ({
 test("wide lead dialog fits and exits cleanly", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto("/");
-  await expect(page.getByText("Your daily focus")).toBeVisible();
+  await expectExecutiveHome(page);
   await page
     .getByRole("button", { name: "Sales pipeline", exact: true })
     .click();
@@ -95,12 +105,12 @@ test("wide lead dialog fits and exits cleanly", async ({ page }) => {
 
 test("sidebar preference and accessible custom controls", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByText("Your daily focus")).toBeVisible();
+  await expectExecutiveHome(page);
   await page
     .getByRole("button", { name: "Collapse sidebar", exact: true })
     .click();
   await page.reload();
-  await expect(page.getByText("Your daily focus")).toBeVisible();
+  await expectExecutiveHome(page);
   await expect(
     page.getByRole("button", { name: "Expand sidebar", exact: true }),
   ).toBeVisible();
@@ -133,7 +143,7 @@ test("sidebar preference and accessible custom controls", async ({ page }) => {
 test("company filter, lead creation and persistence", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByText("Interactive preview")).toBeVisible();
-  await expect(page.getByText("Your daily focus")).toBeVisible();
+  await expectExecutiveHome(page);
   await page
     .getByRole("button", { name: "Sales pipeline", exact: true })
     .click();
@@ -161,7 +171,7 @@ test("accepting a quote creates connected operational records", async ({
   page,
 }) => {
   await page.goto("/");
-  await expect(page.getByText("Your daily focus")).toBeVisible();
+  await expectExecutiveHome(page);
   await page.getByRole("button", { name: "Quotations", exact: true }).click();
   await page
     .getByRole("button", { name: /Mekong Infrastructure/ })
@@ -181,7 +191,7 @@ test("accepting a quote creates connected operational records", async ({
 test("mobile navigation and no horizontal page overflow", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
-  await expect(page.getByText("Your daily focus")).toBeVisible();
+  await expectExecutiveHome(page);
   await page.getByRole("button", { name: "Open navigation" }).click();
   await page.getByRole("button", { name: "People & HR", exact: true }).click();
   await expect(

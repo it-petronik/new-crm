@@ -19,7 +19,8 @@
     "cf:typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
     "cf:deploy:live": "opennextjs-cloudflare deploy -- --env live",
     "cf:preview:live": "opennextjs-cloudflare preview -- --env live",
-    "db:backup": "bash scripts/backup-d1.sh"
+    "db:backup": "bash scripts/backup-d1.sh",
+    "test:collab": "npm run cf:build && playwright test -c playwright.collab.config.ts"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",

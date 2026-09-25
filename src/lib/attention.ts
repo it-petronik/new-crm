@@ -352,3 +352,58 @@ export function morningBrief(
 
   return lines;
 }
+
+// ------------------------------------------------------- operational views
+
+export type OperationalView = {
+  id: string;
+  label: string;
+  detail: string;
+  records: RecordItem[];
+};
+
+/**
+ * The slices people actually open the CRM to look at.
+ *
+ * Each is a question with an answer already in memory — "what is overdue",
+ * "which quotations has nobody answered" — so it needs no saved-query backend
+ * and no hand-built filter. Empty slices are dropped: a list of questions with
+ * no answers is noise.
+ *
+ * `records` must already be permission-scoped by the caller.
+ */
+export function operationalViews(
+  actor: Actor,
+  records: RecordItem[],
+  today = today0(),
+): OperationalView[] {
+  const open = records.filter(isOpen);
+  const overdue = open.filter(
+    (r) => r.due && daysBetween(r.due.slice(0, 10), today) > 0,
+  );
+  const dueToday = open.filter((r) => r.due && r.due.slice(0, 10) === today);
+  const silentQuotes = open.filter(
+    (r) => r.kind === "quotations" && r.status === "Sent" && idleDays(r, today) >= 7,
+  );
+  const delayed = open.filter((r) => r.status === "Delayed");
+  const unpaid = open.filter((r) => r.status === "Overdue");
+  const mine = open.filter((r) => r.ownerId === actor.id);
+  const stale = staleRecords(open, today);
+  const highValue = [...open]
+    .filter((r) => (r.amount || 0) > 0)
+    .sort((a, b) => (b.amount || 0) - (a.amount || 0))
+    .slice(0, 20);
+
+  return (
+    [
+      { id: "overdue", label: "Overdue follow-ups", detail: "Past their follow-up date", records: overdue },
+      { id: "today", label: "Due today", detail: "Follow up before the day ends", records: dueToday },
+      { id: "silent-quotes", label: "Quotations awaiting response", detail: "Sent, no reply for 7+ days", records: silentQuotes },
+      { id: "delayed", label: "Delayed shipments and orders", detail: "Behind schedule", records: delayed },
+      { id: "unpaid", label: "Outstanding payments", detail: "Invoices past due", records: unpaid },
+      { id: "stale", label: "Gone quiet", detail: "No activity for longer than expected", records: stale },
+      { id: "high-value", label: "Highest value open records", detail: "By amount", records: highValue },
+      { id: "mine", label: "My records", detail: "Everything you own", records: mine },
+    ] as OperationalView[]
+  ).filter((view) => view.records.length > 0);
+}

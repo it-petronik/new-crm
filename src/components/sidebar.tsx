@@ -26,6 +26,7 @@ import {
   Bell,
   Sun,
   Keyboard,
+  MessagesSquare,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -72,6 +73,8 @@ export default function Sidebar({
   collapsed,
   mobile,
   approvalCount,
+  collabUnread = 0,
+  collabMentions = 0,
   onCollapse,
   onMobileChange,
   onNavigate,
@@ -84,6 +87,10 @@ export default function Sidebar({
   collapsed: boolean;
   mobile: boolean;
   approvalCount: number;
+  /** Unread chat messages across all conversations. */
+  collabUnread?: number;
+  /** Unread messages that mention this person. */
+  collabMentions?: number;
   onCollapse: () => void;
   onMobileChange: (open: boolean) => void;
   onNavigate: (module: Module) => void;
@@ -127,6 +134,26 @@ export default function Sidebar({
           )}
         </div>
         <nav aria-label={isMobile ? "Mobile navigation" : "Main navigation"}>
+          <Tooltip label="Collaboration" enabled={compact}>
+            <Button
+              className={`nav-item nav-item-collab ${module === "collaboration" ? "active" : ""}`}
+              onClick={() => onView("collaboration")}
+              aria-label={
+                collabUnread
+                  ? `Collaboration, ${collabUnread} unread${collabMentions ? `, ${collabMentions} mentions` : ""}`
+                  : "Collaboration"
+              }
+              aria-current={module === "collaboration" ? "page" : undefined}
+            >
+              <MessagesSquare size={19} />
+              <span className="nav-label">Collaboration</span>
+              {collabMentions > 0 ? (
+                <b className="nav-count nav-count-mention">@</b>
+              ) : collabUnread > 0 ? (
+                <b className="nav-count nav-count-subtle">{collabUnread > 99 ? "99+" : collabUnread}</b>
+              ) : null}
+            </Button>
+          </Tooltip>
           {groups.map(([title, items]) => {
             const visible = items.filter((m) => permitted.includes(m));
             if (!visible.length) return null;

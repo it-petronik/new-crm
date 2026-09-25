@@ -117,10 +117,6 @@
 
 /* Placeholders mirror the real layouts' dimensions without borrowing their
    class names, so nothing can mistake a placeholder for content. */
-.skeleton-kpis {
-  display: grid; gap: 14px;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-}
 .skeleton-kpi {
   padding: 16px; border: 1px solid var(--border); border-radius: 12px;
   min-height: 104px;
@@ -129,16 +125,16 @@
 .skeleton-day-head { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .skeleton-day-head > div { display: flex; flex-direction: column; gap: 8px; }
 .skeleton-day-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.skeleton-two-col { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
 .skeleton-attention { border-left: 3px solid var(--border); }
 @media (max-width: 720px) {
-  .skeleton-kpis, .skeleton-two-col { grid-template-columns: 1fr; }
-  .skeleton-day-head { flex-direction: column; }
+  .skeleton-kpis,   .skeleton-day-head { flex-direction: column; }
 }
 
 /* Placeholder padding matches the loaded panels exactly, so the swap is
    invisible rather than a jump. */
-.skeleton-brief, .skeleton-attention { padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; }
+/* These are .panel elements, so their padding comes from the layout system.
+   Only their internal stacking is declared here. */
+.skeleton-brief, .skeleton-attention { display: flex; flex-direction: column; gap: var(--l-row-gap, 10px); }
 .skeleton-brief-lines { display: flex; flex-direction: column; gap: 8px; }
 .skeleton-attn-row {
   display: flex; align-items: center; gap: 12px;
@@ -146,6 +142,14 @@
 }
 .skeleton-attn-row:first-child { border-top: 0; }
 .skeleton-attention .skeleton-stack { gap: 0; margin-top: 4px; }
-@media (max-width: 720px) {
-  .skeleton-brief, .skeleton-attention { padding: 16px; }
+
+/* The skeleton uses the same grids as the components it stands in for, so its
+   dimensions follow them automatically instead of being re-approximated. */
+.skeleton-two-col {
+  display: grid;
+  gap: var(--l-grid-gap, 16px);
+  grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr);
+  align-items: start;
 }
+.skeleton-two-col > * { min-width: 0; }
+@media (max-width: 1024px) { .skeleton-two-col { grid-template-columns: minmax(0, 1fr); } }

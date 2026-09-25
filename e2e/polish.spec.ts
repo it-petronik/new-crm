@@ -1,16 +1,22 @@
 import { test, expect } from "@playwright/test";
 
-test("table and card icons open the correct edit and delete dialogs", async ({ page }) => {
+test("row and card overflow menus open the correct edit and delete dialogs", async ({ page }) => {
   await page.goto("/?module=customers");
-  await page.getByRole("button", { name: "Edit Gulf Industrial Trading", exact: true }).click();
+  // Edit and delete live in each row's overflow menu, not as permanent buttons.
+  await expect(page.getByRole("button", { name: "Edit Gulf Industrial Trading", exact: true })).toHaveCount(0);
+  const more = page.getByRole("button", { name: "More actions for Gulf Industrial Trading", exact: true }).first();
+  await more.click();
+  await page.getByRole("button", { name: "Edit details", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Customer / Business name", exact: true })).toHaveValue("Gulf Industrial Trading");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeHidden();
-  await page.getByRole("button", { name: "Delete Gulf Industrial Trading", exact: true }).click();
+  await more.click();
+  await page.getByRole("button", { name: "Delete record", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Delete record?", exact: true })).toBeVisible();
   await page.goto("/?module=leads");
   const card = page.locator(".pipeline-card-shell").first();
-  await card.getByRole("button", { name: /^Edit / }).click();
+  await card.getByRole("button", { name: /^More actions for / }).click();
+  await page.getByRole("button", { name: "Edit details", exact: true }).click();
   await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeVisible();
 });
 

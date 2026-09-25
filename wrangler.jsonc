@@ -1,7 +1,9 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "enercore-crm",
-	"main": ".open-next/worker.js",
+	// worker.ts wraps the OpenNext handler (.open-next/worker.js) to add the
+	// Collaboration Hub's realtime socket and Durable Object class.
+	"main": "worker.ts",
 	"compatibility_date": "2026-09-01",
 	// nodejs_compat is required by the Next.js runtime and by node:crypto usage.
 	"compatibility_flags": ["nodejs_compat"],
@@ -60,7 +62,20 @@
 			"routes": [
 				{ "pattern": "crm.enercore.ae", "custom_domain": true }
 			],
-			"observability": { "enabled": true }
+			"observability": { "enabled": true },
+			// Collaboration Hub realtime: one SQLite-backed Durable Object per
+			// person, relaying live events to their open sockets. Live only —
+			// preview serves fictional data and has no collaboration backend.
+			// The namespace is created by the first `cf:deploy:live` that
+			// includes this block; nothing exists remotely until then.
+			"durable_objects": {
+				"bindings": [
+					{ "name": "COLLAB_HUB", "class_name": "CollabHub" }
+				]
+			},
+			"migrations": [
+				{ "tag": "v1-collab-hub", "new_sqlite_classes": ["CollabHub"] }
+			]
 		}
 	}
 }

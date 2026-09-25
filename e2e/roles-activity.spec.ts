@@ -54,10 +54,23 @@ test("sorting is not counted as an active filter", async ({ page }) => {
 
 test("tables carry a Created by column", async ({ page }) => {
   await signIn(page, "md@enercore.test");
+  // Wide screens: a sortable column of its own.
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/workspace/all-companies/sales-orders");
   await expect(page.getByRole("columnheader", { name: /Created by/ })).toBeVisible();
   await page.getByRole("columnheader", { name: /Created by/ }).getByRole("button").click();
   await expect(page.getByRole("columnheader", { name: /Created by/ })).toHaveAttribute("aria-sort", "ascending");
+
+  // Narrower screens drop the column for space; the creator is not lost but
+  // moves into each record's summary line.
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(page.getByRole("columnheader", { name: /Created by/ })).toBeHidden();
+  const rows = page.locator(".e-record-table tbody tr");
+  const count = await rows.count();
+  expect(count).toBeGreaterThan(0);
+  for (let i = 0; i < count; i++)
+    await expect(rows.nth(i).locator(".e-row-owner")).toBeVisible();
+  await expect(rows.first().locator(".e-row-owner")).toHaveText(/ · by \S/);
 });
 
 test("the activity log is a table whose entries open a detail dialog", async ({ page }) => {

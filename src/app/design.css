@@ -2576,9 +2576,7 @@ textarea:focus {
   font-size: 11px;
 }
 .self-service {
-  padding: 42px 28px;
-  max-width: 1220px;
-  margin: 0 auto;
+  /* Uses the shared page container; only the entrance animation is its own. */
   animation: page-in 300ms var(--ease);
 }
 .self-service > .text-button {

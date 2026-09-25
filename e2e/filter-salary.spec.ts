@@ -10,7 +10,7 @@ test("record sorting, search and dashboard custom period",async({page},info)=>{
  await expect(page.getByRole("navigation",{name:"records pagination"})).toContainText("1–1 of 1");
  await page.screenshot({path:info.outputPath("filters-desktop.png"),animations:"disabled"});
  await page.goto("/workspace/all-companies/overview");
- await page.locator(".stats-grid").waitFor();
+ await page.locator(".e-kpi-strip").waitFor();
  const segment = page.locator(".chart-segment").first();
  await segment.focus();
  await page.keyboard.press("Enter");

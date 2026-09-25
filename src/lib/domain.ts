@@ -103,8 +103,11 @@ export type Audit = {
   recordId: string;
   company: string;
   at: string;
-  /** "account" for user administration; absent for business records. */
-  subject?: "account" | null;
+  /**
+   * "account" for user administration, "collaboration" for chat room
+   * administration; absent for business records.
+   */
+  subject?: "account" | "collaboration" | null;
   /** Branch of the account concerned; null or absent means group-wide. */
   branch?: string | null;
 };
@@ -356,9 +359,13 @@ export function scopedWorkspace(actor: Actor, workspace: Workspace): Workspace {
   return {
     records: workspace.records.filter((r) => !r.deletedAt && canRead(actor, r)),
     audit: workspace.audit.filter((a) =>
-      // Rows written before `subject` existed are business-record events and
-      // keep exactly their previous visibility.
-      a.subject === "account"
+      // Room administration is audited for the record, but a private room's
+      // name must never surface in anyone's Activity feed.
+      a.subject === "collaboration"
+        ? false
+        : // Rows written before `subject` existed are business-record events
+          // and keep exactly their previous visibility.
+          a.subject === "account"
         ? canSeeAccountEvent(actor, a)
         : maySeeRecordHistory &&
           actor.companies.includes(a.company) &&

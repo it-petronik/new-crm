@@ -1,4 +1,4 @@
-import type { D1Database } from "@cloudflare/workers-types";
+import type { D1Database, DurableObjectNamespace } from "@cloudflare/workers-types";
 
 /**
  * Bindings and variables available to the Worker at runtime. The Cloudflare
@@ -8,6 +8,8 @@ import type { D1Database } from "@cloudflare/workers-types";
 declare global {
   interface CloudflareEnv {
     DB: D1Database;
+    /** Collaboration Hub realtime relay; live environment only. */
+    COLLAB_HUB?: DurableObjectNamespace;
     APP_MODE?: string;
     APP_URL?: string;
     NODE_ENV?: string;

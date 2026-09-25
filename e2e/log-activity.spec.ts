@@ -13,10 +13,19 @@ const signIn = async (page: Page, who = "sales") => {
   await hydrated(page);
 };
 
+/**
+ * Logging an activity is one of the row's overflow actions: open the first
+ * row's "More actions" menu and choose "Log activity", as a person would.
+ */
+const openLogActivity = async (page: Page) => {
+  await page.getByRole("button", { name: /^More actions for / }).first().click();
+  await page.getByRole("button", { name: "Log activity", exact: true }).click();
+};
+
 test("logging a contact takes a few taps and schedules the next follow-up", async ({ page }) => {
   await signIn(page);
   await page.goto("/workspace/all-companies/customers");
-  await page.locator(".log-activity-trigger").first().click();
+  await openLogActivity(page);
 
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
@@ -35,7 +44,7 @@ test("logging a contact takes a few taps and schedules the next follow-up", asyn
 test("a follow-up can be declined without leaving the record untouched", async ({ page }) => {
   await signIn(page);
   await page.goto("/workspace/all-companies/customers");
-  await page.locator(".log-activity-trigger").first().click();
+  await openLogActivity(page);
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("button", { name: "No follow-up" }).click();
   await expect(dialog).toContainText(/No follow-up will be scheduled/);
@@ -56,9 +65,14 @@ test("the MD opens on a brief counted from the data, not generated prose", async
   await expect(brief).toBeVisible();
 
   // It leads the page, above the attention list.
+  // The brief's counts describe the exceptions listed beneath them, so they
+  // live inside that panel rather than in one of their own.
   const attention = page.locator(".command-attention");
-  if (await attention.count())
-    expect((await brief.boundingBox())!.y).toBeLessThan((await attention.boundingBox())!.y);
+  await expect(attention).toBeVisible();
+  await expect(attention.locator(".morning-brief")).toBeVisible();
+  const firstRow = attention.locator(".attention-row").first();
+  await expect(firstRow).toBeVisible();
+  expect((await brief.boundingBox())!.y).toBeLessThan((await firstRow.boundingBox())!.y);
 
   // Nothing is padded with zeroes, and it stays short.
   const text = await brief.innerText();
@@ -96,7 +110,7 @@ test("log activity is usable one-handed on a phone", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await signIn(page);
   await page.goto("/workspace/all-companies/customers");
-  await page.locator(".log-activity-trigger").first().click();
+  await openLogActivity(page);
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
 

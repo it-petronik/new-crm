@@ -75,9 +75,9 @@ test("only one column reports itself as sorted", async ({ page }) => {
   await page.goto("/workspace/all-companies/sales-orders");
   await page.locator(".records-panel .table-scroll").waitFor();
   await page.getByRole("columnheader", { name: /Value/ }).getByRole("button").click();
-  await page.getByRole("columnheader", { name: /Company/ }).getByRole("button").click();
+  await page.getByRole("columnheader", { name: /Status/ }).getByRole("button").click();
   await expect(page.getByRole("columnheader", { name: /Value/ })).toHaveAttribute("aria-sort", "none");
-  await expect(page.getByRole("columnheader", { name: /Company/ })).toHaveAttribute("aria-sort", "ascending");
+  await expect(page.getByRole("columnheader", { name: /Status/ })).toHaveAttribute("aria-sort", "ascending");
   expect(await page.locator('th[aria-sort="ascending"], th[aria-sort="descending"]').count()).toBe(1);
 });
 

@@ -22,12 +22,11 @@ test("the brief is sized by its content, not by fixed padding", async ({ page })
   const box = (await brief.boundingBox())!;
   const lines = await brief.locator(".brief-line").count();
   const content = (await brief.locator(".morning-brief-list, .morning-brief-clear").first().boundingBox())!;
-  const heading = (await brief.locator(".panel-heading").boundingBox())!;
 
-  // Whatever is left over is padding and the gap between the two. Four lines
-  // must not produce a panel with a large empty region beneath them.
-  const slack = box.height - (heading.height + content.height);
-  expect(slack, `brief has ${lines} lines and ${Math.round(slack)}px of slack`).toBeLessThan(60);
+  // The brief is its content plus a rule beneath it. Anything more would be
+  // the empty region this layout exists to remove.
+  const slack = box.height - content.height;
+  expect(slack, `brief has ${lines} lines and ${Math.round(slack)}px of slack`).toBeLessThan(28);
 });
 
 test("attention rows are compact and hide their presets behind one control", async ({ page }) => {

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   attentionItems, myDay, followUpPresets, isOpen, idleDays,
-  nextAction, staleRecords, morningBrief,
+  nextAction, staleRecords, morningBrief, operationalViews,
 } from "../src/lib/attention";
 import { previewActor } from "../src/lib/fixtures";
 import type { Actor, RecordItem } from "../src/lib/domain";
@@ -149,4 +149,42 @@ test("the morning brief counts facts and stays silent when there is nothing to s
   // Urgent facts are marked as such, and money links to its module.
   assert.equal(lines.find((l) => /overdue across/.test(l.text))?.tone, "urgent");
   assert.equal(lines.find((l) => /overdue across/.test(l.text))?.to, "accounts");
+});
+
+test("operational views answer real questions and hide the empty ones", () => {
+  const views = operationalViews(previewActor, [
+    rec({ id: "late", due: "2026-09-19" }),
+    rec({ id: "now", due: TODAY }),
+    rec({ id: "quiet-quote", kind: "quotations", status: "Sent", due: "", updatedAt: "2026-09-10T00:00:00.000Z" }),
+    rec({ id: "stuck", kind: "logistics", status: "Delayed", due: "" }),
+    rec({ id: "unpaid", kind: "accounts", status: "Overdue", due: "", amount: 5000 }),
+    rec({ id: "won", status: "Won", due: "2026-09-01" }),
+  ], TODAY);
+
+  const byId = new Map(views.map((v) => [v.id, v]));
+  assert.deepEqual(byId.get("overdue")?.records.map((r) => r.id), ["late"]);
+  assert.deepEqual(byId.get("today")?.records.map((r) => r.id), ["now"]);
+  assert.deepEqual(byId.get("silent-quotes")?.records.map((r) => r.id), ["quiet-quote"]);
+  assert.deepEqual(byId.get("delayed")?.records.map((r) => r.id), ["stuck"]);
+  assert.deepEqual(byId.get("unpaid")?.records.map((r) => r.id), ["unpaid"]);
+
+  // A closed record belongs to no operational slice.
+  for (const view of views)
+    assert.ok(!view.records.some((r) => r.id === "won"), `${view.id} must exclude won deals`);
+
+  // Slices with nothing in them are not offered at all.
+  assert.equal(operationalViews(previewActor, [], TODAY).length, 0);
+  for (const view of views) assert.ok(view.records.length > 0, view.id);
+});
+
+test("operational views only ever contain records handed to them", () => {
+  // The caller scopes by permission; the view must not widen that.
+  const mine = rec({ id: "mine", ownerId: previewActor.id, due: "2026-09-19" });
+  const views = operationalViews(previewActor, [mine], TODAY);
+  const ids = new Set(views.flatMap((v) => v.records.map((r) => r.id)));
+  assert.deepEqual([...ids], ["mine"]);
+  assert.deepEqual(
+    views.find((v) => v.id === "mine")?.records.map((r) => r.id),
+    ["mine"],
+  );
 });

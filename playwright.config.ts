@@ -1,6 +1,10 @@
 import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "./e2e",
+  // The Collaboration Hub suite needs the built Worker in live mode with its
+  // Durable Object; it has its own config (playwright.collab.config.ts) and
+  // server rather than being skipped here.
+  testIgnore: ["collab/**"],
   /**
    * The suite runs against `next dev`, which compiles routes on demand. With
    * several workers requesting different routes at once a first hit can take
@@ -9,6 +13,8 @@ export default defineConfig({
    * harness calling compilation time a defect.
    */
   timeout: 60_000,
+  // Compiles every route once before the workers start; see the file's note.
+  globalSetup: "./e2e/global-setup.ts",
   /**
    * `next dev` compiles routes on demand and is the bottleneck here, not the
    * application. With more workers than it can serve, whichever test happens

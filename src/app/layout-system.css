@@ -1,0 +1,637 @@
+/* ===========================================================================
+   LAYOUT SYSTEM — the authoritative owner of spacing and structure.
+
+   The defects this replaces were not individual mistakes; they were the
+   consequence of every component owning its own padding, gap and breakpoints.
+   Eleven different panel paddings and ten near-duplicate breakpoints cannot be
+   kept consistent by hand.
+
+   Ownership, from here on:
+
+     PAGE      page gutter, max width, space above and below
+     STACK     the gap between sibling sections
+     GRID      the relationship between panels
+     PANEL     its own internal padding
+     ROW       its own vertical rhythm
+     COMPONENT only its content
+
+   A child never sets the space between itself and its siblings. This file is
+   imported last so it is authoritative over the older stylesheets, which are
+   left in place rather than rewritten wholesale.
+   ======================================================================== */
+
+:root {
+  /* --- breakpoints (documented; media queries cannot read variables) -----
+     mobile   ≤ 720px
+     tablet   ≤ 1024px
+     desktop  ≤ 1440px
+     wide     > 1440px
+     Everything below uses only these four. */
+
+  /* --- page ------------------------------------------------------------- */
+  --l-page-max: 1640px;
+  --l-gutter: 32px;
+  --l-page-top: 28px;
+  --l-page-bottom: 48px;
+
+  /* --- rhythm ----------------------------------------------------------- */
+  --l-section-gap: 20px;   /* between sibling sections on a page */
+  --l-grid-gap: 16px;      /* between panels inside a grid       */
+  --l-row-gap: 10px;       /* between rows inside a panel        */
+
+  /* --- panel ------------------------------------------------------------ */
+  --l-panel-pad: 20px;
+  --l-panel-pad-compact: 16px;
+  --l-panel-head-gap: 14px;  /* heading to body */
+  --l-row-pad-y: 10px;
+}
+
+@media (max-width: 1024px) {
+  :root { --l-gutter: 24px; --l-section-gap: 18px; --l-panel-pad: 18px; }
+}
+@media (max-width: 720px) {
+  :root {
+    --l-gutter: 16px;
+    --l-page-top: 18px;
+    --l-section-gap: 14px;
+    --l-grid-gap: 12px;
+    --l-panel-pad: 16px;
+    --l-panel-pad-compact: 14px;
+  }
+}
+
+/* --------------------------------------------------------------- app shell */
+/* The shell is left as it was: a fixed sidebar with the main area offset by
+   `margin-left: var(--sidebar-width)`.
+ *
+ * That is not the "calc(100vw - magic number)" pattern — the offset is the
+ * same variable the sidebar's width comes from, so collapsing it reflows
+ * correctly with no second value to keep in step. Converting it to a grid
+ * column broke the sidebar's own positioning, its internal scroll and its
+ * mobile drawer, none of which were the defect being fixed. `min-width: 0` on
+ * the main column is the part that actually matters for overflow, and it is
+ * already set. */
+
+/* ----------------------------------------------------------- page container */
+/* One gutter, one max width, for every page. Pages must not redefine these. */
+.main-content {
+  width: 100%;
+  max-width: var(--l-page-max);
+  margin-inline: auto;
+  padding: var(--l-page-top) var(--l-gutter) var(--l-page-bottom);
+  min-width: 0;
+}
+
+/* --------------------------------------------------------------- page stack */
+/* The parent owns the space between sections, so no section carries a margin
+   that only makes sense next to one particular neighbour. */
+.main-content > * { margin-block: 0; }
+.main-content > * + * { margin-top: var(--l-section-gap); }
+
+/* --------------------------------------------------------------------- panel */
+/* A panel owns its inside and nothing outside it. */
+.panel {
+  padding: var(--l-panel-pad);
+  min-width: 0;
+}
+.panel > * { margin-block: 0; }
+.panel > * + * { margin-top: var(--l-row-gap); }
+
+/* One heading rhythm everywhere. */
+.panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e-3, 12px);
+  padding: 0;
+  margin: 0 0 var(--l-panel-head-gap);
+  min-height: 0;
+  border: 0;
+}
+.panel-heading h2 {
+  margin: 0;
+  font-size: var(--e-section, 1rem);
+  font-weight: var(--e-weight-strong, 600);
+  line-height: var(--e-leading-tight, 1.25);
+}
+.panel-heading > div > p { margin: 2px 0 0; font-size: var(--e-meta, 0.76rem); color: var(--e-text-secondary, #64787c); }
+
+/* ---------------------------------------------------------------- data rows */
+/* Compact business rows share one geometry wherever they appear. */
+.attention-row,
+.e-pipeline-list li,
+.my-day-list li > .record-link,
+.skeleton-attn-row {
+  padding-block: var(--l-row-pad-y);
+}
+
+/* --------------------------------------------------------------- dashboards */
+/* One executive grid. Ratios, never fixed widths; min-width:0 so a long value
+   cannot push a column past its share. */
+.e-exec-grid {
+  display: grid;
+  gap: var(--l-grid-gap);
+  grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr);
+  align-items: start;
+}
+.e-exec-grid > * { min-width: 0; }
+
+.overview-grid,
+.my-day-grid,
+.insight-grid {
+  display: grid;
+  gap: var(--l-grid-gap);
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+}
+.overview-grid > *, .my-day-grid > *, .insight-grid > * { min-width: 0; }
+
+@media (max-width: 1024px) {
+  .e-exec-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ------------------------------------------------------------------ KPI strip */
+/* Equal columns that never clip: no fixed height, content sets the height. */
+.e-kpi-strip,
+.stats-grid,
+.skeleton-kpis {
+  display: grid;
+  gap: var(--l-grid-gap);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.e-kpi, .stat-card, .skeleton-kpi { min-width: 0; height: auto; min-height: 0; }
+.e-kpi-value { overflow-wrap: anywhere; }
+
+/* A role's own cards (two to four of them, depending on its modules) fill
+   their row instead of leaving the empty slots of the four-figure KPI strip.
+   Desktop only; the narrower breakpoints below apply to every count. */
+@media (min-width: 1025px) {
+  .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stats-grid:has(> :nth-child(3)) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .stats-grid:has(> :nth-child(4)) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 1024px) {
+  .e-kpi-strip, .stats-grid, .skeleton-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 420px) {
+  .e-kpi-strip, .stats-grid, .skeleton-kpis { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ------------------------------------------------------------------ toolbars */
+/* A list toolbar and its table share one alignment line: both are inside the
+   same panel, so neither adds a gutter of its own. */
+.list-query-controls { padding-inline: 0; }
+.table-scroll { margin-inline: 0; }
+
+/* ------------------------------------------------------------------- forms */
+.form-grid {
+  display: grid;
+  gap: var(--e-3, 12px);
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+}
+.form-grid > * { min-width: 0; }
+@media (max-width: 720px) { .form-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* ------------------------------------------------------------------ dialogs */
+/* A guard, not a size: each dialog type sets its own width (record forms,
+   compact dialogs, document previews, the activity detail), and none may be
+   wider than the screen less its gutters. A fixed cap here overrode all of
+   them and squeezed the wide record forms into a single narrow column. */
+.modal, .ui-dialog {
+  max-width: calc(100vw - 2 * var(--l-gutter));
+  max-height: min(88svh, calc(100svh - 32px));
+  overflow-y: auto;
+}
+@media (max-width: 720px) {
+  /* A sheet, rather than a small box floating in the middle of a phone. */
+  .modal, .ui-dialog { max-width: 100vw; max-height: 92svh; border-radius: var(--e-radius-lg, 14px) var(--e-radius-lg, 14px) 0 0; }
+}
+
+/* ===========================================================================
+   HEADER BOUNDARY
+
+   The header is sticky, so it already occupies real layout space and content
+   begins after it. What went wrong is painting order, not geometry: page
+   content animates in (`.page-enter` uses a transform), which creates its own
+   stacking context, and without an explicit order a transformed child can
+   paint over an ancestor's sticky sibling.
+
+   Fixed at the root by making the header's layer authoritative and giving the
+   content area its own lower layer — not by pushing individual pages down.
+   ======================================================================== */
+.topbar { z-index: 60; }
+.main-content { position: relative; z-index: 0; }
+/* Anything scrolled to lands below the header rather than behind it. */
+.main-content :is(h1, h2, h3, [id]) { scroll-margin-top: calc(var(--l-header-h) + var(--e-3, 12px)); }
+:root { --l-header-h: 64px; }
+@media (max-width: 720px) { :root { --l-header-h: 56px; } }
+
+/* ===========================================================================
+   BUSINESS TABLE — one column system for every module's record list.
+
+   Fixed widths with `table-layout: fixed` so columns cannot be pushed around
+   by whichever row happens to hold the longest customer name. Identity takes
+   the space; everything else takes only what it needs.
+
+   The widths describe exactly one table shape — Identity · Status · Owner ·
+   Next action · Value · Actions — so they are bound to that table by its own
+   class, never to the shared `.table-scroll` wrapper. Applied to any other
+   table (the cashbook, the activity log, user administration, line items)
+   they would size a different column set by position, and fixed layout plus
+   single-line cells then paints one column's text over the next.
+   ======================================================================== */
+.table-scroll table { width: 100%; border-collapse: collapse; }
+.table-scroll table.e-record-table { table-layout: fixed; }
+
+/* Every other table sizes its columns from its content, which cannot
+   overlap. Long prose may wrap inside a cell; short values stay on one line. */
+.table-scroll table:not(.e-record-table) { table-layout: auto; }
+.table-scroll table:not(.e-record-table) td { white-space: normal; overflow-wrap: break-word; }
+.table-scroll table:not(.e-record-table) :is(.record-link, .avatar-name, .cell-date, .e-badge) { white-space: nowrap; }
+
+.e-record-table thead th:nth-child(1) { width: auto; }
+/* Wide enough for the longest status ("Ready to Dispatch", "Documents
+   Pending") as a badge, so a status never paints into the next column. */
+.e-record-table thead th:nth-child(2) { width: 10.5rem; }
+.e-record-table thead th:nth-child(3) { width: 11rem; }
+.e-record-table thead th:nth-child(4) { width: 14rem; }
+.e-record-table thead th:nth-child(5) { width: 8.5rem; }
+.e-record-table thead th:nth-child(6) { width: 16rem; }
+/* Belt and braces for a status longer than any known one: it truncates
+   inside its own cell (full text in the badge's tooltip) rather than
+   spilling over the neighbouring column. */
+.e-record-table tbody td:nth-child(2) .e-badge { max-width: 100%; }
+.e-badge-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+.table-scroll th, .table-scroll td { vertical-align: middle; }
+.table-scroll tbody td { padding-block: var(--l-row-pad-y); }
+/* A row is one line of identity plus one of context. */
+.table-scroll tbody tr { height: 56px; }
+
+/* --- text discipline ------------------------------------------------------
+   Uncontrolled wrapping is what turned 56px rows into 90px rows. Each piece of
+   text gets exactly the number of lines it is allowed, and truncated text
+   carries its full value in a tooltip. */
+.e-row-title,
+.e-row-meta,
+/* The owner's name, never the avatar beside it: the avatar is also a <span>,
+   and `display: block` would strip the grid centring its initials rely on
+   while the truncation rules clipped them. */
+.e-cell-owner .avatar-name > span:not(.entity-avatar) {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Wherever an avatar sits beside a label, it keeps its own size and shape. */
+.avatar-name > .entity-avatar,
+.record-link > .entity-avatar {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  overflow: hidden;
+}
+.e-cell-identity .record-link { display: flex; align-items: center; gap: var(--e-2, 8px); width: 100%; min-width: 0; }
+/* The avatar keeps its own size. It is a <span>, so a blanket `> span` rule
+   would give it `flex: 1` and stretch it into an ellipse — only the text
+   wrapper may take the remaining width. */
+.e-cell-identity .record-link > .entity-avatar { flex: 0 0 auto; }
+/* These flex containers supply the spacing with `gap`; the older
+   `margin-right` on the avatar would add a second, different amount. */
+.record-link > .entity-avatar, .avatar-name > .entity-avatar { margin-right: 0; }
+.e-cell-identity .record-link > span:not(.entity-avatar) { min-width: 0; flex: 1 1 auto; }
+.e-row-meta { max-width: none; }
+/* Shown only where the Created by column is hidden (see RESPONSIVE). */
+.e-row-owner { display: none; }
+
+/* The next action may take a second line, but never a third. */
+.next-action {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: normal;
+}
+.next-action-cell { min-width: 0; }
+.next-action-cell .cell-date { white-space: nowrap; }
+
+/* Controls never wrap or shrink. */
+.e-badge, .table-record-actions, .amount, .inline-status { white-space: nowrap; }
+/* Numeric column alignment is defined once, further down. */
+
+/* ===========================================================================
+   ROW ACTIONS — one compact cluster, same alignment in every module.
+   ======================================================================== */
+.table-record-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--e-1, 4px);
+  flex-wrap: nowrap;
+}
+.table-record-actions .inline-status {
+  width: auto;
+  /* Wide enough for the longest status this CRM uses ("Pending Planning",
+     "Ready to Dispatch") rather than clipping it to an ellipsis. */
+  max-width: 11rem;
+  min-height: var(--e-control-h-sm, 28px);
+  height: var(--e-control-h-sm, 28px);
+  padding: 0 22px 0 8px;
+  font-size: var(--e-meta, 0.76rem);
+}
+.table-record-actions .icon-button {
+  min-height: var(--e-control-h-sm, 28px);
+  height: var(--e-control-h-sm, 28px);
+  width: var(--e-control-h-sm, 28px);
+  min-width: var(--e-control-h-sm, 28px);
+  padding: 0;
+}
+/* Destructive actions live in the overflow menu, not on every row. */
+.row-overflow-menu {
+  display: flex; flex-direction: column; gap: 2px; min-width: 190px;
+  padding: 6px; border-radius: var(--e-radius, 10px);
+  border: 1px solid var(--e-border); background: var(--e-surface);
+  box-shadow: var(--e-shadow-overlay); z-index: 70;
+}
+.row-overflow-item {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 8px 10px; border-radius: var(--e-radius-sm, 6px);
+  font-size: var(--e-secondary, 0.82rem); text-align: left; min-height: 0;
+}
+.row-overflow-item.is-destructive { color: var(--e-danger); }
+.row-overflow-item.is-destructive:hover { background: var(--e-danger-soft); }
+
+/* ===========================================================================
+   RESPONSIVE — reduce information, never squeeze columns.
+   ======================================================================== */
+@media (max-width: 1280px) {
+  /* Owner is the first thing a narrower screen can do without. */
+  .e-record-table thead th:nth-child(3), .e-record-table .e-cell-owner { display: none; }
+  /* ...and the creator travels with the record's own summary line. */
+  .e-record-table .e-row-owner { display: inline; }
+  .e-record-table thead th:nth-child(4) { width: 12rem; }
+}
+@media (max-width: 1024px) {
+  /* Then the next action's date detail, and the status column header. */
+  .e-record-table thead th:nth-child(2) { width: 9.5rem; }
+  .e-record-table thead th:nth-child(6) { width: 13rem; }
+  .next-action-cell .cell-date { display: none; }
+}
+
+/* ===========================================================================
+   MOBILE LIST — a card per record, not desktop columns squeezed.
+
+   Declared here rather than in a component stylesheet so every module that
+   renders a business table gets the same transformation.
+   ======================================================================== */
+@media (max-width: 720px) {
+  .table-scroll { overflow: visible; }
+  .table-scroll table { table-layout: auto; }
+  .table-scroll thead { display: none; }
+  .table-scroll table, .table-scroll tbody, .table-scroll tr, .table-scroll td { display: block; width: auto; }
+
+  .table-scroll tbody tr {
+    position: relative;
+    height: auto;
+    margin-bottom: var(--l-row-gap);
+    padding: var(--l-panel-pad-compact);
+    border: 1px solid var(--e-border);
+    border-radius: var(--e-radius);
+    background: var(--e-surface);
+  }
+  .table-scroll tbody td { border: 0; padding: 0; }
+  /* Status sits top-right of the card; the value keeps its own line. */
+  /* Record cards only: their second cell is the status badge. */
+  .e-record-table tbody td:nth-child(2) { position: absolute; top: var(--l-panel-pad-compact); right: var(--l-panel-pad-compact); }
+  .table-scroll .e-cell-next { max-width: none; margin-bottom: var(--e-2, 8px); }
+  .table-scroll .e-col-actions { margin-top: var(--e-2, 8px); }
+  .e-row-meta { white-space: normal; }
+  .e-record-table .e-cell-identity { padding-right: 96px; }
+  /* Other tables' cards: one value per line, secondary values spaced. */
+  .table-scroll table:not(.e-record-table) tbody td + td { margin-top: var(--e-1, 4px); }
+  /* Owner and the value column's header are already hidden; keep the value. */
+  .table-scroll .amount { text-align: left; }
+  .table-scroll .next-action { -webkit-line-clamp: 3; }
+  .next-action-cell .cell-date { display: inline-flex; }
+
+  /* Actions sit on their own line and stay comfortably tappable. */
+  .table-record-actions { justify-content: flex-start; gap: var(--e-2, 8px); }
+  .table-record-actions .inline-status,
+  .table-record-actions .icon-button {
+    height: var(--e-control-h-touch, 44px);
+    min-height: var(--e-control-h-touch, 44px);
+  }
+  .table-record-actions .icon-button { width: var(--e-control-h-touch, 44px); min-width: var(--e-control-h-touch, 44px); }
+  .table-record-actions .inline-status { max-width: 11rem; padding-right: 26px; }
+  .row-overflow-menu { min-width: 220px; }
+  .row-overflow-item { min-height: 44px; }
+}
+
+/* ===========================================================================
+   CHARTS AND ANALYTICS
+
+   A chart must fit the column it is given. Without `min-width: 0` a flex or
+   grid child refuses to shrink below its content, which is how a canvas ends
+   up pushing a whole page sideways.
+   ======================================================================== */
+.insight-chart,
+.insight-grid > *,
+.performance,
+.chart-shell,
+.insight-ranking,
+.country-sales {
+  min-width: 0;
+  max-width: 100%;
+}
+.insight-chart canvas,
+.insight-chart svg,
+.performance svg,
+.chart-shell svg {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+/* Panels never spill; their contents wrap or scroll inside them. */
+.panel { overflow-wrap: anywhere; }
+.panel > .table-scroll { overflow-x: auto; }
+
+/* ===========================================================================
+   DIVIDERS
+
+   A boundary between two regions is one line. It became two because the region
+   above drew a bottom border and the region below drew a top border, each
+   unaware of the other. The rule from here: when two dividing elements are
+   adjacent, the second one's divider collapses.
+   ======================================================================== */
+:is(.records-toolbar, .panel-heading, .toolbar-title) + .list-query-controls,
+.list-query-controls:first-child {
+  border-top: 0;
+}
+
+/* ===========================================================================
+   NUMERIC COLUMN ALIGNMENT
+
+   A right-aligned column only reads as aligned if its heading and its figures
+   share the same right edge. The heading is a button with its own padding, so
+   both sides are pinned to one value rather than each inheriting a different
+   default.
+   ======================================================================== */
+:root { --l-cell-pad-x: 14px; }
+
+.e-record-table thead th:nth-child(5) { text-align: right; padding-right: 0; }
+.e-record-table thead th:nth-child(5) .column-sort {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  width: 100%;
+  padding-right: var(--l-cell-pad-x);
+  text-align: right;
+}
+.table-scroll tbody td.amount {
+  text-align: right;
+  padding-right: var(--l-cell-pad-x);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 720px) {
+  /* In card form the value is a line of its own, so it reads from the left. */
+  .table-scroll tbody td.amount { text-align: left; padding-right: 0; }
+}
+
+/* ===========================================================================
+   STALE BADGE SELECTOR FIX
+
+   StatusBadge (src/components/ui/status-badge.tsx) renders `.e-badge`, not the
+   older `.badge` class it replaced. Several positioning rules were written
+   against `.badge` before that migration and went silently dead: the badge no
+   longer received `margin-left: auto`, so it stopped being pushed to a fixed
+   column and instead sat immediately after whatever-width text preceded it —
+   which is why status badges and the date beside them drifted out of
+   alignment row to row (Shipment watch, record cards, the record-detail
+   header). Restored here rather than in each older file, since this file is
+   imported last and is authoritative over layout positioning.
+   ======================================================================== */
+.shipment-row > .e-badge,
+.collection-identity > .e-badge,
+.record-context .e-badge {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* Shipment watch specifically: the date column must start at a fixed point
+   regardless of how wide the name, detail or status text is, so EXPECTED and
+   its value line up row to row. */
+.shipment-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.shipment-row > span:nth-child(2) {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.shipment-date {
+  flex: 0 0 auto;
+  text-align: right;
+  min-width: 5.5rem;
+}
+
+@media (max-width: 720px) {
+  /* The mobile-density pass on Shipment watch sized `.badge` the same way;
+     also dead against the new class. */
+  .shipment-row > .e-badge { font-size: 8px; padding: 5px 6px; }
+}
+
+/* ===========================================================================
+   INSIGHT RANKING — double padding
+
+   .panel already provides the horizontal inset; .insight-ranking ol added a
+   second 20px on top of it, so the ranked rows sat 40px from the edge while
+   the panel-heading above them sat at the normal 20px. Same for its own
+   bottom padding stacking on the panel's. The list now trusts the panel.
+   ======================================================================== */
+.insight-ranking ol { padding: 0; }
+.insight-ranking li:first-child { border-top: 0; }
+
+/* Interactive chart rows: a hover/selected background that touches the panel
+   edge reads as unfinished, so these get a small inset of their own — the one
+   case where a row legitimately owns horizontal padding, because the
+   background it paints needs room to sit inside the panel, not flush with it. */
+.donut-legend-row,
+.horizontal-chart-row {
+  padding-inline: var(--e-2, 8px);
+  margin-inline: calc(var(--e-2, 8px) * -1);
+  border-radius: var(--e-radius-sm, 6px);
+}
+.chart-selection {
+  margin-inline: 0;
+  padding: var(--e-3, 12px) var(--e-6, 24px) var(--e-3, 12px) var(--e-3, 12px);
+}
+/* The empty hint and a selection summary wrap differently in a narrow chart
+   column, so each gets exactly two lines: selecting or clearing a segment can
+   then never change the panel's height and move the page. */
+.chart-selection span {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  line-height: 1.5;
+  min-height: 3em;
+}
+
+/* ===========================================================================
+   ACTIVITY DETAIL DIALOG
+
+   Previously reused .record-detail-dialog and .detail-grid, which are styled
+   across five different files for an editable business record (width rules,
+   footer actions, a reference-document variant) — none of it relevant to six
+   read-only fields. This is its own small, single-owner design instead of
+   another layer on that stack.
+   ======================================================================== */
+.audit-detail-dialog { max-width: min(560px, calc(100vw - 2 * var(--l-gutter))); }
+
+.audit-detail-summary {
+  margin: 0 0 var(--e-4, 16px);
+  padding-bottom: var(--e-4, 16px);
+  border-bottom: 1px solid var(--e-border);
+  font-size: var(--e-body, 0.9rem);
+  line-height: var(--e-leading-body, 1.5);
+}
+.audit-detail-summary strong { font-weight: var(--e-weight-strong, 600); }
+
+.audit-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--e-4, 16px) var(--e-5, 20px);
+  margin: 0;
+}
+.audit-detail-grid > div { min-width: 0; }
+.audit-detail-grid dt {
+  margin: 0 0 3px;
+  font-size: var(--e-caption, 0.7rem);
+  font-weight: var(--e-weight-strong, 600);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--e-text-muted);
+}
+.audit-detail-grid dd {
+  margin: 0;
+  font-size: var(--e-secondary, 0.82rem);
+  font-weight: var(--e-weight-medium, 500);
+  line-height: var(--e-leading-tight, 1.25);
+  overflow-wrap: anywhere;
+}
+
+.audit-detail-note {
+  margin: var(--e-5, 20px) 0 0;
+  padding-top: var(--e-3, 12px);
+  border-top: 1px solid var(--e-border-muted);
+  font-size: var(--e-meta, 0.76rem);
+  color: var(--e-text-muted);
+}
+
+@media (max-width: 720px) {
+  .audit-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

@@ -1,4 +1,4 @@
-import { eq, and, or, lt, gt, inArray, sql, desc } from "drizzle-orm";
+import { eq, and, or, lt, gt, inArray, sql, desc, isNull, ne } from "drizzle-orm";
 import type { Database } from "./d1";
 import { users, sessions, businessRecords, auditEvents, loginAttempts, passwordResets } from "./schema";
 import type { UserRow } from "./schema";
@@ -188,7 +188,15 @@ export function listRecordsForActor(
  * the whole table. Account events now share this window with record events.
  */
 export const listAuditEvents = (db: Database, limit = 200) =>
-  db.select().from(auditEvents).orderBy(desc(auditEvents.at)).limit(limit).all();
+  db
+    .select()
+    .from(auditEvents)
+    // Chat room administration events are kept for the record only; they
+    // must not use up the workspace's display window.
+    .where(or(isNull(auditEvents.subject), ne(auditEvents.subject, "collaboration")))
+    .orderBy(desc(auditEvents.at))
+    .limit(limit)
+    .all();
 
 export type NewRecord = {
   id: string; kind: string; company: string; branch: string;
@@ -197,8 +205,11 @@ export type NewRecord = {
 export type NewAudit = {
   id: string; company: string; actor: string; actorId: string;
   action: string; recordId: string; before?: unknown; after?: unknown; at?: Date;
-  /** "account" for user administration; omitted for business records. */
-  subject?: "account";
+  /**
+   * "account" for user administration, "collaboration" for chat room
+   * administration; omitted for business records.
+   */
+  subject?: "account" | "collaboration";
   /** Branch of the account an "account" event concerns; null means group-wide. */
   branch?: string | null;
 };

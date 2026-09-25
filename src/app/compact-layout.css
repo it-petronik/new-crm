@@ -1,15 +1,7 @@
 /* Shared density rules: less dead space, without shrinking touch targets. */
 @media screen {
-  .main-content {
-    padding-top: 24px;
-  }
-  .page-heading {
-    margin-bottom: 20px;
-    gap: 16px;
-  }
-  .panel-heading {
-    padding: 18px 20px;
-  }
+  /* Page padding, heading rhythm and panel-heading padding now come from
+     layout-system.css so there is one owner rather than three. */
   .insight-grid {
     align-items: start;
   }

@@ -9,11 +9,13 @@ async function pickPeriod(page: import("@playwright/test").Page, option: string)
 
 test("every dashboard period applies to the metrics and charts it controls", async ({ page }) => {
   await page.goto("/workspace/all-companies/overview");
-  await page.locator(".stats-grid").waitFor();
+  await page.locator(".e-kpi-strip").waitFor();
 
   // All time is the widest scope; every narrower preset must be a subset of it.
-  const ordersAll = await page.locator(".stats-grid .stat-card").filter({ hasText: "Confirmed orders" }).innerText();
-  const allCount = Number(ordersAll.match(/(\d+) orders/)![1]);
+  const pipeline = () => page.locator(".e-kpi-strip .e-kpi").filter({ hasText: "Open pipeline" });
+  const countOf = async () =>
+    Number((await pipeline().innerText()).match(/(\d+) open/)![1]);
+  const allCount = await countOf();
   expect(allCount).toBeGreaterThan(0);
 
   for (const [option, label] of [
@@ -24,21 +26,21 @@ test("every dashboard period applies to the metrics and charts it controls", asy
     ["Last 12 months", "12 months"],
   ] as const) {
     await pickPeriod(page, option);
-    const text = await page.locator(".stats-grid .stat-card").filter({ hasText: "Confirmed orders" }).innerText();
-    const count = Number(text.match(/(\d+) orders/)![1]);
+    const text = await pipeline().innerText();
+    const count = Number(text.match(/(\d+) open/)![1]);
     expect(count, `${label} must not exceed all time`).toBeLessThanOrEqual(allCount);
-    // The value shown is explicitly scoped to one currency.
-    expect(text).toContain("USD value only");
+    // Money is still named by its currency rather than shown as a bare number,
+    // and currencies are listed separately instead of being summed together.
+    expect(text, "the KPI must name its currency").toMatch(/[A-Z]{3}|[$€]/);
   }
 
   await pickPeriod(page, "All time");
-  const back = await page.locator(".stats-grid .stat-card").filter({ hasText: "Confirmed orders" }).innerText();
-  expect(Number(back.match(/(\d+) orders/)![1])).toBe(allCount);
+  expect(await countOf()).toBe(allCount);
 });
 
 test("an incomplete or reversed custom range is explained, not silently ignored", async ({ page }) => {
   await page.goto("/workspace/all-companies/overview");
-  await page.locator(".stats-grid").waitFor();
+  await page.locator(".e-kpi-strip").waitFor();
   await pickPeriod(page, "Custom dates");
   // Choosing Custom without dates must not quietly behave like All time.
   await expect(page.locator(".dashboard-period-note")).toContainText("Choose both a start and an end date");
@@ -60,20 +62,28 @@ test("operational alerts stay current and are labelled as such", async ({ page }
   await page.goto("/workspace/all-companies/overview");
   await page.locator(".dashboard-scope").waitFor();
   await expect(page.locator(".dashboard-scope")).toContainText("Daily focus remains current");
-  await expect(page.locator(".insight-banner")).toBeVisible();
+  // The daily focus is the attention panel itself now; the separate banner
+  // that restated it has gone. What matters is that it stays current — it is
+  // counted from all records, not from the selected period.
+  await expect(page.locator(".command-attention")).toBeVisible();
+  await expect(page.locator(".command-attention .morning-brief")).toBeVisible();
 });
 
 test("delete controls read as destructive in both themes", async ({ page }) => {
   for (const theme of ["light", "dark"] as const) {
     await page.goto("/workspace/all-companies/sales-orders");
     await page.evaluate((t) => { document.documentElement.dataset.theme = t; }, theme);
-    const del = page.locator(".delete-action").first();
+    // Delete lives in each row's overflow menu; it must read as destructive
+    // there, next to the routine actions.
+    await page.getByRole("button", { name: /^More actions for / }).first().click();
+    const del = page.getByRole("button", { name: "Delete record", exact: true });
     await del.waitFor();
     const color = await del.evaluate((el) => getComputedStyle(el).color);
     const [r, g, b] = color.match(/\d+/g)!.map(Number);
     expect(r, `${theme} delete colour ${color}`).toBeGreaterThan(150);
     expect(r).toBeGreaterThan(g + 40);
     expect(r).toBeGreaterThan(b + 40);
+    await page.keyboard.press("Escape");
   }
 });
 
@@ -82,7 +92,7 @@ test("capture light and dark, desktop and mobile", async ({ page }) => {
     for (const [w, h, name] of [[1440, 900, "desktop"], [390, 844, "mobile"]] as const) {
       await page.setViewportSize({ width: w, height: h });
       await page.goto("/workspace/all-companies/overview");
-      await page.locator(".stats-grid").waitFor();
+      await page.locator(".e-kpi-strip").waitFor();
       await page.evaluate((t) => { document.documentElement.dataset.theme = t; }, theme);
       await page.waitForTimeout(250);
       await page.screenshot({ path: `${shots}/overview-${theme}-${name}.png`, animations: "disabled", fullPage: name === "desktop" });

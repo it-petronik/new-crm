@@ -2,14 +2,16 @@
 import { companyName } from "@/lib/company-name";
 import { recordsToCsv, exportFilename, downloadCsv } from "@/lib/export";
 import { isImportable, type ImportableKind } from "@/lib/import";
-import { attentionItems, isoDate, nextAction } from "@/lib/attention";
+import { attentionItems, isoDate, nextAction, operationalViews } from "@/lib/attention";
+import { businessStampShort, businessDateTimeLong } from "@/lib/gst";
 import LogActivity from "./log-activity";
 import MorningBrief from "./morning-brief";
 import BusinessClock from "./business-clock";
+import { KpiStrip, PipelineHealth, OperationsSnapshot } from "./executive-panels";
 import MyDay from "./my-day";
 import QuickAdd from "./quick-add";
-import { SkeletonDashboard, SkeletonMyDay, SkeletonList } from "./ui/skeleton";
-import FollowUpControl, { FollowUpMenu } from "./follow-up-control";
+import { SkeletonDashboard, SkeletonMyDay, SkeletonList, SkeletonRegion, SkeletonListRow } from "./ui/skeleton";
+import { FollowUpMenu } from "./follow-up-control";
 import ImportDialog from "./import-dialog";
 import { salaryAttributes } from "@/lib/salary";
 import { workspaceUrl, workspaceParams } from "@/lib/workspace-url";
@@ -60,6 +62,7 @@ import {
   Sparkles,
   AlertTriangle,
   Phone,
+  Pin,
   Target,
   Truck,
   Users,
@@ -114,8 +117,32 @@ import {
   type WorkspaceView,
 } from "./workspace-pages";
 import CommandMenu from "./command-menu";
+import { StatusBadge as Badge } from "./ui/status-badge";
+import { RowActions, rowActionIcons } from "./ui/row-actions";
+import { formatMoney, formatMoneyCompact, totalsByCurrency, describeTotals } from "@/lib/money-format";
+import { recentRecords, rememberRecord, pinnedIds, togglePin, resolveVisible } from "@/lib/workspace-prefs";
 import { workspaceNotifications } from "@/lib/notifications";
 import Link from "next/link";
+import dynamic from "next/dynamic";
+import { useCollabSummary } from "@/lib/collab-client";
+
+// Loaded only when someone opens Collaboration, so the rest of the CRM does
+// not carry it. The skeleton keeps the three-pane shape while it arrives.
+const CollaborationHub = dynamic(() => import("./collaboration/collaboration-hub"), {
+  ssr: false,
+  loading: () => (
+    <SkeletonRegion label="Loading collaboration">
+      <div className="collab collab-loading">
+        <div className="collab-sidebar">
+          {Array.from({ length: 6 }, (_, i) => (
+            <SkeletonListRow key={i} />
+          ))}
+        </div>
+        <div className="collab-main" />
+      </div>
+    </SkeletonRegion>
+  ),
+});
 const icons: Record<Module, LucideIcon> = {
   overview: LayoutDashboard,
   leads: Target,
@@ -184,44 +211,6 @@ const cardModules: Module[] = [
   "it",
   "logistics",
 ];
-function Badge({ status }: { status: string }) {
-  const tone = [
-    "Approved",
-    "Active",
-    "Available",
-    "Paid",
-    "Delivered",
-    "Won",
-    "Accepted",
-    "Completed",
-    "Resolved",
-  ].includes(status)
-    ? "green"
-    : [
-          "Overdue",
-          "Delayed",
-          "Rejected",
-          "Lost",
-          "Cancelled",
-          "Credit Hold",
-        ].includes(status)
-      ? "red"
-      : [
-            "Pending Approval",
-            "Low Stock",
-            "Negotiation",
-            "Documents Pending",
-            "On Leave",
-          ].includes(status)
-        ? "amber"
-        : "blue";
-  return (
-    <span className={`badge ${tone}`}>
-      <i />
-      {status}
-    </span>
-  );
-}
 function Company({ name }: { name: string }) {
   return (
     <span className="company-label">
@@ -302,7 +291,19 @@ export default function Workspace({
   const initial = routeFromUrl(actor, initialPath, initialSearch);
   const [selfService, setSelfService] = useState(initialSelfService || initial.selfService);
   const [view, setView] = useState<WorkspaceView | null>(initial.view);
+  // Unread chat totals for the sidebar, from server-side read cursors.
+  const { summary: collabSummary } = useCollabSummary(!preview);
   const [commandOpen, setCommandOpen] = useState(false);
+  // When set, the palette lists the records in that operational slice.
+  const [commandView, setCommandView] = useState<string | null>(null);
+  // Local, per-person conveniences. Kept in state so pinning re-renders, and
+  // read from storage on mount so the server render stays identical.
+  const [recent, setRecent] = useState<ReturnType<typeof recentRecords>>([]);
+  const [pins, setPins] = useState<string[]>([]);
+  useEffect(() => {
+    setRecent(recentRecords(actor.id));
+    setPins(pinnedIds(actor.id));
+  }, [actor.id]);
   const [readNotifications, setReadNotifications] = useState<string[]>([]);
   const [module, setModule] = useState<Module>(initial.module);
   const [company, setCompany] = useState(initial.company);
@@ -344,7 +345,10 @@ export default function Workspace({
           : "All companies",
       );
       const requested = params.get("module");
-      window.history.replaceState(null, "", workspaceUrl(self ? "my-requests" : params.get("view") || requested || "overview", params.get("company") || "All companies"));
+      // The open conversation (?c=) is the Collaboration Hub's own state and
+      // survives the canonical-URL rewrite, so a shared link opens the thread.
+      const conversation = params.get("view") === "collaboration" ? params.get("c") : null;
+      window.history.replaceState(null, "", workspaceUrl(self ? "my-requests" : params.get("view") || requested || "overview", params.get("company") || "All companies") + (conversation ? `?c=${encodeURIComponent(conversation)}` : ""));
       setModule(
         requested && allowedModules(actor).includes(requested as Module)
           ? (requested as Module)
@@ -388,8 +392,15 @@ export default function Workspace({
   // After advancing a record, offer the follow-up rather than relying on the
   // person to remember. Dismissable, never blocking.
   const [prompt, setPrompt] = useState<{ record: RecordItem; status: string } | null>(null);
-  // Who sees the company view rather than their own day.
-  const executive = ["MD", "IT Administrator", "Group Manager", "Branch Manager"].includes(actor.role);
+  /**
+   * Who reads the company view rather than their own day.
+   *
+   * Deliberately the roles that run the business. An IT Administrator
+   * administers the system, not the sales pipeline, and has no access to leads
+   * or accounts — so a commercial KPI strip would be empty for them. They get
+   * their own day and their ticket figures, which is the useful answer.
+   */
+  const executive = ["MD", "Group Manager", "Branch Manager"].includes(actor.role);
   const [mutationError, setMutationError] = useState("");
   useEffect(() => { if (!form) { setEditing(null); setMutationError(""); } }, [form]);
   // "n" opens quick add, the way a mail client opens a compose window. Ignored
@@ -620,6 +631,15 @@ export default function Workspace({
   const selectedCurrent = selected
     ? data.records.find((r) => r.id === selected.id) || selected
     : null;
+  // Remembering happens on open, not on render, so the list reflects what was
+  // actually looked at.
+  useEffect(() => {
+    if (selected) setRecent(rememberRecord(actor.id, selected));
+  }, [selected, actor.id]);
+  const pin = (r: RecordItem) => {
+    setPins(togglePin(actor.id, r.id));
+    setToast(pins.includes(r.id) ? "Removed from pinned." : "Pinned.");
+  };
   async function update(r: RecordItem, status: string) {
     setBusy(true);
     try {
@@ -819,6 +839,8 @@ export default function Workspace({
         collapsed={collapsed}
         mobile={mobile}
         approvalCount={approvals.length}
+        collabUnread={collabSummary.unread}
+        collabMentions={collabSummary.mentions}
         onCollapse={toggleSidebar}
         onMobileChange={setMobile}
         onNavigate={go}
@@ -962,7 +984,7 @@ export default function Workspace({
         )}
         <main
           id="main"
-          className="main-content page-enter"
+          className={`main-content page-enter${view === "collaboration" && !selfService ? " is-collaboration" : ""}`}
           key={selfService ? "my-requests" : view || `${module}-${company}`}
         >
           {selfService ? (
@@ -976,6 +998,7 @@ export default function Workspace({
                   onAppearance={() => openView("appearance")}
                 />
               )}
+              {view === "collaboration" && <CollaborationHub actor={actor} preview={preview} />}
               {view === "appearance" && <AppearancePage />}
               {view === "notifications" && (
                 <NotificationsPage
@@ -1478,8 +1501,53 @@ export default function Workspace({
       <DialogPresence>
         {commandOpen && (
           <CommandMenu
-            onClose={() => setCommandOpen(false)}
+            onClose={() => { setCommandOpen(false); setCommandView(null); }}
             items={[
+              // What this person pinned, then what they last opened. Both are
+              // resolved against the records they can currently see, so an
+              // entry for something they have lost access to simply vanishes.
+              ...resolveVisible(pins, scoped.records).map((r) => ({
+                id: `pin-${r.id}`,
+                label: r.title,
+                detail: `${recordProfiles[r.kind].noun} · ${companyName(r.company)}`,
+                group: "Pinned",
+                run: () => setSelected(r),
+              })),
+              ...resolveVisible(recent.map((x) => x.id), scoped.records)
+                .filter((r) => !pins.includes(r.id))
+                .slice(0, 6)
+                .map((r) => ({
+                  id: `recent-${r.id}`,
+                  label: r.title,
+                  detail: `${recordProfiles[r.kind].noun} · ${companyName(r.company)}`,
+                  group: "Recent",
+                  run: () => setSelected(r),
+                })),
+              // Operational slices: the questions people actually open the CRM
+              // to answer, answered inside the palette rather than by building
+              // a filter by hand. Each is scoped to what the actor can see.
+              ...operationalViews(actor, scoped.records).map((view) => ({
+                id: `view-${view.id}`,
+                label: view.label,
+                detail: view.detail,
+                group: "Find",
+                // Narrows the palette in place rather than closing it.
+                keepOpen: true,
+                run: () => setCommandView(view.id),
+              })),
+              ...(commandView
+                ? operationalViews(actor, scoped.records)
+                    .find((v) => v.id === commandView)
+                    ?.records.slice(0, 20)
+                    .map((r) => ({
+                      id: `result-${r.id}`,
+                      label: r.title,
+                      detail: `${nextAction(r).label} · ${companyName(r.company)}`,
+                      record: true,
+                      group: "Records",
+                      run: () => setSelected(r),
+                    })) ?? []
+                : []),
               ...Object.entries(newLabels)
                 .filter(([m]) =>
                   canWrite(actor, {
@@ -1547,6 +1615,9 @@ export default function Workspace({
             onClose={() => setSelected(null)}
             onEdit={() => { setMutationError(""); setEditing(selectedCurrent); setSelected(null); setForm(selectedCurrent.kind); }}
             onDelete={() => { setMutationError(""); setDeleting(selectedCurrent); setSelected(null); }}
+            pinned={pins.includes(selectedCurrent.id)}
+            onPin={() => pin(selectedCurrent)}
+            onLog={() => setLogging(selectedCurrent)}
             onUpdate={(s) => update(selectedCurrent, s)}
             onAction={(action) => extraAction(selectedCurrent, action)}
             onQuote={() => {
@@ -1608,11 +1679,12 @@ export default function Workspace({
           <span>
             {prompt.record.title} is now <b>{prompt.status}</b>. Set the next follow-up?
           </span>
-          <FollowUpControl
-            compact
+          {/* The compact menu, not the full preset row: this bar sits over the
+              list, so it must stay a single line rather than a panel. */}
+          <FollowUpMenu
             busy={busy}
+            label="Set follow-up"
             onChoose={(date) => { void setFollowUp(prompt.record, date); setPrompt(null); }}
-            onClear={() => setPrompt(null)}
           />
           <Button className="icon-button" aria-label="Dismiss" onClick={() => setPrompt(null)}>
             <X size={15} />
@@ -1657,39 +1729,39 @@ function NextActionCell({ record }: { record: RecordItem }) {
   );
 }
 
-function RecordIcons({ record, actor, onEdit, onDelete, onStatus, onLog }: RecordActionsProps & { record: RecordItem }) {
+/**
+ * A row's actions, built from the shared component so every module presents
+ * the same cluster in the same order and the same width.
+ */
+function RecordIcons({
+  record, actor, onEdit, onDelete, onStatus, onLog, onOpen,
+}: RecordActionsProps & { record: RecordItem; onOpen?: (r: RecordItem) => void }) {
   if (!canWrite(actor, record)) return null;
   const options = stages[record.kind] || [];
-  return <span className="record-icon-actions">
-    {/* Logging a contact is the most frequent thing that happens to a record
-        and should never require opening it. */}
-    {onLog && LOGGABLE.includes(record.kind) && (
-      <Button
-        className="icon-button log-activity-trigger"
-        title="Log activity"
-        aria-label={`Log activity for ${record.title}`}
-        onClick={(e) => { e.stopPropagation(); onLog(record); }}
-      >
-        <Phone size={15} />
-      </Button>
-    )}
-    {/* Advancing a record is the most repeated action in the CRM, so it
-        happens in the row. It still goes through the same authenticated,
-        audited, version-guarded update as the full dialog. */}
-    {onStatus && options.length > 1 && (
-      <Select
-        className="inline-status"
-        aria-label={`Status for ${record.title}`}
-        value={record.status}
-        onChange={(e) => onStatus(record, e.target.value)}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {options.map((s) => <option key={s}>{s}</option>)}
-      </Select>
-    )}
-    <Button className="icon-button" title="Edit record" aria-label={`Edit ${record.title}`} onClick={() => onEdit(record)}><Pencil size={16} /></Button>
-    <Button className="icon-button delete-action" title="Delete record" aria-label={`Delete ${record.title}`} onClick={() => onDelete(record)}><Trash2 size={16} /></Button>
-  </span>;
+  return (
+    <RowActions
+      label={record.title}
+      status={record.status}
+      statusOptions={options}
+      onStatus={onStatus ? (next) => onStatus(record, next) : undefined}
+      onOpen={onOpen ? () => onOpen(record) : undefined}
+      actions={[
+        // Logging a contact is frequent, but it does not need to occupy a
+        // column on every row to be one click away.
+        ...(onLog && LOGGABLE.includes(record.kind)
+          ? [{ id: "log", label: "Log activity", icon: rowActionIcons.log, run: () => onLog(record) }]
+          : []),
+        { id: "edit", label: "Edit details", icon: rowActionIcons.edit, run: () => onEdit(record) },
+        {
+          id: "delete",
+          label: "Delete record",
+          icon: rowActionIcons.delete,
+          destructive: true,
+          run: () => onDelete(record),
+        },
+      ]}
+    />
+  );
 }
 /**
  * Exports the filtered list as CSV. Company and kind come from the records
@@ -1806,74 +1878,57 @@ function RecordTable({
         onImport={onImport}
       />
       {pagination.total > 0 && <div className="table-scroll">
-        <table>
+        <table className="e-record-table">
           <thead>
             <tr>
+              {/* Six columns, not eight. Company and product are secondary
+                  detail and now sit under the name, which removes the
+                  horizontal scroll without losing anything. */}
               <SortHeader sortKey="name" query={pagination.query} setQuery={pagination.setQuery}>Record / Customer</SortHeader>
-              <SortHeader sortKey="company" query={pagination.query} setQuery={pagination.setQuery}>Company</SortHeader>
-              <SortHeader sortKey="product" query={pagination.query} setQuery={pagination.setQuery}>Product / Details</SortHeader>
-              <SortHeader sortKey="amount" query={pagination.query} setQuery={pagination.setQuery}>Value</SortHeader>
               <SortHeader sortKey="status" query={pagination.query} setQuery={pagination.setQuery}>Status</SortHeader>
-              <SortHeader sortKey="due" query={pagination.query} setQuery={pagination.setQuery}>Next action</SortHeader>
               <SortHeader sortKey="owner" query={pagination.query} setQuery={pagination.setQuery}>Created by</SortHeader>
-              <th>Actions</th>
+              <SortHeader sortKey="due" query={pagination.query} setQuery={pagination.setQuery}>Next action</SortHeader>
+              <SortHeader sortKey="amount" query={pagination.query} setQuery={pagination.setQuery}>Value</SortHeader>
+              <th className="e-col-actions">Actions</th>
             </tr>
           </thead>
           <tbody>
             {pagination.items.map((r) => (
               <tr key={r.id}>
-                <td>
+                <td className="e-cell-identity">
                   <Button className="record-link avatar-name" onClick={() => onSelect(r)}>
-                    <Avatar name={r.title} size={32} />
+                    <Avatar name={r.title} size={30} />
                     <span>
-                      {r.title}
-                      <small>
-                        {r.id} · {r.contact || r.owner}
+                      <span className="e-row-title" title={r.title}>{r.title}</span>
+                      <small
+                        className="e-row-meta"
+                        title={[companyName(r.company), r.product || r.contact, r.owner && `by ${r.owner}`].filter(Boolean).join(" · ")}
+                      >
+                        {[companyName(r.company), r.product || r.contact]
+                          .filter(Boolean)
+                          .join(" · ")}
+                        {/* Where the Created by column is dropped for space
+                            (narrower screens, phone cards), the creator
+                            moves into this line instead of disappearing. */}
+                        {r.owner && <span className="e-row-owner"> · by {r.owner}</span>}
                       </small>
                     </span>
                   </Button>
                 </td>
-                <td>
-                  <Company name={r.company} />
-                </td>
-                <td>
-                  <span className="truncate">
-                    {r.product || r.detail || "—"}
-                  </span>
-                  <small>
-                    {r.quantity
-                      ? `${r.quantity.toLocaleString()} ${r.unit}`
-                      : ""}
-                  </small>
-                </td>
-                <td className="amount">
-                  {r.amount ? money(r.amount, r.currency) : "—"}
-                </td>
-                <td>
-                  <Badge status={r.status} />
-                </td>
-                {/* The derived next action replaces a bare date: it says what
-                    to do as well as when, so nobody opens a record to find
-                    out. The date remains visible underneath. */}
-                <td>
-                  <NextActionCell record={r} />
-                </td>
-                <td>
+                <td><Badge status={r.status} /></td>
+                <td className="e-cell-owner">
                   {r.owner ? (
-                    <span className="avatar-name"><Avatar name={r.owner} size={26} /><span>{r.owner}</span></span>
+                    <span className="avatar-name"><Avatar name={r.owner} size={24} /><span title={r.owner}>{r.owner}</span></span>
                   ) : "—"}
                 </td>
-                <td>
-                  <div className="table-record-actions">
-                  <RecordIcons record={r} {...actions} />
-                  <Button
-                    className="icon-button"
-                    aria-label={`Open ${r.title}`}
-                    onClick={() => onSelect(r)}
-                  >
-                    <ArrowUpRight size={16} />
-                  </Button>
-                  </div>
+                {/* The derived next action says what to do as well as when,
+                    so nobody opens a record to find out. */}
+                <td className="e-cell-next"><NextActionCell record={r} /></td>
+                <td className="amount e-numeric">
+                  {r.amount ? formatMoney(r.amount, r.currency) : "—"}
+                </td>
+                <td className="e-col-actions">
+                  <RecordIcons record={r} onOpen={onSelect} {...actions} />
                 </td>
               </tr>
             ))}
@@ -2079,9 +2134,9 @@ function Overview({
     .flatMap((m) => cards[m] || [])
     .slice(0, 4);
 
-  // The cards a role already gets from its own modules. Kept for everyone:
-  // they are the role's summary, and dropping them for non-executives would
-  // trade one useful thing for another rather than adding.
+  // A role's own module summary. Executives now read the KPI strip instead,
+  // which says the same things in one line, so these are shown only to the
+  // roles that have no strip.
   const roleCards = metrics.length > 0 && (
     <div className="stats-grid">
       {metrics.map((m) => (
@@ -2127,13 +2182,18 @@ function Overview({
 
   return (
     <>
-      <MorningBrief actor={actor} records={allRecords} onGo={(m) => go(m as Module)} />
+      {/* Figures first, then the exceptions beside the pipeline that produced
+          them. The brief's counts live inside the attention panel rather than
+          in a panel of their own: they describe the same list. */}
+      <KpiStrip records={records} onGo={(m) => go(m as Module)} />
+      <div className="e-exec-grid">
       {ranked.length > 0 && (
         <section className="panel attention-section tone-urgent command-attention">
           <div className="panel-heading">
             <h2><AlertTriangle size={16} /> Needs attention</h2>
             <span className="attention-count">{rankedAll.length}</span>
           </div>
+          <MorningBrief actor={actor} records={allRecords} onGo={(m) => go(m as Module)} />
           <ul className="attention-list">
             {ranked.map((item) => (
               <li key={item.id} className={`attention-row sev-${item.severity}`}>
@@ -2159,64 +2219,13 @@ function Overview({
           )}
         </section>
       )}
+        <PipelineHealth records={records} onGo={(m) => go(m as Module)} />
+      </div>
+      <OperationsSnapshot records={records} onGo={(m) => go(m as Module)} />
       <p className="dashboard-scope">
         <span>Metrics and charts use record creation date. Daily focus remains current.</span>
         {scopeNote && <span className="dashboard-period-note" role={reversed ? "alert" : "status"}>{scopeNote}</span>}
       </p>
-      <section className="insight-banner">
-        <div className="insight-icon">
-          <Sparkles size={21} />
-        </div>
-        <div>
-          <b>Your daily focus</b>
-          <p>
-            {approvals.length || attention.length ? (
-              <>
-                {approvals.length} {approvals.length === 1 ? "approval" : "approvals"} and{" "}
-                {attention.length} {attention.length === 1 ? "item needs" : "items need"} attention.
-              </>
-            ) : (
-              "No outstanding actions."
-            )}
-          </p>
-        </div>
-        <Button
-          onClick={() =>
-            go(
-              approvals.length
-                ? "approvals"
-                : allowed.includes("leads")
-                  ? "leads"
-                  : allowed.includes("it")
-                    ? "it"
-                    : "hr",
-            )
-          }
-        >
-          Review actions <ArrowRight size={16} />
-        </Button>
-      </section>
-      {metrics.length > 0 && <div className="stats-grid">
-        {metrics.map((m) => (
-          <Button
-            className={`stat-card metric-${m.accent}`}
-            key={m.label}
-            onClick={() => go(m.to)}
-          >
-            <div className="stat-top">
-              <span>{m.label}</span>
-              <div className={`stat-icon ${m.accent}`}>
-                <m.icon size={18} />
-              </div>
-            </div>
-            <strong>{m.value}</strong>
-            <div className="stat-bottom">
-              <span>{m.sub}</span>
-              <ArrowUpRight size={15} />
-            </div>
-          </Button>
-        ))}
-      </div>}
       {commercial && (
         <DashboardInsights actor={actor} records={records} onSelect={onSelect} />
       )}
@@ -2312,53 +2321,6 @@ function Overview({
             </span>
           </div>
         </section>}
-        <section className="panel attention-panel">
-          <div className="panel-heading">
-            <div>
-              <h2>Needs your attention</h2>
-              <p>Pending approvals and overdue work.</p>
-            </div>
-            <span className="count">{attention.length + approvals.length}</span>
-          </div>
-          {[...approvals, ...attention].slice(0, 4).map((r, i) => (
-            <Button
-              className="attention-row"
-              key={r.id}
-              onClick={() => onSelect(r)}
-            >
-              <span className={`attention-icon ${i % 2 ? "amber" : "mint"}`}>
-                {r.status === "Pending Approval" ? (
-                  <ShieldCheck size={18} />
-                ) : (
-                  <Clock size={18} />
-                )}
-              </span>
-              <span>
-                <b>
-                  {r.status === "Pending Approval"
-                    ? "Approval requested"
-                    : r.status === "Delayed"
-                      ? "Shipment delayed"
-                      : "Follow-up needed"}
-                </b>
-                <small>{r.title}</small>
-                <em>
-                  {companyName(r.company)} ·{" "}
-                  {r.kind === "quotations"
-                    ? money(r.amount, r.currency)
-                    : r.due}
-                </em>
-              </span>
-              <ChevronRight size={16} />
-            </Button>
-          ))}
-          {!attention.length && !approvals.length && (
-            <Empty title="All clear" detail="No urgent items in your scope." />
-          )}
-          <div className="panel-bottom">
-            <ShieldCheck size={14} /> Visible only within your access scope
-          </div>
-        </section>
       </div>
       <div className="overview-lower">
         <section className="panel">
@@ -2435,10 +2397,10 @@ function activityParts(action: string) {
   if (at < 0) return { area: "", change: action };
   return { area: action.slice(0, at).trim(), change: action.slice(at + 1).trim() };
 }
-const activityWhen = (at: string) =>
-  new Date(at).toLocaleString("en-GB", {
-    month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-  });
+// Business time, not the device's: "04:14" with no am/pm is ambiguous next to
+// the 12-hour GST clock in the header, and a local-time value would disagree
+// with it entirely for anyone not in Dubai.
+const activityWhen = businessStampShort;
 
 function ActivityList({
   events,
@@ -2538,13 +2500,16 @@ function ActivityList({
         {detail && (
           <Dialog
             title="Activity detail"
-            className="record-detail-dialog"
+            // Its own class rather than borrowing .record-detail-dialog: that
+            // class carries width and footer rules meant for an editable
+            // business record, none of which apply to six read-only fields.
+            className="audit-detail-dialog"
             onClose={() => setDetail(null)}
           >
-            <p className="detail-summary">
+            <p className="audit-detail-summary">
               <strong>{detail.actor}</strong> {activityParts(detail.action).change}
             </p>
-            <dl className="detail-grid">
+            <dl className="audit-detail-grid">
               {([
                 ["Person", detail.actor],
                 // Only present when the action names an area, e.g. "leads: …".
@@ -2555,7 +2520,7 @@ function ActivityList({
                 ["Company", companyName(detail.company)],
                 // Account events reference a user, not a business record.
                 [detail.subject === "account" ? "Account" : "Record", detail.recordId || "—"],
-                ["When", new Date(detail.at).toLocaleString("en-GB", { dateStyle: "full", timeStyle: "short" })],
+                ["When", businessDateTimeLong(detail.at)],
               ] as [string, string][]).map(([term, value]) => (
                 <div key={term}>
                   <dt>{term}</dt>
@@ -2563,7 +2528,7 @@ function ActivityList({
                 </div>
               ))}
             </dl>
-            <p className="muted small">
+            <p className="audit-detail-note">
               Audit entries are a record of what changed. They cannot be edited
               or removed.
             </p>
@@ -2583,10 +2548,17 @@ function Detail({
   onAction,
   onEdit,
   onDelete,
+  pinned,
+  onPin,
+  onLog,
 }: {
   record: RecordItem;
   actor: Actor;
   busy: boolean;
+  /** Pinning is a per-person convenience; it never touches the record. */
+  pinned: boolean;
+  onPin: () => void;
+  onLog: () => void;
   onClose: () => void;
   onUpdate: (s: string) => void;
   onQuote: () => void;
@@ -2614,6 +2586,22 @@ function Detail({
         </span>
         <Company name={r.company} />
         <Badge status={r.status} />
+        <span className="detail-quick-actions">
+          {LOGGABLE.includes(r.kind) && canWrite(actor, r) && (
+            <Button className="secondary" onClick={onLog}>
+              <Phone size={15} aria-hidden="true" /> Log activity
+            </Button>
+          )}
+          <Button
+            className="icon-button"
+            aria-pressed={pinned}
+            aria-label={pinned ? `Unpin ${r.title}` : `Pin ${r.title}`}
+            title={pinned ? "Remove from pinned" : "Pin for quick access"}
+            onClick={onPin}
+          >
+            <Pin size={16} className={pinned ? "is-pinned" : undefined} />
+          </Button>
+        </span>
       </div>
       {r.kind === "quotations" && (
         <>

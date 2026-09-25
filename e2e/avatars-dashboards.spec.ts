@@ -19,6 +19,9 @@ test.beforeAll(() => {
 });
 
 test("each role gets a dashboard built from its own modules", async ({ page }) => {
+  // Four full sign-ins and four dashboard renders: genuinely several times the
+  // work of a normal test, rather than a slow assertion.
+  test.slow();
   const cards = async () => {
     await page.locator(".stats-grid .stat-card").first().waitFor();
     return (await page.locator(".stats-grid .stat-card").allInnerTexts()).map((t) => t.split("\n")[0]);
@@ -30,11 +33,16 @@ test("each role gets a dashboard built from its own modules", async ({ page }) =
   expect(await cards()).toEqual(["Open tickets", "Resolved tickets"]);
   await signIn(page, "logistics");
   expect(await cards()).toContain("Active shipments");
+  // The MD reads the executive KPI strip instead of a narrow role's cards: the
+  // same commercial figures, in one line rather than two rows.
   await signIn(page, "md");
-  // The MD keeps the commercial dashboard rather than a narrow role's cards.
-  expect(await cards()).toEqual([
-    "Open pipeline", "Confirmed orders", "Active shipments", "Invoices awaiting payment",
-  ]);
+  await expect(page.locator(".e-kpi-strip")).toBeVisible();
+  const kpis = await page.locator(".e-kpi .e-kpi-label").evaluateAll((els) =>
+    els.map((el) => (el.textContent ?? "").trim()),
+  );
+  expect(kpis).toEqual(["Open pipeline", "Won", "Outstanding", "In progress"]);
+  // And does not also get a role card row saying the same things twice.
+  await expect(page.locator(".stats-grid .stat-card")).toHaveCount(0);
 });
 
 test("a role's dashboard fills its row instead of leaving another role's gaps", async ({ page }) => {
@@ -68,6 +76,9 @@ test("a role's dashboard fills its row instead of leaving another role's gaps", 
 
 test("records and people carry initials avatars", async ({ page }) => {
   await signIn(page, "md");
+  // Wide enough for the Created by column, which narrower screens fold into
+  // the record's summary line (covered in roles-activity.spec.ts).
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/workspace/all-companies/sales-orders");
   await page.locator(".records-panel .table-scroll").waitFor();
   const first = page.locator(".records-panel tbody tr").first();
@@ -135,7 +146,7 @@ test("record cards show one identity row, not a separate glyph row", async ({ pa
   await expect(card.locator(".collection-icon")).toHaveCount(0);
   const identity = card.locator(".collection-identity");
   await expect(identity.locator(".entity-avatar")).toBeVisible();
-  await expect(identity.locator(".badge")).toBeVisible();
+  await expect(identity.locator(".e-badge")).toBeVisible();
   // Avatar, name and status share one line.
   const rows = await identity.evaluate((el) => {
     const tops = [...el.children].map((c) => Math.round(c.getBoundingClientRect().top));

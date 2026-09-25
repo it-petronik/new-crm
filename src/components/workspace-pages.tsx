@@ -1,5 +1,6 @@
 "use client";
 import { companyName } from "@/lib/company-name";
+import { businessStampShort } from "@/lib/gst";
 import { BrandLogo, brands } from "./brand";
 import { Pagination, usePagination } from "./pagination";
 import { useEffect, useState } from "react";
@@ -28,8 +29,9 @@ import {
 } from "@/lib/domain";
 import type { NotificationItem } from "@/lib/notifications";
 export type WorkspaceView =
-  "notifications" | "profile" | "appearance" | "access" | "shortcuts";
+  "collaboration" | "notifications" | "profile" | "appearance" | "access" | "shortcuts";
 export const viewLabels: Record<WorkspaceView, string> = {
+  collaboration: "Collaboration",
   notifications: "Notifications",
   profile: "My profile",
   appearance: "Appearance",
@@ -320,7 +322,7 @@ export function NotificationsPage({
               <h3>{n.title}</h3>
               <p>{n.detail}</p>
               <small>
-                {companyName(n.company)} · {new Date(n.at).toLocaleString()}
+                {companyName(n.company)} · {businessStampShort(n.at)}
               </small>
             </div>
             <div className="inbox-actions">

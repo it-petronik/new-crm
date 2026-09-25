@@ -32,6 +32,14 @@ export const businessTime = (at: Date = new Date(), withSeconds = false) =>
 export const businessDate = (at: Date = new Date()) =>
   formatter({ weekday: "short", day: "numeric", month: "short" }).format(at);
 
+/** `Friday, 25 September 2026 at 10:42 am`, for a dialog's full-length field. */
+export const businessDateTimeLong = (at: Date | string) => {
+  const date = typeof at === "string" ? new Date(at) : at;
+  if (Number.isNaN(date.getTime())) return "";
+  const day = formatter({ weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(date);
+  return `${day} at ${businessTime(date)}`;
+};
+
 /**
  * The business day as `YYYY-MM-DD`.
  *
@@ -51,6 +59,21 @@ export const businessStamp = (at: Date | string) => {
   const date = typeof at === "string" ? new Date(at) : at;
   if (Number.isNaN(date.getTime())) return "";
   return `${formatter({ day: "numeric", month: "short" }).format(date)}, ${businessTime(date)} GST`;
+};
+
+/**
+ * The compact form for a dense list — activity rows, table cells — where
+ * `businessStamp`'s trailing "GST" repeated down a column would be noise.
+ * Still Dubai time and still 12-hour with am/pm: a bare 24-hour time like
+ * "04:14" reads as ambiguous next to a 12-hour clock elsewhere on the same
+ * page, which is what this replaces.
+ *
+ * e.g. `25 Sep, 10:42 am`
+ */
+export const businessStampShort = (at: Date | string) => {
+  const date = typeof at === "string" ? new Date(at) : at;
+  if (Number.isNaN(date.getTime())) return "";
+  return `${formatter({ day: "numeric", month: "short" }).format(date)}, ${businessTime(date)}`;
 };
 
 /** Milliseconds until the next minute turns, so a clock ticks on the minute. */

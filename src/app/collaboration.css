@@ -1,0 +1,870 @@
+/* ---------------------------------------------------------------------------
+   Collaboration Hub.
+
+   Three panes on desktop (list | thread | optional details), one pane at a
+   time on mobile with the thread full-screen. Built from the semantic tokens
+   so it follows the theme and palette like every other page; everything is
+   scoped under .collab-* and the one main-content modifier below.
+   ------------------------------------------------------------------------ */
+
+/* The hub fills the space under the header instead of scrolling the page. */
+.main-content.is-collaboration {
+  max-width: none;
+  padding: 0;
+  height: calc(100dvh - var(--l-header-h));
+  overflow: hidden;
+}
+.main-content.is-collaboration > * + * { margin-top: 0; }
+
+.collab {
+  --collab-list-w: 320px;
+  --collab-details-w: 300px;
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--collab-list-w) minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  background: var(--e-surface);
+  border-top: 1px solid var(--e-border);
+  color: var(--e-text);
+}
+.collab.has-details {
+  grid-template-columns: var(--collab-list-w) minmax(0, 1fr) var(--collab-details-w);
+}
+.collab.collab-unavailable { display: flex; align-items: center; justify-content: center; }
+
+/* --------------------------------------------------------------- list pane */
+
+.collab-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--e-border);
+  background: var(--e-surface);
+}
+.collab-sidebar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e-2);
+  padding: var(--e-4) var(--e-4) var(--e-2);
+}
+.collab-sidebar-head h1 {
+  margin: 0;
+  font-size: var(--e-section);
+  font-weight: var(--e-weight-strong);
+  letter-spacing: -0.01em;
+}
+.collab-sidebar-actions { display: flex; gap: 2px; }
+
+.collab-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin: var(--e-1) var(--e-4) var(--e-2);
+}
+.collab-search > svg {
+  position: absolute;
+  left: 10px;
+  color: var(--e-text-muted);
+  pointer-events: none;
+}
+.collab-search .ui-input {
+  width: 100%;
+  height: 34px;
+  padding-left: 32px;
+  font-size: var(--e-secondary);
+}
+
+.collab-filters {
+  display: flex;
+  gap: 4px;
+  padding: 0 var(--e-4) var(--e-2);
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--e-border-muted);
+}
+.collab-filters::-webkit-scrollbar { display: none; }
+.collab-filters button {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--e-radius-pill);
+  background: transparent;
+  color: var(--e-text-secondary);
+  font: inherit;
+  font-size: var(--e-meta);
+  font-weight: var(--e-weight-medium);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.collab-filters button:hover { background: var(--e-surface-sunken); color: var(--e-text); }
+.collab-filters button.is-active {
+  background: var(--e-accent-soft);
+  color: var(--e-accent-strong);
+}
+.collab-filters button:focus-visible { outline: none; box-shadow: var(--e-focus-ring); }
+
+.collab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--e-radius-pill);
+  background: var(--e-accent);
+  color: var(--e-text-inverse);
+  font-size: 10.5px;
+  font-weight: var(--e-weight-strong);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.collab-count.is-mention { background: var(--e-warning); }
+
+.collab-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--e-1) var(--e-2) var(--e-4);
+}
+
+.collab-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: var(--e-radius);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.collab-row + .collab-row { margin-top: 1px; }
+.collab-row:hover { background: var(--e-surface-sunken); }
+.collab-row.is-active { background: var(--e-accent-soft); }
+.collab-row:focus-visible { outline: none; box-shadow: var(--e-focus-ring); }
+.collab-row .entity-avatar { flex: 0 0 auto; }
+.collab-row-main { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.collab-row-top,
+.collab-row-bottom { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.collab-row-top b {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--e-secondary);
+  font-weight: var(--e-weight-medium);
+}
+.collab-row-top time {
+  flex: 0 0 auto;
+  font-size: var(--e-caption);
+  color: var(--e-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.collab-row-preview {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--e-meta);
+  color: var(--e-text-secondary);
+}
+.collab-row.is-unread .collab-row-top b { font-weight: var(--e-weight-strong); }
+.collab-row.is-unread .collab-row-preview { color: var(--e-text); }
+.collab-row.is-unread .collab-row-top time { color: var(--e-accent-strong); }
+.collab-row.is-archived { opacity: 0.72; }
+
+.collab-room-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--e-radius);
+  background: var(--e-surface-sunken);
+  color: var(--e-text-secondary);
+}
+.collab-room-icon.is-large { width: 52px; height: 52px; border-radius: var(--e-radius-lg); }
+
+/* Mentions view */
+.collab-mentions { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.collab-mentions button {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--e-border-muted);
+  border-radius: var(--e-radius);
+  background: var(--e-surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.collab-mentions button:hover { background: var(--e-surface-sunken); }
+.collab-mentions button.is-unread { border-color: color-mix(in srgb, var(--e-warning) 40%, var(--e-border)); }
+.collab-mention-where {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--e-caption);
+  color: var(--e-text-muted);
+  font-weight: var(--e-weight-medium);
+}
+.collab-mention-where time { margin-left: auto; font-weight: var(--e-weight-regular); }
+.collab-mention-who { display: flex; align-items: center; gap: 6px; font-size: var(--e-meta); }
+.collab-mention-text {
+  font-size: var(--e-secondary);
+  line-height: var(--e-leading-body);
+  color: var(--e-text);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* -------------------------------------------------------------- thread pane */
+
+.collab-main {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--e-bg);
+}
+.collab-thread { display: flex; flex-direction: column; flex: 1; min-height: 0; position: relative; }
+
+.collab-thread-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 60px;
+  padding: 10px var(--e-4);
+  border-bottom: 1px solid var(--e-border);
+  background: var(--e-surface);
+}
+/* The shared .icon-button rule sets display with !important, so hiding the
+   mobile-only back button has to as well. */
+.collab-thread-head .collab-back { display: none !important; }
+.collab-thread-title { flex: 1; min-width: 0; }
+.collab-thread-title h2 {
+  margin: 0;
+  font-size: var(--e-card);
+  font-weight: var(--e-weight-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.collab-thread-title p {
+  margin: 1px 0 0;
+  font-size: var(--e-caption);
+  color: var(--e-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.collab-thread-head .icon-button.is-active { background: var(--e-accent-soft); color: var(--e-accent-strong); }
+
+.collab-live {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--e-neutral);
+  opacity: 0.5;
+}
+.collab-live.is-live { background: var(--e-success); opacity: 1; }
+.collab-live.is-connecting,
+.collab-live.is-offline { background: var(--e-warning); opacity: 0.8; }
+
+.collab-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px var(--e-4);
+  background: var(--e-neutral-soft);
+  color: var(--e-text-secondary);
+  font-size: var(--e-meta);
+  border-bottom: 1px solid var(--e-border-muted);
+}
+
+.collab-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--e-3) 0 var(--e-2);
+}
+
+.collab-messages { list-style: none; margin: 0; padding: 0; }
+.collab-older,
+.collab-start { display: flex; justify-content: center; padding: var(--e-2) 0 var(--e-3); }
+.collab-start { font-size: var(--e-caption); color: var(--e-text-muted); }
+
+.collab-day,
+.collab-unread-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  margin: var(--e-3) var(--e-4) var(--e-2);
+  font-size: var(--e-caption);
+  font-weight: var(--e-weight-strong);
+  color: var(--e-text-muted);
+}
+.collab-day::before,
+.collab-day::after,
+.collab-unread-divider::before,
+.collab-unread-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--e-border);
+}
+.collab-unread-divider { color: var(--e-danger); }
+.collab-unread-divider::before,
+.collab-unread-divider::after { background: color-mix(in srgb, var(--e-danger) 45%, transparent); }
+
+.collab-msg {
+  position: relative;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  column-gap: 10px;
+  padding: 6px var(--e-4) 2px;
+  margin-top: 6px;
+}
+.collab-msg.is-grouped { margin-top: 0; padding-top: 1px; }
+.collab-msg:hover { background: color-mix(in srgb, var(--e-text) 3%, transparent); }
+.collab-msg-avatar { margin-top: 2px; }
+.collab-msg-gutter {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 3px;
+}
+.collab-msg-gutter time {
+  font-size: 10px;
+  color: var(--e-text-muted);
+  opacity: 0;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.collab-msg:hover .collab-msg-gutter time { opacity: 1; }
+.collab-msg-main { min-width: 0; }
+.collab-msg-head { display: flex; align-items: baseline; gap: 8px; }
+.collab-msg-head b { font-size: var(--e-secondary); font-weight: var(--e-weight-strong); }
+.collab-msg-head time { font-size: var(--e-caption); color: var(--e-text-muted); font-variant-numeric: tabular-nums; }
+.collab-msg-body {
+  margin: 1px 0 0;
+  font-size: var(--e-body);
+  line-height: var(--e-leading-body);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.collab-msg-deleted {
+  margin: 1px 0 0;
+  font-size: var(--e-secondary);
+  font-style: italic;
+  color: var(--e-text-muted);
+}
+.collab-edited { font-size: var(--e-caption); color: var(--e-text-muted); }
+.collab-msg.is-sending .collab-msg-body { opacity: 0.6; }
+.collab-msg.is-failed .collab-msg-body { opacity: 0.75; }
+.collab-msg-state {
+  display: inline-flex;
+  gap: 8px;
+  margin-top: 2px;
+  font-size: var(--e-caption);
+  color: var(--e-text-muted);
+}
+.collab-msg-state.is-failed { color: var(--e-danger); }
+.collab-msg-state button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: var(--e-weight-strong);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.collab-msg.is-flash { animation: collab-flash 1.8s ease-out; }
+@keyframes collab-flash {
+  0%, 30% { background: color-mix(in srgb, var(--e-warning) 18%, transparent); }
+  100% { background: transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .collab-msg.is-flash { animation: none; background: color-mix(in srgb, var(--e-warning) 12%, transparent); }
+}
+
+.collab-msg-actions {
+  position: absolute;
+  top: -12px;
+  right: var(--e-4);
+  display: flex;
+  gap: 1px;
+  padding: 2px;
+  /* Hidden but still in the tab order, so keyboard users reach the actions
+     and focusing one reveals the toolbar. */
+  opacity: 0;
+  pointer-events: none;
+  border: 1px solid var(--e-border);
+  border-radius: var(--e-radius-sm);
+  background: var(--e-surface);
+  box-shadow: var(--e-shadow-raised);
+  z-index: 2;
+}
+.collab-msg:hover .collab-msg-actions,
+.collab-msg:focus-within .collab-msg-actions { opacity: 1; pointer-events: auto; }
+.collab-msg-actions .icon-button { width: 28px; height: 28px; min-height: 0; }
+.collab-msg-actions .icon-button.is-danger:hover { color: var(--e-danger); }
+/* Touch screens have no hover: keep the actions reachable. */
+@media (hover: none) {
+  .collab-msg-actions { position: static; opacity: 1; pointer-events: auto; justify-self: start; grid-column: 2; margin-top: 2px; box-shadow: none; border-color: var(--e-border-muted); }
+}
+
+.collab-quote {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  margin: 3px 0 2px;
+  padding: 3px 8px;
+  border: 0;
+  border-left: 2px solid var(--e-accent);
+  border-radius: 0 var(--e-radius-sm) var(--e-radius-sm) 0;
+  background: var(--e-accent-soft);
+  color: var(--e-text-secondary);
+  font: inherit;
+  font-size: var(--e-meta);
+  text-align: left;
+  cursor: pointer;
+}
+.collab-quote:hover { color: var(--e-text); }
+.collab-quote > svg { flex: 0 0 auto; }
+.collab-quote b { flex: 0 0 auto; font-weight: var(--e-weight-strong); color: var(--e-text); }
+.collab-quote span,
+.collab-quote em { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.collab-mention {
+  padding: 0 3px;
+  border-radius: 4px;
+  background: var(--e-accent-soft);
+  color: var(--e-accent-strong);
+  font-weight: var(--e-weight-medium);
+}
+.collab-mention.is-me {
+  background: var(--e-warning-soft);
+  color: var(--e-warning);
+}
+.collab-link { color: var(--e-info); text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
+
+.collab-jump {
+  position: absolute;
+  left: 50%;
+  bottom: 118px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: var(--e-radius-pill);
+  background: var(--e-accent);
+  color: var(--e-text-inverse);
+  font-size: var(--e-meta);
+  font-weight: var(--e-weight-medium);
+  box-shadow: var(--e-shadow-overlay);
+  z-index: 3;
+}
+.collab-notice,
+.collab-toast {
+  margin: 0;
+  padding: 7px 12px;
+  border-radius: var(--e-radius);
+  background: var(--e-text);
+  color: var(--e-surface);
+  font-size: var(--e-meta);
+  box-shadow: var(--e-shadow-overlay);
+}
+.collab-notice { position: absolute; left: 50%; bottom: 118px; transform: translateX(-50%); z-index: 4; max-width: calc(100% - 32px); }
+.collab-toast { position: absolute; left: 50%; bottom: var(--e-4); transform: translateX(-50%); z-index: 5; }
+
+.collab-thread-skeleton { display: grid; gap: var(--e-4); padding: var(--e-3) var(--e-4); }
+.collab-skel-msg { display: grid; grid-template-columns: 32px 1fr; gap: 10px; }
+.collab-skel-msg > div { display: grid; gap: 6px; }
+
+/* ----------------------------------------------------------------- composer */
+
+.collab-composer {
+  flex: 0 0 auto;
+  padding: var(--e-2) var(--e-4) calc(var(--e-2) + env(safe-area-inset-bottom, 0px));
+  background: var(--e-bg);
+}
+.collab-composer.is-editing { padding: 4px 0 0; background: transparent; }
+.collab-composer.is-disabled {
+  margin: var(--e-2) var(--e-4) var(--e-3);
+  padding: 10px 12px;
+  border: 1px dashed var(--e-border);
+  border-radius: var(--e-radius);
+  color: var(--e-text-secondary);
+  font-size: var(--e-meta);
+  text-align: center;
+}
+.collab-composer-reply {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 10px;
+  margin-bottom: -1px;
+  border: 1px solid var(--e-border);
+  border-bottom: 0;
+  border-radius: var(--e-radius) var(--e-radius) 0 0;
+  background: var(--e-surface-sunken);
+  font-size: var(--e-meta);
+  color: var(--e-text-secondary);
+}
+.collab-composer-reply > span { flex: 1; min-width: 0; display: flex; gap: 6px; }
+.collab-composer-reply small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--e-text-muted); font-size: inherit; }
+.collab-composer-reply .icon-button { width: 24px; height: 24px; min-height: 0; }
+.collab-composer-reply + .collab-composer-box { border-top-left-radius: 0; border-top-right-radius: 0; }
+
+.collab-composer-box {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 6px 6px 6px 12px;
+  border: 1px solid var(--e-border);
+  border-radius: var(--e-radius);
+  background: var(--e-surface);
+}
+.collab-composer-box:focus-within { border-color: color-mix(in srgb, var(--e-accent) 55%, var(--e-border)); box-shadow: var(--e-focus-ring); }
+.collab-composer-input {
+  flex: 1;
+  min-height: 24px;
+  max-height: 180px;
+  padding: 5px 0;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: var(--e-text);
+  font: inherit;
+  font-size: var(--e-body);
+  line-height: 1.45;
+}
+.collab-composer-tools { display: flex; align-items: center; gap: 4px; }
+.collab-composer-tools .icon-button { width: 32px; height: 32px; min-height: 0; }
+.collab-send.ui-button { width: 34px; height: 32px; min-height: 0; padding: 0; justify-content: center; }
+.collab-composer-hint {
+  min-height: 16px;
+  padding: 3px 2px 0;
+  font-size: 10.5px;
+  color: var(--e-text-muted);
+}
+.collab-composer.is-editing .collab-composer-hint { display: none; }
+.collab-composer-hint kbd {
+  padding: 0 4px;
+  border: 1px solid var(--e-border);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 10px;
+}
+.collab-composer-hint .is-over { color: var(--e-danger); font-weight: var(--e-weight-strong); }
+
+.collab-mention-menu {
+  position: absolute;
+  left: 8px;
+  bottom: calc(100% + 6px);
+  z-index: 10;
+  width: min(300px, calc(100% - 16px));
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid var(--e-border);
+  border-radius: var(--e-radius);
+  background: var(--e-surface);
+  box-shadow: var(--e-shadow-overlay);
+}
+.collab-mention-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--e-radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--e-secondary);
+  text-align: left;
+  cursor: pointer;
+}
+.collab-mention-menu button span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.collab-mention-menu button small { color: var(--e-text-muted); font-size: var(--e-caption); }
+.collab-mention-menu button.is-active,
+.collab-mention-menu button:hover { background: var(--e-accent-soft); }
+
+.collab-emoji {
+  display: grid;
+  grid-template-columns: repeat(8, 32px);
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid var(--e-border);
+  border-radius: var(--e-radius);
+  background: var(--e-surface);
+  box-shadow: var(--e-shadow-overlay);
+  z-index: 80;
+}
+.collab-emoji button {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: var(--e-radius-sm);
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.collab-emoji button:hover,
+.collab-emoji button:focus-visible { background: var(--e-surface-sunken); outline: none; }
+
+/* ------------------------------------------------------------- details pane */
+
+.collab-details {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--e-border);
+  background: var(--e-surface);
+}
+.collab-details-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 60px;
+  padding: 10px var(--e-4);
+  border-bottom: 1px solid var(--e-border);
+}
+.collab-details-head h3 { margin: 0; font-size: var(--e-card); font-weight: var(--e-weight-strong); }
+.collab-details-body { flex: 1; min-height: 0; overflow-y: auto; padding: var(--e-4); display: grid; align-content: start; gap: var(--e-4); }
+.collab-details-section { display: grid; gap: var(--e-2); }
+.collab-details-section + .collab-details-section { padding-top: var(--e-4); border-top: 1px solid var(--e-border-muted); }
+.collab-details-section h4 { margin: 0; font-size: var(--e-secondary); font-weight: var(--e-weight-strong); }
+.collab-details-section h4 span { color: var(--e-text-muted); font-weight: var(--e-weight-regular); margin-left: 4px; }
+.collab-details-desc { margin: 0; font-size: var(--e-secondary); color: var(--e-text-secondary); white-space: pre-wrap; overflow-wrap: anywhere; }
+.collab-details-subhead { display: flex; align-items: center; justify-content: space-between; }
+.collab-details-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.collab-facts { margin: 0; display: grid; gap: 6px; }
+.collab-facts div { display: grid; grid-template-columns: 76px 1fr; gap: 8px; font-size: var(--e-meta); }
+.collab-facts dt { color: var(--e-text-muted); }
+.collab-facts dd { margin: 0; color: var(--e-text); }
+.collab-members { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.collab-members li { display: flex; align-items: center; gap: 8px; padding: 5px 0; min-height: 40px; }
+.collab-member-name { flex: 1; min-width: 0; display: grid; font-size: var(--e-secondary); }
+.collab-member-name em { font-style: normal; color: var(--e-text-muted); }
+.collab-member-name small { color: var(--e-text-muted); font-size: var(--e-caption); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.collab-members .icon-button { width: 28px; height: 28px; min-height: 0; }
+.collab-leave.ui-button { justify-self: start; color: var(--e-danger); }
+.collab-profile { display: grid; justify-items: center; gap: 4px; padding: var(--e-4) 0; text-align: center; }
+.collab-profile b { font-size: var(--e-card); margin-top: 6px; }
+.collab-profile small { color: var(--e-text-muted); font-size: var(--e-meta); }
+
+/* ------------------------------------------------------------ empty states */
+
+.collab-empty {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 6px;
+  padding: var(--e-8) var(--e-6);
+  text-align: center;
+  color: var(--e-text-secondary);
+  font-size: var(--e-secondary);
+}
+.collab-empty p { margin: 0; max-width: 34ch; }
+.collab-empty.is-compact { padding: var(--e-6) var(--e-3); }
+.collab-empty.is-thread { height: 100%; }
+.collab-empty > svg { color: var(--e-text-muted); }
+.collab-empty-title { color: var(--e-text); font-size: var(--e-card); font-weight: var(--e-weight-strong); }
+.collab-empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: var(--e-2); }
+.collab-placeholder,
+.collab-join { flex: 1; }
+.collab-join-meta { font-size: var(--e-meta); color: var(--e-text-muted); margin-bottom: var(--e-2) !important; }
+
+/* ------------------------------------------------------------------ dialogs */
+
+/* Collaboration dialogs are short forms and pickers: a narrow size of their
+   own rather than the 920px compact record dialog they borrow structure from. */
+.modal.ui-dialog.collab-dialog { width: min(560px, calc(100vw - 32px)); }
+@media (max-width: 720px) {
+  /* On phones, the same full-width sheet as every other dialog. */
+  .modal.ui-dialog.collab-dialog { width: 100vw; }
+}
+.collab-dialog .dialog-body { display: grid; gap: var(--e-3); }
+.collab-dialog-text { margin: 0; font-size: var(--e-secondary); color: var(--e-text-secondary); line-height: var(--e-leading-body); }
+.collab-form { display: grid; gap: var(--e-3); }
+.collab-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--e-3); }
+.collab-form-label { font-size: var(--e-meta); font-weight: var(--e-weight-medium); color: var(--e-text-secondary); }
+.collab-dialog .collab-search { margin: 0; }
+.collab-visibility { margin: 0; padding: 0; border: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.collab-visibility legend { padding: 0; margin-bottom: 6px; font-size: var(--e-meta); font-weight: var(--e-weight-medium); color: var(--e-text-secondary); }
+.collab-visibility label {
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--e-border);
+  border-radius: var(--e-radius);
+  cursor: pointer;
+}
+.collab-visibility label.is-selected { border-color: var(--e-accent); background: var(--e-accent-soft); }
+.collab-visibility input { margin: 2px 0 0; accent-color: var(--e-accent); }
+.collab-visibility span { display: grid; gap: 2px; font-size: var(--e-secondary); }
+.collab-visibility small { color: var(--e-text-muted); font-size: var(--e-caption); line-height: 1.35; }
+
+.collab-picker { display: grid; gap: var(--e-2); }
+.collab-picker-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.collab-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 4px 0 10px;
+  border-radius: var(--e-radius-pill);
+  background: var(--e-accent-soft);
+  color: var(--e-accent-strong);
+  font-size: var(--e-meta);
+  font-weight: var(--e-weight-medium);
+}
+.collab-chip button { display: inline-flex; padding: 3px; border: 0; border-radius: 50%; background: none; color: inherit; cursor: pointer; }
+.collab-picker-list,
+.collab-browse {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--e-border-muted);
+  border-radius: var(--e-radius);
+}
+.collab-picker-list li + li,
+.collab-browse li + li { border-top: 1px solid var(--e-border-muted); }
+.collab-picker-list button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.collab-picker-list button:hover { background: var(--e-surface-sunken); }
+.collab-picker-list button.is-selected { background: var(--e-accent-soft); }
+.collab-picker-list button > span { flex: 1; min-width: 0; display: grid; font-size: var(--e-secondary); }
+.collab-picker-list button small { color: var(--e-text-muted); font-size: var(--e-caption); }
+.collab-picker-list button > svg { color: var(--e-accent-strong); }
+.collab-picker-empty { padding: var(--e-4); font-size: var(--e-meta); color: var(--e-text-muted); text-align: center; }
+.collab-picker-list .skeleton-row,
+.collab-browse .skeleton-row { padding: 8px 10px; }
+.collab-browse li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; }
+.collab-browse-main { flex: 1; min-width: 0; display: grid; font-size: var(--e-secondary); }
+.collab-browse-main small { color: var(--e-text-muted); font-size: var(--e-caption); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ------------------------------------------------------------ sidebar badge */
+
+.nav-item-collab { position: relative; }
+.nav-count.nav-count-subtle { background: var(--e-accent-soft); color: var(--e-accent-strong); border-color: transparent; }
+.nav-count.nav-count-mention { background: var(--e-warning); color: var(--e-text-inverse); border-color: transparent; }
+/* The collapsed sidebar hides counts; a dot keeps unread visible. */
+.sidebar-compact .nav-item-collab:has(.nav-count)::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--e-accent);
+}
+.sidebar-compact .nav-item-collab:has(.nav-count-mention)::after { background: var(--e-warning); }
+
+/* Loading shell while the hub's code arrives. */
+.collab.collab-loading .collab-sidebar { padding: var(--e-4) var(--e-2); gap: 4px; }
+
+/* ------------------------------------------------------------- breakpoints */
+
+/* Narrower desktops: details float over the thread instead of squeezing it. */
+@media (max-width: 1180px) {
+  .collab.has-details { grid-template-columns: var(--collab-list-w) minmax(0, 1fr); }
+  .collab.has-details .collab-details {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(var(--collab-details-w), 100%);
+    z-index: 6;
+    box-shadow: var(--e-shadow-overlay);
+  }
+}
+@media (max-width: 1000px) {
+  .collab { --collab-list-w: 280px; }
+}
+
+/* Mobile: one pane at a time; an open conversation is full-screen. */
+@media (max-width: 760px) {
+  /* The page-enter animation leaves a transform on .main-content, which
+     would make the "fixed" conversation fixed to the content box instead of
+     the screen, and its z-index layer would keep it under the header. While
+     a conversation is open, the content area drops the transform and lifts
+     its layer above the header so the thread really is full-screen. */
+  .main-content.is-collaboration:has(.collab.has-selection) {
+    animation: none;
+    transform: none;
+    z-index: 70;
+  }
+  .collab,
+  .collab.has-details { grid-template-columns: minmax(0, 1fr); border-top: 0; }
+  .collab.has-selection .collab-sidebar { display: none; }
+  .collab:not(.has-selection) .collab-main { display: none; }
+  .collab.has-selection .collab-main {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    height: 100dvh;
+  }
+  .collab-thread-head .collab-back { display: inline-flex !important; }
+  .collab-thread-head { padding: 8px 10px; min-height: 56px; padding-top: calc(8px + env(safe-area-inset-top, 0px)); }
+  .collab-msg { padding-left: 12px; padding-right: 12px; }
+  .collab-composer { padding-left: 10px; padding-right: 10px; }
+  .collab.has-details .collab-details {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    z-index: 75;
+    border-left: 0;
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .collab-form-row,
+  .collab-visibility { grid-template-columns: 1fr; }
+  .collab-jump,
+  .collab-notice { bottom: 104px; }
+  .collab-composer-hint { display: none; }
+}

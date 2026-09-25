@@ -1,5 +1,5 @@
 "use client";
-import { Sunrise, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/controls";
 import { morningBrief } from "@/lib/attention";
 import type { Actor, RecordItem } from "@/lib/domain";
@@ -21,11 +21,10 @@ export default function MorningBrief({
 }) {
   const lines = morningBrief(actor, records);
 
+  // Rendered inside the attention panel: these counts describe that same list,
+  // so giving them a panel of their own said everything twice.
   return (
-    <section className="panel morning-brief">
-      <div className="panel-heading">
-        <h2><Sunrise size={16} aria-hidden="true" /> Morning brief</h2>
-      </div>
+    <div className="morning-brief">
       {lines.length === 0 ? (
         <p className="muted morning-brief-clear">
           Nothing is overdue, delayed or waiting. The company is on top of its work.
@@ -47,6 +46,6 @@ export default function MorningBrief({
           ))}
         </ul>
       )}
-    </section>
+    </div>
   );
 }

@@ -19,7 +19,6 @@
 .attention-section { border-left: 3px solid var(--border); }
 .attention-section.tone-urgent { border-left-color: var(--danger, #d9534f); }
 .attention-section.tone-warning { border-left-color: var(--warning, #d98c1f); }
-.attention-section .panel-heading h2 { display: flex; align-items: center; gap: 8px; }
 
 .attention-count {
   font-variant-numeric: tabular-nums; font-weight: 600; font-size: 0.82rem;
@@ -62,7 +61,6 @@
 .my-day-clear > div { flex: 1 1 240px; }
 .my-day-clear p { margin: 2px 0 0; }
 
-.my-day-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
 .my-day-list { list-style: none; margin: 0; padding: 0; }
 .my-day-list li { border-top: 1px solid var(--border); }
 .my-day-list li:first-child { border-top: 0; }
@@ -109,7 +107,6 @@
 .page-heading.is-my-day { margin-bottom: 4px; }
 
 /* --- morning brief ------------------------------------------------------- */
-.morning-brief .panel-heading h2 { display: flex; align-items: center; gap: 8px; }
 .morning-brief-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
 .morning-brief-clear { margin: 0; }
 .brief-line { display: flex; align-items: center; gap: 9px; font-size: 0.9rem; }
@@ -156,18 +153,21 @@
 .next-action-cell { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
 .next-action-cell .cell-date { display: inline-flex; align-items: center; gap: 4px; font-size: 0.74rem; }
 
-/* After-action prompt: a quiet bar above the toast, never a modal. */
+/* After-action prompt: one quiet line above the toast, never a panel over the
+   list it refers to. */
 .after-action {
   position: fixed; left: 50%; transform: translateX(-50%);
-  bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 45;
-  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  max-width: min(680px, calc(100vw - 32px));
-  padding: 10px 12px; border-radius: 10px;
-  border: 1px solid var(--border);
-  background: var(--surface, #fff);
-  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.14);
-  font-size: 0.86rem;
+  bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 55;
+  display: flex; align-items: center; gap: var(--e-3, 12px); flex-wrap: nowrap;
+  width: max-content; max-width: min(620px, calc(100vw - 32px));
+  padding: 8px 10px 8px 14px; border-radius: var(--e-radius-pill, 999px);
+  border: 1px solid var(--e-border);
+  background: var(--e-surface, #fff);
+  box-shadow: var(--e-shadow-overlay, 0 10px 30px rgba(0,0,0,.16));
+  font-size: var(--e-secondary, 0.82rem);
 }
+.after-action > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.after-action .follow-up-menu-trigger { flex: none; }
 @media (max-width: 720px) {
   .after-action { left: 16px; right: 16px; transform: none; max-width: none; bottom: calc(84px + env(safe-area-inset-bottom)); }
 }
@@ -180,19 +180,12 @@
    padding that survives when the content does not.
    ------------------------------------------------------------------------ */
 
-.morning-brief { padding: 18px 20px; }
-.morning-brief .panel-heading { margin: 0 0 10px; padding: 0; border: 0; min-height: 0; }
-.morning-brief .panel-heading h2 { margin: 0; font-size: 0.95rem; }
 .morning-brief-list { gap: 8px; }
 .morning-brief .brief-line { line-height: 1.35; }
 .morning-brief-clear { font-size: 0.88rem; }
 
 /* One attention item is one line of substance plus one of detail, with its
    action on the same row — around 56px, not the 140px five buttons produced. */
-.attention-section { padding: 16px 20px; }
-.attention-section .panel-heading { margin: 0 0 6px; padding: 0; border: 0; min-height: 0; }
-.attention-section .panel-heading h2 { margin: 0; font-size: 0.95rem; }
-.attention-row { padding: 9px 0; gap: 10px; flex-wrap: nowrap; align-items: center; }
 .attention-open { flex: 1 1 auto; min-width: 0; }
 .attention-open small {
   display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -246,18 +239,58 @@
 }
 
 /* Two lines of text and an action, at the density the executive screen needs. */
-.attention-row { padding: 7px 0; }
 .attention-open { padding: 0; }
 .attention-open .my-day-title { font-size: 0.89rem; line-height: 1.25; }
 .attention-open small { font-size: 0.765rem; line-height: 1.25; margin-top: 1px; }
 .attention-tag { padding: 0 6px; font-size: 0.69rem; }
 
 /* More specific than the generic panel-list and button rules these sit inside. */
-.attention-section .attention-list .attention-row { padding: 7px 0; }
 .attention-section .attention-row .attention-open { min-height: 0; padding: 0; }
 .attention-section .attention-row .follow-up-menu-trigger {
   min-height: 0; height: 28px; padding: 0 10px; font-size: 0.78rem;
 }
 @media (max-width: 720px) {
   .attention-section .attention-row .follow-up-menu-trigger { height: 38px; }
+}
+
+/* --- command palette ------------------------------------------------------ */
+.command-dialog { max-width: 620px; }
+.command-results { max-height: min(52vh, 440px); overflow-y: auto; margin: 4px -4px 0; padding: 0 4px; }
+.command-section + .command-section { margin-top: 10px; }
+.command-section-title {
+  display: flex; align-items: center; gap: 5px;
+  margin: 0 0 4px; padding: 0 8px;
+  font-size: 0.7rem; font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--muted);
+}
+.command-item {
+  display: flex; align-items: baseline; gap: 10px; width: 100%;
+  padding: 8px 10px; border-radius: 8px; text-align: left;
+  min-height: 0;
+}
+.command-item.is-active { background: var(--surface-2, rgba(128, 128, 128, 0.1)); }
+.command-item-label { font-weight: 500; }
+.command-item small { color: var(--muted); flex: 1; }
+.command-enter { color: var(--muted); flex: none; }
+.command-empty { margin: 14px 8px; color: var(--muted); font-size: 0.87rem; }
+.command-hint {
+  margin: 10px 0 0; padding-top: 10px; border-top: 1px solid var(--border);
+  font-size: 0.74rem; color: var(--muted);
+}
+.command-hint kbd {
+  display: inline-block; padding: 1px 5px; margin-right: 2px;
+  border: 1px solid var(--border); border-radius: 4px;
+  font-family: inherit; font-size: 0.72rem;
+}
+
+/* --- detail quick actions ------------------------------------------------- */
+.detail-quick-actions { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+.detail-quick-actions .is-pinned { fill: currentColor; }
+
+@media (max-width: 720px) {
+  .command-results { max-height: 58vh; }
+  .command-item { min-height: 44px; }
+  .command-hint { display: none; }
+  .detail-quick-actions { margin-left: 0; width: 100%; }
+  .detail-quick-actions button { min-height: 40px; }
 }

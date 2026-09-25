@@ -1,5 +1,6 @@
 "use client";
 import { Button, Input, Textarea, Field } from "@/components/ui/controls";
+import { businessStampShort } from "@/lib/gst";
 import { check, required, number } from "@/lib/validation";
 import { useState } from "react";
 import { Plus, X } from "lucide-react";
@@ -199,7 +200,9 @@ export function RecordActivity({
           {record.notes?.map((n) => (
             <div className="record-note" key={n.id}>
               <b>{n.actor}</b>
-              <small>{new Date(n.at).toLocaleString()}</small>
+              {/* Business time, not the browser's default locale — otherwise this
+                  timestamp disagrees with the GST clock elsewhere on the page. */}
+              <small>{businessStampShort(n.at)}</small>
               <p>{n.text}</p>
             </div>
           ))}

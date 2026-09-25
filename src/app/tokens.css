@@ -1,0 +1,251 @@
+/* ---------------------------------------------------------------------------
+   Semantic design tokens.
+
+   A layer over the existing primitives rather than a replacement for them: the
+   older stylesheets keep working untouched, and everything built from here on
+   refers to meaning ("a surface", "a danger tone") instead of to a particular
+   colour. That is what makes the CRM consistent — two components asking for
+   the same meaning get the same value, and changing it changes both.
+
+   Dark mode is inherited: every token below resolves through the existing
+   [data-theme] primitives, so it follows the theme without a second palette.
+   ------------------------------------------------------------------------ */
+
+:root {
+  /* --- surfaces and lines ------------------------------------------------ */
+  --e-bg: var(--bg);
+  --e-surface: var(--surface);
+  --e-surface-raised: var(--surface);
+  --e-surface-sunken: color-mix(in srgb, var(--ink) 3%, var(--surface));
+  --e-border: var(--line);
+  --e-border-muted: color-mix(in srgb, var(--line) 55%, transparent);
+
+  /* --- text -------------------------------------------------------------- */
+  --e-text: var(--ink);
+  --e-text-secondary: var(--muted);
+  --e-text-muted: var(--subtle);
+  --e-text-inverse: #fff;
+
+  /* --- meaning. Colour is only ever used to say something. --------------- */
+  --e-accent: var(--teal);
+  --e-accent-strong: var(--teal-dark);
+  --e-success: #1f7a4d;
+  --e-warning: #9a6512;
+  --e-danger: #b4372f;
+  --e-info: #1f5f8b;
+  --e-neutral: var(--muted);
+
+  /* Tints for badges and rails; mixed so they follow the theme. */
+  --e-success-soft: color-mix(in srgb, var(--e-success) 12%, transparent);
+  --e-warning-soft: color-mix(in srgb, var(--e-warning) 13%, transparent);
+  --e-danger-soft: color-mix(in srgb, var(--e-danger) 12%, transparent);
+  --e-info-soft: color-mix(in srgb, var(--e-info) 12%, transparent);
+  --e-neutral-soft: color-mix(in srgb, var(--e-neutral) 11%, transparent);
+  --e-accent-soft: color-mix(in srgb, var(--e-accent) 12%, transparent);
+
+  /* --- type scale -------------------------------------------------------- */
+  --e-eyebrow: 0.7rem;
+  --e-title: 1.5rem;
+  --e-section: 1.0rem;
+  --e-card: 0.92rem;
+  --e-kpi: 1.55rem;
+  --e-body: 0.9rem;
+  --e-secondary: 0.82rem;
+  --e-meta: 0.76rem;
+  --e-caption: 0.7rem;
+
+  --e-weight-regular: 400;
+  --e-weight-medium: 500;
+  --e-weight-strong: 600;
+
+  --e-leading-tight: 1.25;
+  --e-leading-body: 1.5;
+
+  /* --- spacing, radius, elevation ---------------------------------------- */
+  --e-1: 4px;  --e-2: 8px;  --e-3: 12px; --e-4: 16px;
+  --e-5: 20px; --e-6: 24px; --e-8: 32px; --e-10: 40px;
+
+  --e-radius-sm: 6px;
+  --e-radius: 10px;
+  --e-radius-lg: 14px;
+  --e-radius-pill: 999px;
+
+  /* Elevation is used only where something genuinely floats. */
+  --e-shadow-none: none;
+  --e-shadow-raised: 0 1px 2px rgba(16, 42, 46, 0.04);
+  --e-shadow-overlay: 0 10px 30px rgba(16, 42, 46, 0.16);
+
+  --e-focus-ring: 0 0 0 3px color-mix(in srgb, var(--e-accent) 30%, transparent);
+
+  /* --- controls and density ---------------------------------------------- */
+  --e-control-h: 36px;
+  --e-control-h-sm: 28px;
+  --e-control-h-touch: 44px;
+  --e-row-h: 56px;
+
+  --e-transition: 140ms var(--ease, ease-out);
+}
+
+/* A compact row is still a comfortable target on a touch screen. */
+@media (max-width: 720px) {
+  :root {
+    --e-control-h: var(--e-control-h-touch);
+    --e-control-h-sm: 38px;
+    --e-row-h: auto;
+  }
+}
+
+/* --- typography roles ---------------------------------------------------- */
+.e-eyebrow {
+  font-size: var(--e-eyebrow); font-weight: var(--e-weight-strong);
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--e-text-muted);
+}
+.e-section-title {
+  font-size: var(--e-section); font-weight: var(--e-weight-strong);
+  line-height: var(--e-leading-tight); margin: 0;
+}
+.e-card-title {
+  font-size: var(--e-card); font-weight: var(--e-weight-medium);
+  line-height: var(--e-leading-tight);
+}
+.e-kpi-value {
+  font-size: var(--e-kpi); font-weight: var(--e-weight-strong);
+  line-height: 1.1; font-variant-numeric: tabular-nums;
+}
+.e-meta { font-size: var(--e-meta); color: var(--e-text-secondary); }
+.e-caption { font-size: var(--e-caption); color: var(--e-text-muted); }
+/* Money is compared down a column, so it aligns and shares one width. */
+.e-numeric { font-variant-numeric: tabular-nums; }
+
+/* --- focus --------------------------------------------------------------- */
+/* One visible focus treatment everywhere, including compact rows. */
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: none;
+  box-shadow: var(--e-focus-ring);
+  border-radius: var(--e-radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --e-transition: 0ms; }
+}
+
+/* --- status badge --------------------------------------------------------- */
+.e-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 2px 9px; border-radius: var(--e-radius-pill);
+  font-size: var(--e-meta); font-weight: var(--e-weight-medium);
+  line-height: 1.6; white-space: nowrap;
+  border: 1px solid transparent;
+}
+.e-badge.is-sm { font-size: var(--e-caption); padding: 1px 7px; }
+.e-badge-dot { width: 6px; height: 6px; border-radius: var(--e-radius-pill); background: currentColor; flex: none; }
+
+.e-badge.tone-neutral { color: var(--e-neutral); background: var(--e-neutral-soft); }
+.e-badge.tone-info    { color: var(--e-info);    background: var(--e-info-soft); }
+.e-badge.tone-active  { color: var(--e-accent-strong); background: var(--e-accent-soft); }
+.e-badge.tone-success { color: var(--e-success); background: var(--e-success-soft); }
+.e-badge.tone-warning { color: var(--e-warning); background: var(--e-warning-soft); }
+.e-badge.tone-danger  { color: var(--e-danger);  background: var(--e-danger-soft); }
+
+/* --- business tables ------------------------------------------------------ */
+/* Compact but not cramped: one line of identity, one of context, and a row
+   that stays near 56px so more of the list fits on a screen. */
+.table-scroll table tbody tr { transition: background var(--e-transition); }
+.table-scroll table tbody tr:hover { background: var(--e-surface-sunken); }
+.table-scroll table tbody tr:focus-within { background: var(--e-surface-sunken); }
+
+.e-cell-identity .record-link { padding: 0; min-height: 0; text-align: left; }
+.e-row-title {
+  display: block; font-size: var(--e-body); font-weight: var(--e-weight-medium);
+  line-height: var(--e-leading-tight);
+}
+.e-row-meta {
+  display: block; font-size: var(--e-meta); color: var(--e-text-secondary);
+  line-height: var(--e-leading-tight); margin-top: 1px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 34ch;
+}
+/* The name only; the avatar sizes its initials from its own `size` prop. */
+.e-cell-owner .avatar-name > span:not(.entity-avatar) { font-size: var(--e-secondary); color: var(--e-text-secondary); }
+.e-cell-next { max-width: 22ch; }
+/* Actions are available, not loud. */
+.e-col-actions { width: 1%; white-space: nowrap; }
+.table-record-actions { display: inline-flex; gap: 2px; opacity: 0.72; transition: opacity var(--e-transition); }
+tr:hover .table-record-actions, tr:focus-within .table-record-actions { opacity: 1; }
+
+/* The mobile card transform lives in layout-system.css, which owns the
+   business-table layout for every module. */
+
+/* --- executive KPI strip --------------------------------------------------- */
+/* One compact row, not four large cards. No icons: they decorate without
+   adding meaning when every tile is the same kind of thing. */
+.e-kpi {
+  display: flex; flex-direction: column; gap: 3px; align-items: flex-start;
+  padding: var(--e-4); min-height: 0; text-align: left;
+  border: 1px solid var(--e-border); border-radius: var(--e-radius);
+  background: var(--e-surface); box-shadow: var(--e-shadow-raised);
+  transition: border-color var(--e-transition);
+}
+.e-kpi:hover { border-color: color-mix(in srgb, var(--e-accent) 40%, var(--e-border)); }
+.e-kpi-label {
+  font-size: var(--e-caption); font-weight: var(--e-weight-strong);
+  letter-spacing: 0.05em; text-transform: uppercase; color: var(--e-text-muted);
+}
+.e-kpi .e-kpi-value { font-size: var(--e-kpi); }
+
+/* --- pipeline health ------------------------------------------------------- */
+.e-pipeline-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.e-pipeline-list li {
+  display: grid; align-items: center; gap: var(--e-3);
+  grid-template-columns: 8.5rem minmax(60px, 1fr) 2.5rem 7rem 8rem;
+  padding: 7px 0; border-top: 1px solid var(--e-border-muted);
+  font-size: var(--e-secondary);
+}
+.e-pipeline-list li:first-child { border-top: 0; }
+.e-pipeline-stage { font-weight: var(--e-weight-medium); }
+.e-pipeline-bar { height: 6px; border-radius: var(--e-radius-pill); background: var(--e-surface-sunken); overflow: hidden; }
+.e-pipeline-bar span { display: block; height: 100%; border-radius: var(--e-radius-pill); background: var(--e-accent); }
+.e-pipeline-list li.is-peak .e-pipeline-bar span { background: var(--e-warning); }
+.e-pipeline-count { font-weight: var(--e-weight-strong); }
+.e-pipeline-value, .e-pipeline-stale { color: var(--e-text-secondary); font-size: var(--e-meta); }
+.e-pipeline-note { margin: var(--e-3) 0 0; }
+
+/* --- operations ------------------------------------------------------------ */
+.e-operations-grid { display: grid; gap: var(--e-2); grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.e-operation {
+  display: flex; flex-direction: column; gap: 2px; align-items: flex-start;
+  padding: var(--e-3); min-height: 0; text-align: left;
+  border: 1px solid var(--e-border); border-radius: var(--e-radius);
+}
+.e-operation-title { font-size: var(--e-caption); text-transform: uppercase; letter-spacing: 0.05em; color: var(--e-text-muted); font-weight: var(--e-weight-strong); }
+.e-operation-primary { font-size: var(--e-body); font-weight: var(--e-weight-medium); }
+.e-operation-alert { font-size: var(--e-meta); color: var(--e-text-muted); }
+.e-operation-alert.is-alert { color: var(--e-danger); font-weight: var(--e-weight-medium); }
+
+.e-empty { margin: 0; color: var(--e-text-secondary); font-size: var(--e-secondary); }
+
+@media (max-width: 900px) {
+  .e-exec-grid { grid-template-columns: 1fr; }
+  .e-pipeline-list li { grid-template-columns: 7rem minmax(40px, 1fr) 2rem; }
+  .e-pipeline-value, .e-pipeline-stale { display: none; }
+}
+
+/* --- executive first viewport --------------------------------------------
+   The brief's counts sit above the exceptions they describe, inside the same
+   panel. Operations is one row, not a grid of cards. */
+.command-attention .morning-brief-list { gap: 5px; }
+.command-attention .brief-line { font-size: var(--e-secondary); }
+.command-attention .morning-brief-clear { font-size: var(--e-secondary); margin: 0; }
+
+/* Operations reads as one line of four figures. */
+.e-operations-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--e-3); }
+.e-operation { border: 0; padding: 0; }
+.e-operation + .e-operation { border-left: 1px solid var(--e-border-muted); padding-left: var(--e-3); }
+
+@media (max-width: 720px) {
+  .e-operations-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--e-4) var(--e-3); }
+  .e-operation + .e-operation { border-left: 0; padding-left: 0; }
+}
+
+/* The brief is separated from the exceptions it counts; the gap itself comes
+   from the panel's row rhythm, not from here. */
+.command-attention .morning-brief { padding-bottom: var(--l-row-gap); border-bottom: 1px solid var(--e-border-muted); }
