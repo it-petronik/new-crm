@@ -99,7 +99,7 @@ test("the cashbook filters on the transaction date it displays", async ({ page }
   await page.getByRole("button", { name: "Add entry", exact: true }).click();
   await page.getByRole("textbox", { name: "Description", exact: true }).fill("Transaction date check");
   await page.getByRole("spinbutton", { name: "Amount", exact: true }).fill("42");
-  await page.getByRole("button", { name: "Save record", exact: true }).click();
+  await page.getByRole("button", { name: "Record entry", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeHidden();
   await expect(page.locator(".cashbook-panel thead")).toContainText("Transaction date");
   await expect(page.locator(".cashbook-panel").getByRole("columnheader", { name: /Transaction date/ })).toHaveAttribute("aria-sort", "none");

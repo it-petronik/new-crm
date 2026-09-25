@@ -33,6 +33,10 @@
   --l-gutter: 32px;
   --l-page-top: 28px;
   --l-page-bottom: 48px;
+  /* Room the floating Quick Add (52px, 16px from the edge) needs below the
+     last piece of content on phones, plus the device's safe area. Applied
+     once, by the page container, at the breakpoint where the button floats. */
+  --l-fab-clearance: calc(52px + 32px + env(safe-area-inset-bottom, 0px));
 
   /* --- rhythm ----------------------------------------------------------- */
   --l-section-gap: 20px;   /* between sibling sections on a page */
@@ -86,6 +90,11 @@
 /* The parent owns the space between sections, so no section carries a margin
    that only makes sense next to one particular neighbour. */
 .main-content > * { margin-block: 0; }
+/* The floating Quick Add (my-day.css) appears at this width: every page can
+   scroll its last card fully above it. */
+@media (max-width: 720px) {
+  .main-content { padding-bottom: calc(var(--l-page-bottom) + var(--l-fab-clearance)); }
+}
 .main-content > * + * { margin-top: var(--l-section-gap); }
 
 /* --------------------------------------------------------------------- panel */
@@ -635,3 +644,23 @@
 @media (max-width: 720px) {
   .audit-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* ------------------------------------------------------- scrolling strips */
+/* Deliberate overflow (see useOverflowFade): a soft fade only on an edge
+   that has more content beyond it, gone once scrolled to that end. */
+.overflow-fade-x {
+  --fade-start: 0px;
+  --fade-end: 0px;
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 var(--fade-start), #000 calc(100% - var(--fade-end)), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 var(--fade-start), #000 calc(100% - var(--fade-end)), transparent 100%);
+}
+.overflow-fade-y {
+  --fade-start: 0px;
+  --fade-end: 0px;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--fade-start), #000 calc(100% - var(--fade-end)), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 var(--fade-start), #000 calc(100% - var(--fade-end)), transparent 100%);
+}
+.overflow-fade-x[data-fade-start="true"] { --fade-start: 28px; }
+.overflow-fade-x[data-fade-end="true"] { --fade-end: 28px; }
+.overflow-fade-y[data-fade-start="true"] { --fade-start: 20px; }
+.overflow-fade-y[data-fade-end="true"] { --fade-end: 32px; }

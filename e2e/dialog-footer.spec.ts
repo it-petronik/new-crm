@@ -34,11 +34,11 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
   test(`dialog actions follow one rule at ${viewport.width}px`, async ({ page }) => {
     await page.setViewportSize(viewport);
 
-    // Create: [Cancel] [Save record].
+    // Create: [Cancel] [Create customer].
     await page.goto("/?module=customers");
     await page.getByRole("button", { name: "Add customer", exact: true }).click();
     let z = await zones(page);
-    expect(z.end).toEqual(["Cancel", "Save record"]);
+    expect(z.end).toEqual(["Cancel", "Create customer"]);
     expect(z.primaryRightmost).toBe(true);
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
 

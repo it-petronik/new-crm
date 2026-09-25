@@ -63,6 +63,8 @@ export const people: TestPerson[] = [
   person("nhr", "Noah People", ["Petronex"], [], "HR Manager"),
   person("nemp", "Nina Employee", ["Petronex"], [], "Employee"),
   person("nit", "Ned Support", ["Petronex"], [], "IT Administrator"),
+  // UI polish checks.
+  ...range(4).map((i) => person(`q${i}`, `Quinn Polish${i}`, ["Petronik"], [])),
 ];
 
 export const byKey = (key: string) => {

@@ -29,6 +29,23 @@ import { fieldWidth, quoteSection, quoteSections } from "@/lib/form-layout";
 import { cashEntryProfile } from "@/lib/record-profiles";
 import { salaryAttributes } from "@/lib/salary";
 import { isCashEntry } from "@/lib/cashbook";
+
+/** The primary action of each create form, named for what it creates. */
+const CREATE_LABELS: Record<Kind, string> = {
+  leads: "Create lead",
+  quotations: "Create quotation",
+  orders: "Create order",
+  logistics: "Create shipment",
+  accounts: "Create invoice",
+  customers: "Create customer",
+  suppliers: "Create supplier",
+  products: "Create product",
+  hr: "Create employee",
+  marketing: "Create campaign",
+  it: "Create ticket",
+  leave: "Submit request",
+};
+
 export default function RecordForm({
   initial,
   kind,
@@ -58,6 +75,8 @@ export default function RecordForm({
   ) => Promise<void>;
 }) {
   const profile = kind === "accounts" && (!initial || isCashEntry(initial)) ? cashEntryProfile : recordProfiles[kind];
+  // A create form's primary action names what it makes; edits save changes.
+  const createLabel = profile === cashEntryProfile ? "Record entry" : CREATE_LABELS[kind];
   const locked = Boolean(editing && initial && commercialLocked(initial));
   const quoteEditor = kind === "quotations" && !locked;
   const [formError, setFormError] = useState("");
@@ -261,6 +280,9 @@ export default function RecordForm({
             {profile.nameLabel}
             <Input
               name="title"
+              // Marks the field required (the shared Field draws the *);
+              // validation itself stays the form's own check (noValidate).
+              required={!locked}
               readOnly={locked}
               maxLength={160}
               onInput={() => clearFieldError("title")}
@@ -508,7 +530,7 @@ export default function RecordForm({
           primary={{
             type: "submit",
             form: formId,
-            label: editing ? "Save changes" : "Save record",
+            label: editing ? "Save changes" : createLabel,
             pendingLabel: "Saving…",
             pending: busy,
           }}

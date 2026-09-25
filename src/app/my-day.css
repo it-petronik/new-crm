@@ -294,3 +294,14 @@
   .detail-quick-actions { margin-left: 0; width: 100%; }
   .detail-quick-actions button { min-height: 40px; }
 }
+
+/* Needs attention with nothing to act on: a one-line all-clear that keeps
+   the executive grid's first column in place. */
+.attention-clear-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--e-success);
+  font-size: var(--e-secondary);
+}

@@ -136,7 +136,7 @@ test("sidebar preference and accessible custom controls", async ({ page }) => {
     page.getByRole("dialog", { name: "Choose a date", exact: true }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "Save record", exact: true }),
+    page.getByRole("button", { name: "Create lead", exact: true }),
   ).toBeVisible();
 });
 
@@ -150,7 +150,7 @@ test("company filter, lead creation and persistence", async ({ page }) => {
   await page.getByRole("button", { name: "New lead", exact: true }).click();
   await page.getByLabel("Company / Record name").fill("Test customer");
   await page.getByLabel("Contact person").fill("Test contact");
-  await page.getByRole("button", { name: "Save record", exact: true }).click();
+  await page.getByRole("button", { name: "Create lead", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Test customer" }),
   ).toBeVisible();

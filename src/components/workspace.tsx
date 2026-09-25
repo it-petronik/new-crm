@@ -2277,7 +2277,18 @@ function Overview({
           in a panel of their own: they describe the same list. */}
       <KpiStrip records={records} onGo={(m) => go(m as Module)} />
       <div className="e-exec-grid">
-      {ranked.length > 0 && (
+      {/* The panel is always present so the grid never reflows around a
+          missing column; with nothing to act on it is a one-line all-clear. */}
+      {ranked.length === 0 ? (
+        <section className="panel attention-section command-attention attention-clear">
+          <div className="panel-heading">
+            <h2><AlertTriangle size={16} aria-hidden="true" /> Needs attention</h2>
+          </div>
+          <p className="attention-clear-note">
+            <CheckCircle2 size={16} aria-hidden="true" /> Nothing needs your attention right now.
+          </p>
+        </section>
+      ) : (
         <section className="panel attention-section tone-urgent command-attention">
           <div className="panel-heading">
             <h2><AlertTriangle size={16} /> Needs attention</h2>

@@ -19,6 +19,12 @@ const config: NextConfig = {
           },
           {
             key: "Content-Security-Policy",
+            // Deliberately no third-party script or connect origins. Cloudflare
+            // Web Analytics is not used by this app; the beacon seen in the
+            // console (static.cloudflareinsights.com) is injected by the
+            // zone's automatic Web Analytics setting and is correctly blocked
+            // here. Turn that injection off in the Cloudflare dashboard rather
+            // than widening this policy.
             value:
               "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self'; connect-src 'self' wss://crm.enercore.ae; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
           },

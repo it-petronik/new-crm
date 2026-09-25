@@ -368,11 +368,8 @@
   }
 }
 @media (max-width: 560px) {
-  .welcome-message span {
-    display: block;
-    font-size: 12px;
-    margin-top: 4px;
-  }
+  /* The welcome line stays one sentence and wraps naturally; its muted
+     half is inline, never forced onto a line of its own. */
   .profile-heading h2 {
     font-size: 21px;
   }

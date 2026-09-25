@@ -40,6 +40,17 @@ import { type WorkspaceView } from "./workspace-pages";
 import { Button, Tooltip } from "./ui/controls";
 import { Avatar } from "./avatar";
 import { useAvatar } from "@/lib/avatar-store";
+import { useOverflowFade } from "@/lib/use-overflow-fade";
+
+/**
+ * The navigation's scroll area. When more items sit below (or above) the
+ * visible part — the Manage group on a short screen — a soft fade at that
+ * edge says so; it disappears once scrolled to the end.
+ */
+function FadingNav(props: React.ComponentProps<"nav">) {
+  const ref = useOverflowFade<HTMLElement>("y");
+  return <nav ref={ref} {...props} className={["overflow-fade-y", props.className].filter(Boolean).join(" ")} />;
+}
 const icons: Record<Module, LucideIcon> = {
   overview: LayoutDashboard,
   leads: Target,
@@ -133,7 +144,7 @@ export default function Sidebar({
             </Tooltip>
           )}
         </div>
-        <nav aria-label={isMobile ? "Mobile navigation" : "Main navigation"}>
+        <FadingNav aria-label={isMobile ? "Mobile navigation" : "Main navigation"}>
           <Tooltip label="Collaboration" enabled={compact}>
             <Button
               className={`nav-item nav-item-collab ${module === "collaboration" ? "active" : ""}`}
@@ -239,7 +250,7 @@ export default function Sidebar({
               <span className="nav-label">Shortcuts</span>
             </Button>
           </Tooltip>
-        </nav>
+        </FadingNav>
         <div className="sidebar-bottom">
           <Tooltip label="Appearance" enabled={compact}>
             <Button

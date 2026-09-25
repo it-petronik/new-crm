@@ -76,6 +76,14 @@
   font-weight: 600; font-size: 1.3rem;
 }
 .app-boot p { margin: 0; color: var(--muted); font-size: 0.88rem; }
+/* One loading state at a time. While the session and app shell resolve, the
+   branded boot screen is the only thing shown; page skeletons streamed in
+   behind it stay invisible until it is gone, then take over with no gap
+   (the boot screen is removed in the same commit that reveals the page). */
+body:has(.app-boot) .skeleton-region,
+body:has(.app-boot) .collab-loading {
+  visibility: hidden;
+}
 /* An indeterminate bar: it shows work is happening without claiming progress. */
 .app-boot-bar {
   width: 132px; height: 3px; border-radius: 999px; overflow: hidden;

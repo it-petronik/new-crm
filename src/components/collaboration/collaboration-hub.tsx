@@ -21,6 +21,7 @@ import { PersonAvatar } from "./presence";
 import { RoomAvatar } from "./room-avatar";
 import type { PresenceView } from "@/lib/collab";
 import Details from "./details";
+import { useOverflowFade } from "@/lib/use-overflow-fade";
 import { BrowseRoomsDialog, NewDirectDialog, NewRoomDialog } from "./dialogs";
 import { MessageText, listStamp } from "./message-text";
 
@@ -116,6 +117,8 @@ export default function CollaborationHub({
     return () => window.removeEventListener("keydown", onKey);
   }, [toggleFocus]);
   const live = useLiveState(enabled);
+  // The filter tabs scroll sideways when the list is narrow; the fade shows it.
+  const filterStrip = useOverflowFade<HTMLDivElement>("x");
   const [conversations, setConversations] = useState<ConversationSummary[] | null>(null);
   const [listError, setListError] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
@@ -464,7 +467,7 @@ export default function CollaborationHub({
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <div className="collab-filters" role="tablist" aria-label="Show">
+        <div ref={filterStrip} className="collab-filters overflow-fade-x" role="tablist" aria-label="Show">
           {filters.map((f) => {
             const n = f.id === "unread" ? counts.unread : f.id === "mentions" ? counts.mentions : 0;
             return (
@@ -474,7 +477,11 @@ export default function CollaborationHub({
                 role="tab"
                 aria-selected={filter === f.id}
                 className={filter === f.id ? "is-active" : ""}
-                onClick={() => setFilter(f.id)}
+                onClick={(e) => {
+                  setFilter(f.id);
+                  // A tab chosen at the strip's edge scrolls fully into view.
+                  e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" });
+                }}
               >
                 {f.label}
                 {n > 0 && <span className="collab-count">{countLabel(n)}</span>}

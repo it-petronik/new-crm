@@ -34,7 +34,7 @@ test("shared dialog retains actions and saves employee fields", async ({
   expect(await page.locator(".ui-dialog-footer").boundingBox()).toEqual(footer);
   expect(footer!.y + footer!.height).toBeLessThanOrEqual(720);
   await page.screenshot({ path: info.outputPath("employee-mobile.png") });
-  await page.getByRole("button", { name: "Save record", exact: true }).click();
+  await page.getByRole("button", { name: "Create employee", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeHidden();
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem("enercore-preview-v1") || "{}").records.find((r: {title:string}) => r.title === "Layout Test Employee"));
   expect(stored.attributes.monthlySalary).toBe("5750");

@@ -39,10 +39,19 @@
   padding: 16px 20px;
   border-bottom: 1px solid var(--e-border);
 }
+/* One row, never wrapped: on a narrow screen it scrolls sideways with an
+   edge fade (useOverflowFade), like the Collaboration filter strip. */
 .notify-filters {
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-padding-inline: 28px;
+  scrollbar-width: none;
 }
+.notify-filters::-webkit-scrollbar { display: none; }
+.notify-filters > .ui-button { flex: 0 0 auto; }
 .notify-section + .notify-section {
   border-top: 1px solid var(--e-border);
 }
@@ -266,6 +275,10 @@
 @media (max-width: 760px) {
   .notify-toolbar {
     padding: 12px 14px;
+  }
+  /* The strip takes the full row; "Mark all read" sits on its own line. */
+  .notify-filters {
+    flex: 1 1 100%;
   }
   .notify-filters .ui-button,
   .notify-filters button {

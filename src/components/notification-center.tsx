@@ -18,6 +18,7 @@ import { PageTitle } from "./workspace-pages";
 import { businessStamp, businessTime, businessToday } from "@/lib/gst";
 import type { NotificationCategory, NotificationPreferences, NotificationView } from "@/lib/notification-types";
 import { desktopPermission, desktopSupported } from "@/lib/notifications-client";
+import { useOverflowFade } from "@/lib/use-overflow-fade";
 
 /**
  * The notification inbox, its settings, and the in-app toasts. Every item
@@ -202,6 +203,8 @@ export function NotificationsPage({
 }) {
   const [filter, setFilter] = useState<Filter>("all");
   const [loadingMore, setLoadingMore] = useState(false);
+  // One row that scrolls sideways on a phone, like the other segmented strips.
+  const filterStrip = useOverflowFade<HTMLDivElement>("x");
   const visible = items.filter((n) =>
     filter === "all" ? true : filter === "unread" ? !n.readAt : n.category === filter,
   );
@@ -218,9 +221,12 @@ export function NotificationsPage({
       <PageTitle title="Notifications" subtitle="Assignments, approvals, reminders and mentions — as they happen." />
       <section className="panel notify-panel">
         <div className="notify-toolbar">
-          <div className="segmented notify-filters" role="group" aria-label="Show">
+          <div ref={filterStrip} className="segmented notify-filters overflow-fade-x" role="group" aria-label="Show">
             {FILTERS.map(([value, label]) => (
-              <Button key={value} className={filter === value ? "selected" : ""} aria-pressed={filter === value} onClick={() => setFilter(value)}>
+              <Button key={value} className={filter === value ? "selected" : ""} aria-pressed={filter === value} onClick={(e) => {
+                setFilter(value);
+                e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" });
+              }}>
                 {label}
                 {value === "unread" && unread > 0 ? ` (${unread > 99 ? "99+" : unread})` : ""}
               </Button>

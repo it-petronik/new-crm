@@ -4,7 +4,7 @@ test("add and cancel a company expense, preserve invoice separation", async ({pa
   await page.getByRole("button",{name:"Add entry",exact:true}).click();
   await page.getByRole("textbox",{name:"Description",exact:true}).fill("Office supplies QA");
   await page.getByRole("spinbutton",{name:"Amount",exact:true}).fill("125.50");
-  await page.getByRole("button",{name:"Save record",exact:true}).click();
+  await page.getByRole("button",{name:"Record entry",exact:true}).click();
   await expect(page.getByRole("dialog")).toBeHidden();
   await expect(page.locator(".cashbook-summary")).toContainText("$125.50");
   await page.getByRole("button",{name:/Office supplies QA/}).click();
@@ -20,7 +20,7 @@ test("add and cancel a company expense, preserve invoice separation", async ({pa
   await page.getByRole("combobox",{name:"Entry type",exact:true}).click();
   await page.getByRole("option",{name:"Income",exact:true}).click();
   await page.getByRole("spinbutton",{name:"Amount",exact:true}).fill("250");
-  await page.getByRole("button",{name:"Save record",exact:true}).click();
+  await page.getByRole("button",{name:"Record entry",exact:true}).click();
   await expect(page.getByRole("dialog")).toBeHidden();
   await expect(page.locator(".cashbook-summary")).toContainText("$250.00");
   await page.setViewportSize({width:390,height:844});

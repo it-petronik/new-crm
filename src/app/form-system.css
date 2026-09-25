@@ -122,6 +122,10 @@
 .modal .form-grid { gap: var(--f-field-gap); margin-top: 0; }
 .modal .dialog-body > * + .form-grid,
 .modal .dialog-body > .form-grid + * { margin-top: var(--f-section-gap); }
+/* A form split into consecutive field grids (fields, then the notes) reads
+   as one set: the gap between the grids is the ordinary field gap. */
+.form-grid + .form-grid,
+.modal .form-grid + .form-grid { margin-top: var(--f-field-gap); }
 
 /* A label beside its control, for single inline settings (e.g. a record's
    status in the dialog footer). */

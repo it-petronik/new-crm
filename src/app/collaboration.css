@@ -81,6 +81,9 @@
   gap: 4px;
   padding: 0 var(--e-4) var(--e-2);
   overflow-x: auto;
+  overscroll-behavior-x: contain;
+  /* A tab brought into view stops clear of the edge fade, never under it. */
+  scroll-padding-inline: 28px;
   scrollbar-width: none;
   border-bottom: 1px solid var(--e-border-muted);
 }
@@ -435,9 +438,24 @@
 .collab-msg:focus-within .collab-msg-actions { opacity: 1; pointer-events: auto; }
 .collab-msg-actions .icon-button { width: 28px; height: 28px; min-height: 0; }
 .collab-msg-actions .icon-button.is-danger:hover { color: var(--e-danger); }
-/* Touch screens have no hover: keep the actions reachable. */
-@media (hover: none) {
-  .collab-msg-actions { position: static; opacity: 1; pointer-events: auto; justify-self: start; grid-column: 2; margin-top: 2px; box-shadow: none; border-color: var(--e-border-muted); }
+/* Touch screens have no hover, and on a phone-width column a floating bar
+   would sit over the author and time. There the actions are an in-flow,
+   compact row under the message: always reachable, never covering the
+   timestamp or the text. Desktop keeps the hover toolbar. */
+@media (hover: none), (max-width: 760px) {
+  .collab-msg-actions {
+    position: static;
+    opacity: 1;
+    pointer-events: auto;
+    grid-column: 2;
+    justify-self: start;
+    margin-top: 2px;
+    padding: 0;
+    border: 0;
+    background: none;
+    box-shadow: none;
+  }
+  .collab-msg-actions .icon-button { width: 30px; height: 30px; color: var(--e-text-muted); }
 }
 
 .collab-quote {
@@ -901,6 +919,9 @@
   .collab,
   .collab.has-details { grid-template-columns: minmax(0, 1fr); border-top: 0; }
   .collab.has-selection .collab-sidebar { display: none; }
+  /* The hub is its own scroll area (the page container has no padding
+     here), so the list reserves the floating Quick Add's space itself. */
+  .collab-list { padding-bottom: var(--l-fab-clearance); }
   .collab:not(.has-selection) .collab-main { display: none; }
   .collab.has-selection .collab-main {
     position: fixed;
@@ -1303,7 +1324,19 @@ button.collab-file-main:hover b { text-decoration: underline; text-underline-off
 
 /* -------------------------------------------------- details: room + media */
 .collab-room-card { display: grid; justify-items: center; gap: 4px; padding: var(--e-2) 0 0; text-align: center; }
-.collab-room-card b { font-size: var(--e-card); margin-top: 6px; overflow-wrap: anywhere; }
+/* A long room name (up to 80 characters) wraps to at most two lines, then
+   ends in an ellipsis, so it can never push the panel's layout. */
+.collab-room-card b {
+  font-size: var(--e-card);
+  margin-top: 6px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
 .collab-room-card small { color: var(--e-text-muted); font-size: var(--e-meta); }
 .collab-details-empty { margin: 0; font-size: var(--e-meta); color: var(--e-text-muted); }
 .collab-media-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }

@@ -88,27 +88,20 @@ export function SkeletonPanel({ lines = 3, title = true }: { lines?: number; tit
 export function SkeletonDashboard() {
   return (
     <SkeletonRegion label="Loading your dashboard">
-      {/* Four brief lines and five attention rows: the same shape and the same
-          padding as the loaded panels, so neither moves when data lands. */}
-      <section className="panel skeleton-brief" aria-hidden="true">
-        <Skeleton w="34%" h={13} />
-        <div className="skeleton-brief-lines">
-          {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={i} w={["62%", "74%", "55%", "68%"][i]} h={11} />
-          ))}
-        </div>
-      </section>
-      <section className="panel skeleton-attention tone-urgent" aria-hidden="true">
-        <Skeleton w="30%" h={13} />
-        <div className="skeleton-stack">
-          {[0, 1, 2, 3, 4].map((i) => <SkeletonAttnRow key={i} />)}
-        </div>
-      </section>
+      {/* The loaded executive layout, piece for piece: the KPI strip, then the
+          same e-exec-grid (attention | pipeline health), then Operations —
+          so nothing moves or reflows when the data lands. */}
       <SkeletonKpiRow />
-      <div className="skeleton-two-col">
-        <SkeletonPanel lines={4} />
+      <div className="e-exec-grid">
+        <section className="panel skeleton-attention" aria-hidden="true">
+          <Skeleton w="30%" h={13} />
+          <div className="skeleton-stack">
+            {[0, 1, 2].map((i) => <SkeletonAttnRow key={i} />)}
+          </div>
+        </section>
         <SkeletonPanel lines={4} />
       </div>
+      <SkeletonPanel lines={2} />
     </SkeletonRegion>
   );
 }

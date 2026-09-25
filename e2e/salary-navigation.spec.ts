@@ -7,7 +7,7 @@ test("salary components persist, total is derived, and legacy records survive ed
   await page.getByRole("textbox", { name: "Job title", exact: true }).fill("Operations assistant");
   await page.getByRole("spinbutton", { name: "Basic salary", exact: true }).fill("8000");
   await page.getByRole("spinbutton", { name: "Allowance", exact: true }).fill("1250.75");
-  await page.getByRole("button", { name: "Save record", exact: true }).click();
+  await page.getByRole("button", { name: "Create employee", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeHidden();
 
   // The stored total is derived from the two components, not typed separately.
