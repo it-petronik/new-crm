@@ -208,3 +208,58 @@ export function recordPayment(
     ],
   };
 }
+
+/** Kinds whose owner means "the person responsible", and so can be assigned. */
+export const ASSIGNABLE_KINDS = ["leads", "quotations", "orders", "logistics", "accounts", "marketing", "it"] as const;
+const LEADS_BY_ROLE: Partial<Record<Actor["role"], readonly string[]>> = {
+  "Sales Manager": ["leads", "quotations"],
+  "Logistics Manager": ["logistics"],
+  "Accounts Manager": ["accounts"],
+  "Marketing Manager": ["marketing", "leads"],
+  "IT Administrator": ["it"],
+};
+
+/**
+ * Who may hand a record to someone else: a manager who may already change
+ * it — group leadership for anything assignable, a department manager for
+ * their own department's records. Executives cannot reassign.
+ */
+export function canAssign(actor: Actor, record: RecordItem) {
+  if (!(ASSIGNABLE_KINDS as readonly string[]).includes(record.kind) || isCashEntry(record)) return false;
+  if (!canWrite(actor, record)) return false;
+  if (["MD", "Group Manager", "Branch Manager"].includes(actor.role)) return true;
+  return !!LEADS_BY_ROLE[actor.role]?.includes(record.kind);
+}
+
+/**
+ * Makes `assignee` the record's owner. The caller has already checked the
+ * assignee is active and could read the record once it is theirs.
+ */
+export function assign(
+  workspace: Workspace,
+  actor: Actor,
+  id: string,
+  assignee: { id: string; name: string },
+): Workspace {
+  const record = workspace.records.find((r) => r.id === id);
+  if (!record || !canAssign(actor, record))
+    throw new Error("You do not have permission to assign this record.");
+  if (record.ownerId === assignee.id) return workspace;
+  const now = new Date().toISOString();
+  return {
+    records: workspace.records.map((r) =>
+      r.id === id ? { ...r, ownerId: assignee.id, owner: assignee.name, updatedAt: now } : r,
+    ),
+    audit: [
+      {
+        id: crypto.randomUUID(),
+        actor: actor.name,
+        action: `Assigned to ${assignee.name} (was ${record.owner})`,
+        recordId: id,
+        company: record.company,
+        at: now,
+      },
+      ...workspace.audit,
+    ],
+  };
+}

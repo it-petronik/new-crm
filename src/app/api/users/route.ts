@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { notifyAccount } from "@/lib/notify";
 import { z } from "zod";
 import { hashPassword } from "@/lib/password";
 import { getDb } from "@/lib/db";
@@ -174,8 +175,9 @@ export async function PATCH(request: Request) {
     } else {
       await updateUserAndRevokeSessions(db, body.id, changes);
     }
+    const auditId = crypto.randomUUID();
     await writeAudit(db, {
-      id: crypto.randomUUID(),
+      id: auditId,
       company: current.companies[0],
       actorId: actor.id,
       actor: actor.name,
@@ -188,6 +190,19 @@ export async function PATCH(request: Request) {
         moduleAccess: target.moduleAccess, active: target.active,
       },
       after: changes,
+    });
+    // The person is told what happened to their account, never how to
+    // exploit it: no roles of others, no tokens. They read it on their
+    // next sign-in (their sessions were just revoked).
+    const deactivated = "active" in changes && changes.active === false;
+    const reactivated = "active" in changes && changes.active === true;
+    await notifyAccount(db, {
+      userId: body.id,
+      actor: { id: actor.id, name: actor.name },
+      type: deactivated ? "account.deactivated" : reactivated ? "account.reactivated" : "account.access_changed",
+      title: deactivated ? "Your account was deactivated" : reactivated ? "Your account was reactivated" : "Your access was updated",
+      body: deactivated || reactivated ? `By ${actor.name}` : `Your role, companies or modules were changed by ${actor.name}.`,
+      key: `access:${auditId}`,
     });
     return NextResponse.json({ ok: true });
   } catch {

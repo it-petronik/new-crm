@@ -51,6 +51,18 @@ export const people: TestPerson[] = [
   ...range(4).map((i) => person(`vf${i}`, `Val Afrilube${i}`, ["Afrilube"], [])),
   // V2 browser suites.
   ...range(16).map((i) => person(`w${i}`, `Wes Browser${i}`, ["Petronik"], [])),
+  // Notifications: their own company (Petronex), so approvals, logistics
+  // and accounts hand-offs raised by other suites never reach them.
+  ...range(6).map((i) => person(`nm${i}`, `Nadia Manager${i}`, ["Petronex"], [], "Sales Manager")),
+  ...range(10).map((i) => person(`ns${i}`, `Nour Sales${i}`, ["Petronex"], [], "Sales Executive")),
+  person("nsd", "Nabil Dubai", ["Petronex"], ["Dubai"], "Sales Executive"),
+  person("nsf", "Nia Afrilube", ["Afrilube"], [], "Sales Executive"),
+  person("nlog", "Nils Logistics", ["Petronex"], [], "Logistics Manager"),
+  person("nacc", "Nora Accounts", ["Petronex"], [], "Accounts Manager"),
+  person("nacc2", "Nadim Accountant", ["Petronex"], [], "Accountant"),
+  person("nhr", "Noah People", ["Petronex"], [], "HR Manager"),
+  person("nemp", "Nina Employee", ["Petronex"], [], "Employee"),
+  person("nit", "Ned Support", ["Petronex"], [], "IT Administrator"),
 ];
 
 export const byKey = (key: string) => {

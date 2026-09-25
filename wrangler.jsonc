@@ -84,9 +84,12 @@
 			"r2_buckets": [
 				{ "binding": "COLLAB_FILES", "bucket_name": "enercore-collab-files" }
 			],
-			// Daily purge of unsent uploads (after 1 day) and of files whose
-			// message was deleted more than 30 days ago.
-			"triggers": { "crons": ["23 2 * * *"] }
+			// 02:23 UTC: purge of unsent uploads (after 1 day) and of files
+			// whose message was deleted more than 30 days ago.
+			// 04:00 UTC (08:00 GST): notification reminders — follow-ups due
+			// or overdue, expiring quotations, overdue payments, late
+			// shipments and tickets — plus notification retention.
+			"triggers": { "crons": ["23 2 * * *", "0 4 * * *"] }
 		}
 	}
 }

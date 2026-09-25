@@ -292,7 +292,15 @@ export function useCollabSummary(enabled: boolean) {
       if (pending.current) clearTimeout(pending.current);
     };
   }, [enabled, refresh]);
-  useCollabEvents(enabled, refresh, refresh);
+  // Presence and notification events never change chat unread counts.
+  useCollabEvents(
+    enabled,
+    (event) => {
+      if (event.type === "presence" || event.type.startsWith("notification.")) return;
+      refresh();
+    },
+    refresh,
+  );
   return { summary, refresh };
 }
 

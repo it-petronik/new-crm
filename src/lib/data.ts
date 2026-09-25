@@ -249,7 +249,7 @@ export async function updateRecordWithAudit(
   db: Database,
   id: string,
   expectedVersion: number,
-  changed: { status: string; payload: unknown },
+  changed: { status: string; payload: unknown; ownerId?: string },
   event: NewAudit,
   alsoCreate: NewRecord[] = [],
 ): Promise<boolean> {
@@ -262,6 +262,8 @@ export async function updateRecordWithAudit(
     .set({
       status: changed.status,
       payload: changed.payload,
+      // Kept in step with the payload so owner-scoped queries see a reassignment.
+      ...(changed.ownerId ? { ownerId: changed.ownerId } : {}),
       version: sql`${businessRecords.version} + 1`,
       updatedAt: now,
     })

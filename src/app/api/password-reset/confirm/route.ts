@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { notifyAccount } from "@/lib/notify";
 import { z } from "zod";
 import { getDb, isPreview } from "@/lib/db";
 import { checkOrigin } from "@/lib/auth";
@@ -68,8 +69,9 @@ export async function POST(request: Request) {
     stage = "redeem";
     // The redemption itself consumes the token, so only one of two concurrent
     // requests can win. The loser gets the same generic message.
+    const auditId = crypto.randomUUID();
     const redeemed = await redeemPasswordReset(db, tokenHash, passwordHash, {
-      id: crypto.randomUUID(),
+      id: auditId,
       company: found.user.companies[0],
       actor: found.user.name,
       actorId: found.user.id,
@@ -80,6 +82,14 @@ export async function POST(request: Request) {
       // No password, no hash, no token.
     });
     if (!redeemed) return NextResponse.json({ error: INVALID }, { status: 400 });
+    await notifyAccount(db, {
+      userId: found.user.id,
+      actor: null,
+      type: "account.password_changed",
+      title: "Your password was changed",
+      body: "If this wasn't you, tell your administrator straight away.",
+      key: `password-changed:${auditId}`,
+    });
     return NextResponse.json({ ok: true });
   } catch (error) {
     // The response below is byte-identical to the one an unknown or expired

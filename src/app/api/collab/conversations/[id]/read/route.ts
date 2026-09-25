@@ -3,6 +3,7 @@ import { isId } from "@/lib/collab";
 import { CollabError, collabContext, handle, json, requireRead } from "@/lib/collab-auth";
 import { advanceRead, findMessage } from "@/lib/collab-data";
 import { publish } from "@/lib/collab-realtime";
+import { notifyConversationRead } from "@/lib/notify";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -27,6 +28,7 @@ export function POST(request: Request, { params }: Params) {
       conversationId: access.conversation.id,
       lastReadMessageId: messageId,
     });
+    await notifyConversationRead(db, actor.id, access.conversation.id, messageId);
     return json({ ok: true });
   });
 }

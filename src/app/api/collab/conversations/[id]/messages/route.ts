@@ -12,6 +12,7 @@ import {
   messagePage,
 } from "@/lib/collab-data";
 import { announceMessage, audience } from "@/lib/collab-service";
+import { notifyMessage } from "@/lib/notify";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -91,11 +92,13 @@ export function POST(request: Request, { params }: Params) {
       throw new CollabError(400, `Messages are at most ${MESSAGE_MAX.toLocaleString()} characters.`);
 
     let replyToId: string | null = null;
+    let replyToAuthorId: string | null = null;
     if (input.replyToId) {
       const target = await findMessage(db, input.replyToId);
       if (!target || target.conversationId !== conversationId || target.deletedAt)
         throw new CollabError(400, "The message you're replying to is no longer available.");
       replyToId = target.id;
+      replyToAuthorId = target.authorId;
     }
 
     // Mentionable = members who could read this conversation right now.
@@ -125,6 +128,18 @@ export function POST(request: Request, { params }: Params) {
       { ...row, createdAt: now, editedAt: null, deletedAt: null },
     ]);
     await announceMessage(db, "message.created", message);
+    await notifyMessage(db, {
+      id: row.id,
+      conversationId,
+      body,
+      hasFiles: attachmentIds.length > 0,
+      author: actor,
+      direct: access.conversation.kind === "direct",
+      roomName: access.conversation.name,
+      mentionIds: mentions,
+      replyToAuthorId,
+      audience: [...entitled],
+    });
     return json({ message }, 201);
   });
 }

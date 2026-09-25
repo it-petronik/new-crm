@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { notifyAccount } from "@/lib/notify";
 import { z } from "zod";
 import { getDb, isPreview } from "@/lib/db";
 import { checkOrigin, currentActor } from "@/lib/auth";
@@ -46,13 +47,14 @@ export async function POST(request: Request) {
 
     await purgeExpiredResets(db);
     const token = createResetToken();
+    const auditId = crypto.randomUUID();
     await issuePasswordReset(
       db,
       await hashResetToken(token),
       target.id,
       { id: actor.id, name: actor.name },
       {
-        id: crypto.randomUUID(),
+        id: auditId,
         company: target.companies[0],
         actor: actor.name,
         actorId: actor.id,
@@ -63,6 +65,15 @@ export async function POST(request: Request) {
         // Deliberately no token, no hash, no password material.
       },
     );
+    // No link, token or hash: only that it happened and who did it.
+    await notifyAccount(db, {
+      userId: target.id,
+      actor: { id: actor.id, name: actor.name },
+      type: "account.reset_issued",
+      title: "A password reset was issued for your account",
+      body: `By ${actor.name}. If you didn't ask for this, tell your administrator.`,
+      key: `reset-issued:${auditId}`,
+    });
     return NextResponse.json({
       link: resetLink(token),
       expiresInMinutes: RESET_TTL_MINUTES,

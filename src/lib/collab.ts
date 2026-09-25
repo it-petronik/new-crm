@@ -8,6 +8,8 @@
  * server's answer ever grants anything.
  */
 
+import type { NotificationEvent } from "./notification-types";
+
 export const MESSAGE_MAX = 4000;
 export const ROOM_NAME_MIN = 2;
 export const ROOM_NAME_MAX = 80;
@@ -173,7 +175,9 @@ export type CollabEvent =
   | { type: "typing"; conversationId: string; userId: string; name: string; state: "start" | "stop" }
   | { type: "reaction"; conversationId: string; messageId: string; reactions: ReactionView[] }
   // Presence is about a person, not a conversation; conversationId is "".
-  | { type: "presence"; conversationId: ""; userId: string; status: PresenceStatus; lastSeenAt: string | null };
+  | { type: "presence"; conversationId: ""; userId: string; status: PresenceStatus; lastSeenAt: string | null }
+  // The same channel carries the CRM-wide notification inbox.
+  | NotificationEvent;
 
 /* ------------------------------------------------------------------ text */
 

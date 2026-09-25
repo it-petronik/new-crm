@@ -8,7 +8,7 @@ import {
   type Actor,
 } from "../src/lib/domain";
 import { inAdminScope, mayAssign } from "../src/lib/access-control";
-import { workspaceNotifications } from "../src/lib/notifications";
+import { authorised, type NotificationDraft, type Person } from "../src/lib/notification-rules";
 import { makePreview, previewActor } from "../src/lib/fixtures";
 
 const requested = {
@@ -80,20 +80,41 @@ test("module restrictions narrow permissions and cannot elevate a role", () => {
     false,
   );
 });
-test("notifications exclude records and audit outside the actor's scope", () => {
-  const actor: Actor = {
+test("notifications reach only people who may read the record right now", () => {
+  const data = makePreview();
+  const insider: Person = {
     ...previewActor,
+    id: "insider",
     companies: ["Petronik"],
     moduleAccess: { accounts: "none" },
+    active: true,
   };
-  const data = makePreview();
-  const items = workspaceNotifications(actor, data);
-  assert.ok(items.length > 0);
-  assert.ok(items.every((n) => n.company === "Petronik"));
-  assert.ok(
-    items.every((n) => {
-      const r = data.records.find((r) => r.id === n.recordId);
-      return r && canRead(actor, r);
-    }),
+  const outsider: Person = { ...insider, id: "outsider", companies: ["Afrilube"], moduleAccess: {}, active: true };
+  const inactive: Person = { ...insider, id: "inactive", active: false };
+  const drafts: NotificationDraft[] = data.records.flatMap((r) =>
+    [insider, outsider, inactive].map((p) => ({
+      recipientId: p.id,
+      actorId: "someone-else",
+      type: "record.assigned",
+      category: "assignment" as const,
+      title: "t",
+      body: "b",
+      entityType: r.kind,
+      entityId: r.id,
+      priority: "normal" as const,
+      dedupeKey: `k:${r.id}:${p.id}`,
+    })),
   );
+  const records = new Map(data.records.map((r) => [r.id, r]));
+  const kept = authorised(drafts, [insider, outsider, inactive], records);
+  assert.ok(kept.length > 0);
+  assert.ok(kept.every((d) => d.recipientId !== "inactive"));
+  for (const d of kept) {
+    const person = d.recipientId === "insider" ? insider : outsider;
+    assert.ok(canRead(person, records.get(d.entityId)!));
+  }
+  assert.ok(kept.every((d) => !(d.recipientId === "insider" && records.get(d.entityId)!.kind === "accounts")));
+  assert.ok(kept.every((d) => d.recipientId !== "outsider" || records.get(d.entityId)!.company !== "Petronik"));
+  // Never the person acting.
+  assert.equal(authorised(drafts.map((d) => ({ ...d, actorId: d.recipientId })), [insider, outsider], records).length, 0);
 });

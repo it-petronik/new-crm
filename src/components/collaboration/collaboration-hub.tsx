@@ -46,6 +46,8 @@ function writeSelection(id: string | null) {
   const url = new URL(window.location.href);
   if (id) url.searchParams.set("c", id);
   else url.searchParams.delete("c");
+  // A deep-linked message applies once, to the conversation it came with.
+  url.searchParams.delete("m");
   window.history.replaceState(window.history.state, "", url);
 }
 
@@ -209,7 +211,22 @@ export default function CollaborationHub({
     void loadList();
     const initial = selectedFromUrl();
     if (initial) setSelectedId(initial);
+    // A notification's deep link may name the message (?m=) to jump to.
+    const message = new URLSearchParams(window.location.search).get("m");
+    if (initial && message && /^[A-Za-z0-9-]{8,64}$/.test(message)) setJumpTo(message);
   }, [enabled, loadList]);
+
+  // Opening a notification while the hub is already on screen.
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const { conversationId, messageId } = (e as CustomEvent<{ conversationId: string; messageId: string | null }>).detail;
+      setSelectedId(conversationId);
+      setJumpTo(messageId);
+      writeSelection(conversationId);
+    };
+    window.addEventListener("enercore:open-conversation", onOpen);
+    return () => window.removeEventListener("enercore:open-conversation", onOpen);
+  }, []);
 
   useEffect(() => {
     setDetail(null);
@@ -241,6 +258,8 @@ export default function CollaborationHub({
     (event: CollabEvent) => {
       // Presence, typing and reactions change nothing in the list.
       if (event.type === "presence" || event.type === "typing" || event.type === "reaction") return;
+      // CRM-wide notifications share the channel but are not about the list.
+      if (event.type.startsWith("notification.")) return;
       const id = event.conversationId;
       if (event.type === "message.created") {
         const m = event.message;

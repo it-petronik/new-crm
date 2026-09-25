@@ -1,0 +1,292 @@
+/* ------------------------------------------------------------------------
+   Notifications: header badge, inbox, settings, live toasts.
+   Built on the shared tokens (tokens.css), so light and dark follow the
+   rest of the workspace. Restrained: colour marks priority only where it
+   matters; most items are neutral.
+   --------------------------------------------------------------------- */
+
+/* Bell count badge */
+.notification-button .notify-badge {
+  position: absolute;
+  top: 1px;
+  right: 0;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: var(--e-radius-pill);
+  background: var(--e-danger);
+  color: var(--e-text-inverse);
+  font-size: 10px;
+  font-weight: var(--e-weight-strong);
+  line-height: 17px;
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--e-surface);
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Inbox */
+.notify-panel {
+  padding: 0;
+  overflow: hidden;
+}
+.notify-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--e-border);
+}
+.notify-filters {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.notify-section + .notify-section {
+  border-top: 1px solid var(--e-border);
+}
+.notify-heading {
+  margin: 0;
+  padding: 14px 20px 6px;
+  font-size: var(--e-eyebrow);
+  font-weight: var(--e-weight-strong);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--e-text-muted);
+}
+.notify-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 6px;
+}
+.notify-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 12px 0 8px;
+  border-radius: var(--e-radius);
+  margin: 0 8px;
+}
+.notify-row:hover {
+  background: var(--e-surface-sunken);
+}
+.notify-row.is-unread {
+  background: var(--e-accent-soft);
+}
+.notify-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 8px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--e-radius);
+}
+.notify-main:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+.notify-main:focus-visible,
+.notify-toast-main:focus-visible {
+  outline: none;
+  box-shadow: var(--e-focus-ring);
+}
+.notify-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--e-radius);
+  background: var(--e-neutral-soft);
+  color: var(--e-text-secondary);
+}
+.notify-icon.is-assignment,
+.notify-icon.is-collaboration {
+  background: var(--e-accent-soft);
+  color: var(--e-accent-strong);
+}
+.notify-icon.is-approval {
+  background: var(--e-info-soft);
+  color: var(--e-info);
+}
+.notify-icon.is-security {
+  background: var(--e-warning-soft);
+  color: var(--e-warning);
+}
+.notify-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.notify-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--e-secondary);
+  font-weight: var(--e-weight-medium);
+  color: var(--e-text);
+  overflow-wrap: anywhere;
+}
+.is-unread .notify-title {
+  font-weight: var(--e-weight-strong);
+}
+.notify-body {
+  font-size: var(--e-secondary);
+  color: var(--e-text-secondary);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.notify-meta {
+  font-size: var(--e-caption);
+  color: var(--e-text-muted);
+}
+.notify-dot {
+  flex: none;
+  align-self: center;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--e-accent);
+}
+.notify-priority {
+  font-size: var(--e-caption);
+  font-weight: var(--e-weight-medium);
+  padding: 1px 7px;
+  border-radius: var(--e-radius-pill);
+  background: var(--e-warning-soft);
+  color: var(--e-warning);
+}
+.notify-priority.is-urgent {
+  background: var(--e-danger-soft);
+  color: var(--e-danger);
+}
+.notify-toggle {
+  flex: none;
+  color: var(--e-text-muted);
+}
+.notify-empty {
+  padding: 28px 20px;
+  margin: 0;
+}
+.notify-more {
+  display: flex;
+  justify-content: center;
+  padding: 12px 20px 18px;
+  border-top: 1px solid var(--e-border);
+}
+
+/* Settings */
+.notify-settings {
+  margin-top: 20px;
+}
+.notify-settings .settings-row > span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.notify-settings .settings-row small {
+  color: var(--e-text-secondary);
+  font-size: var(--e-meta);
+}
+.notify-settings-note {
+  padding: 12px 24px 18px;
+  margin: 0;
+}
+
+/* Live toasts: top-right on desktop, full-width near the top on phones,
+   clear of the ordinary action toast at the bottom. */
+.notify-toasts {
+  position: fixed;
+  top: 68px;
+  right: 20px;
+  z-index: 185;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 360px;
+  max-width: calc(100vw - 32px);
+}
+.notify-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 4px 4px 4px 0;
+  background: var(--e-surface-raised);
+  border: 1px solid var(--e-border);
+  border-radius: var(--e-radius-lg);
+  box-shadow: var(--e-shadow-overlay);
+  animation: notify-in 200ms var(--ease, ease-out);
+}
+.notify-toast.is-urgent {
+  border-left: 3px solid var(--e-danger);
+}
+.notify-toast-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 10px;
+  padding: 10px 4px 10px 12px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--e-radius);
+}
+.notify-toast-main:disabled {
+  cursor: default;
+}
+@keyframes notify-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .notify-toast {
+    animation: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .notify-toolbar {
+    padding: 12px 14px;
+  }
+  .notify-filters .ui-button,
+  .notify-filters button {
+    padding-inline: 10px;
+  }
+  .notify-row {
+    margin: 0 4px;
+    padding: 0 4px;
+  }
+  .notify-heading {
+    padding-inline: 14px;
+  }
+  .notify-toasts {
+    top: 60px;
+    left: 16px;
+    right: 16px;
+    width: auto;
+    max-width: none;
+  }
+  .notify-settings .settings-row {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+}

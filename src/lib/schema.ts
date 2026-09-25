@@ -339,7 +339,80 @@ export const collabPresence = sqliteTable("CollabPresence", {
   lastSeenAt: integer("lastSeenAt", { mode: "timestamp_ms" }).notNull(),
 });
 
+/* ------------------------------------------------------------------------
+ * Notifications — one inbox for the whole CRM. Additive only.
+ * --------------------------------------------------------------------- */
+
+/**
+ * Something that happened which one person should know about: a lead
+ * assigned to them, an approval waiting, a mention. One row per recipient,
+ * so read state is per person and follows them across devices.
+ *
+ * A row never grants anything. `entityType`/`entityId` say what it is about;
+ * opening it goes through the normal access checks again, and the inbox
+ * hides the details of anything the reader can no longer see. No URLs are
+ * stored: the destination is derived from the entity when read.
+ *
+ * `dedupeKey` is deterministic for the event (e.g. `assigned:{record}:
+ * {owner}:{version}`), and unique per recipient, so a retried request, a
+ * repeated scheduled run or a replayed event can never notify twice.
+ *
+ * Ids are time-ordered (like message ids), so one index serves the
+ * newest-first inbox and its cursor.
+ */
+export const notifications = sqliteTable(
+  "Notification",
+  {
+    id: text("id").primaryKey(),
+    recipientId: text("recipientId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // NULL for the system (scheduled reminders).
+    actorId: text("actorId"),
+    type: text("type").notNull(),
+    category: text("category")
+      .$type<"assignment" | "approval" | "collaboration" | "reminder" | "update" | "security">()
+      .notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    // A record kind ("leads", "quotations", …), "conversation" or "account".
+    entityType: text("entityType").notNull(),
+    entityId: text("entityId").notNull(),
+    conversationId: text("conversationId"),
+    messageId: text("messageId"),
+    priority: text("priority").$type<"normal" | "important" | "urgent">().notNull().default("normal"),
+    dedupeKey: text("dedupeKey").notNull(),
+    createdAt: integer("createdAt", { mode: "timestamp_ms" }).notNull(),
+    readAt: integer("readAt", { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    uniqueIndex("Notification_recipientId_dedupeKey_key").on(table.recipientId, table.dedupeKey),
+    // The inbox, newest first, and its unread count.
+    index("Notification_recipientId_id_idx").on(table.recipientId, table.id),
+    index("Notification_recipientId_readAt_idx").on(table.recipientId, table.readAt),
+    // Resolving an approval clears everyone's "approval required" for it.
+    index("Notification_entityId_type_idx").on(table.entityId, table.type),
+    // Retention purge.
+    index("Notification_createdAt_idx").on(table.createdAt),
+  ],
+);
+
+/**
+ * Per-person notification preferences. Absent row = defaults (desktop off,
+ * previews on). Security notifications are not governed by these: they are
+ * always recorded and always shown in the inbox.
+ */
+export const notificationPreferences = sqliteTable("NotificationPreference", {
+  userId: text("userId")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  desktop: integer("desktop", { mode: "boolean" }).notNull().default(false),
+  preview: integer("preview", { mode: "boolean" }).notNull().default(true),
+  updatedAt: integer("updatedAt", { mode: "timestamp_ms" }).notNull(),
+});
+
 export type UserRow = typeof users.$inferSelect;
+export type NotificationRow = typeof notifications.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;
 export type BusinessRecordRow = typeof businessRecords.$inferSelect;
 export type AuditEventRow = typeof auditEvents.$inferSelect;

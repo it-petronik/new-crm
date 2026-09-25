@@ -1,14 +1,9 @@
 "use client";
-import { companyName } from "@/lib/company-name";
-import { businessStampShort } from "@/lib/gst";
 import { BrandLogo, brands } from "./brand";
-import { Pagination, usePagination } from "./pagination";
 import { useEffect, useState } from "react";
 import {
   Building2,
   ArrowUpRight,
-  Bell,
-  CheckCheck,
   UserRound,
   Sun,
   Moon,
@@ -16,7 +11,7 @@ import {
   ShieldCheck,
   LogOut,
 } from "lucide-react";
-import { Button, Input, Select, Field } from "./ui/controls";
+import { Button } from "./ui/controls";
 import { previewActorKey } from "@/lib/fixtures";
 import { AvatarEditor } from "./avatar-editor";
 import { useTheme, setTheme, usePalette, setPalette, palettes } from "./theme-toggle";
@@ -27,7 +22,6 @@ import {
   type Actor,
   type RecordItem,
 } from "@/lib/domain";
-import type { NotificationItem } from "@/lib/notifications";
 export type WorkspaceView =
   "collaboration" | "notifications" | "profile" | "appearance" | "access" | "shortcuts";
 export const viewLabels: Record<WorkspaceView, string> = {
@@ -230,132 +224,6 @@ export function AppearancePage() {
           </Button>)}
         </div>
       </section>
-    </>
-  );
-}
-export function NotificationsPage({
-  items,
-  read,
-  onRead,
-  onReadAll,
-  onOpen,
-}: {
-  items: NotificationItem[];
-  read: string[];
-  onRead: (id: string) => void;
-  onReadAll: () => void;
-  onOpen: (recordId: string) => void;
-}) {
-  const [filter, setFilter] = useState("all");
-  const [search, setSearch] = useState("");
-  const [company, setCompany] = useState("all");
-  const visible = items.filter(
-    (n) =>
-      (filter !== "unread" || !read.includes(n.id)) &&
-      (filter !== "action" || n.category === "action") &&
-      (company === "all" || n.company === company) &&
-      `${n.title} ${n.detail}`.toLowerCase().includes(search.toLowerCase()),
-  );
-  const pagination = usePagination(visible, `${filter}|${search}|${company}`);
-  return (
-    <>
-      <PageTitle
-        title="Notifications"
-        subtitle="Follow-ups, approvals and workspace updates in one inbox."
-      />
-      <section className="panel">
-        <div className="records-toolbar">
-          <div className="segmented">
-            {[
-              ["all", "All"],
-              ["unread", "Unread"],
-              ["action", "Needs action"],
-            ].map(([v, l]) => (
-              <Button
-                key={v}
-                className={filter === v ? "selected" : ""}
-                onClick={() => setFilter(v)}
-              >
-                {l}
-                {v === "unread"
-                  ? ` (${items.filter((i) => !read.includes(i.id)).length})`
-                  : ""}
-              </Button>
-            ))}
-          </div>
-          <Button className="secondary" onClick={onReadAll}>
-            <CheckCheck size={16} />
-            Mark all read
-          </Button>
-        </div>
-        <div className="inbox-filters">
-          <Input
-            aria-label="Search notifications"
-            placeholder="Search notifications…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          <Field>
-            <Select
-              aria-label="Notification company"
-              value={company}
-              onChange={(e) => setCompany(e.target.value)}
-            >
-              <option value="all">All companies</option>
-              {Array.from(new Set(items.map((n) => n.company))).map((c) => (
-                <option key={c} value={c}>
-                  {companyName(c)}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        </div>
-        {pagination.items.map((n) => (
-          <article
-            className={`inbox-row ${read.includes(n.id) ? "" : "unread"}`}
-            key={n.id}
-          >
-            <span className="inbox-icon">
-              <Bell size={18} />
-            </span>
-            <div>
-              <h3>{n.title}</h3>
-              <p>{n.detail}</p>
-              <small>
-                {companyName(n.company)} · {businessStampShort(n.at)}
-              </small>
-            </div>
-            <div className="inbox-actions">
-              <Button
-                className="secondary"
-                onClick={() => {
-                  onRead(n.id);
-                  onOpen(n.recordId);
-                }}
-              >
-                Open
-              </Button>
-              {!read.includes(n.id) && (
-                <Button className="text-button" onClick={() => onRead(n.id)}>
-                  Mark read
-                </Button>
-              )}
-            </div>
-          </article>
-        ))}
-        {!visible.length && (
-          <div className="empty">
-            <Bell />
-            <h3>No notifications</h3>
-            <p>Nothing matches this view.</p>
-          </div>
-        )}
-      </section>
-      <Pagination {...pagination} label="notifications" />
-      <p className="small muted preference-note">
-        Read status is saved on this device. External email and WhatsApp
-        delivery are not connected.
-      </p>
     </>
   );
 }

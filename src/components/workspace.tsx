@@ -65,6 +65,7 @@ import {
   Pin,
   Target,
   Truck,
+  UserPlus,
   Users,
   Wallet,
   X,
@@ -78,6 +79,7 @@ import {
 import {
   allowedModules,
   canApprove,
+  canRead,
   canWrite,
   canManageUsers,
   companies,
@@ -96,7 +98,7 @@ import {
   type Workspace as WorkspaceData,
 } from "@/lib/domain";
 import { makePreview } from "@/lib/fixtures";
-import { transition, addNote, recordPayment } from "@/lib/workflow";
+import { transition, addNote, recordPayment, canAssign } from "@/lib/workflow";
 import { RecordActivity } from "./record-tools";
 import Sidebar from "./sidebar";
 import { Dialog, DialogPresence, DialogActions } from "./ui/controls";
@@ -110,7 +112,6 @@ import UserAdmin from "./user-admin";
 import {
   ProfilePage,
   AppearancePage,
-  NotificationsPage,
   ShortcutsPage,
   PageTitle,
   viewLabels,
@@ -121,7 +122,10 @@ import { StatusBadge as Badge } from "./ui/status-badge";
 import { RowActions, rowActionIcons } from "./ui/row-actions";
 import { formatMoney, formatMoneyCompact, totalsByCurrency, describeTotals } from "@/lib/money-format";
 import { recentRecords, rememberRecord, pinnedIds, togglePin, resolveVisible } from "@/lib/workspace-prefs";
-import { workspaceNotifications } from "@/lib/notifications";
+import { NotificationsPage, NotificationToasts } from "./notification-center";
+import AssignDialog from "./assign-dialog";
+import { useNotifications, claimAlert, showDesktop } from "@/lib/notifications-client";
+import { badgeCount, moduleForKind, titleWithCount, type NotificationView, type NotificationPreferences } from "@/lib/notification-types";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useCollabSummary } from "@/lib/collab-client";
@@ -294,7 +298,6 @@ export default function Workspace({
     setRecent(recentRecords(actor.id));
     setPins(pinnedIds(actor.id));
   }, [actor.id]);
-  const [readNotifications, setReadNotifications] = useState<string[]>([]);
   const [module, setModule] = useState<Module>(initial.module);
   const [company, setCompany] = useState(initial.company);
   useEffect(() => {
@@ -338,7 +341,9 @@ export default function Workspace({
       // The open conversation (?c=) is the Collaboration Hub's own state and
       // survives the canonical-URL rewrite, so a shared link opens the thread.
       const conversation = params.get("view") === "collaboration" ? params.get("c") : null;
-      window.history.replaceState(null, "", workspaceUrl(self ? "my-requests" : params.get("view") || requested || "overview", params.get("company") || "All companies") + (conversation ? `?c=${encodeURIComponent(conversation)}` : ""));
+      // …and a notification's deep link may also name the message (?m=).
+      const message = conversation ? params.get("m") : null;
+      window.history.replaceState(null, "", workspaceUrl(self ? "my-requests" : params.get("view") || requested || "overview", params.get("company") || "All companies") + (conversation ? `?c=${encodeURIComponent(conversation)}${message ? `&m=${encodeURIComponent(message)}` : ""}` : ""));
       setModule(
         requested && allowedModules(actor).includes(requested as Module)
           ? (requested as Module)
@@ -354,14 +359,6 @@ export default function Workspace({
     try {
       setCollapsed(
         localStorage.getItem("enercore-sidebar-collapsed") === "true",
-      );
-      const savedRead = JSON.parse(
-        localStorage.getItem(`enercore-notifications-${actor.id}`) || "[]",
-      );
-      setReadNotifications(
-        Array.isArray(savedRead)
-          ? savedRead.filter((id): id is string => typeof id === "string")
-          : [],
       );
     } catch {}
     return () => window.removeEventListener("popstate", syncLocation);
@@ -379,6 +376,7 @@ export default function Workspace({
   const [importing, setImporting] = useState(false);
   const [quickAdd, setQuickAdd] = useState<{ open: boolean; kind?: Kind }>({ open: false });
   const [logging, setLogging] = useState<RecordItem | null>(null);
+  const [assigning, setAssigning] = useState<RecordItem | null>(null);
   // After advancing a record, offer the follow-up rather than relying on the
   // person to remember. Dismissable, never blocking.
   const [prompt, setPrompt] = useState<{ record: RecordItem; status: string } | null>(null);
@@ -518,22 +516,7 @@ export default function Workspace({
     return () => window.removeEventListener("keydown", fn);
   }, [module, hrTab, view, selfService, form, selected, company, actor]);
   const scoped = scopedWorkspace(actor, data);
-  const notificationItems = workspaceNotifications(actor, scoped);
-  const markRead = (ids: string[]) => {
-    const next = Array.from(new Set([...readNotifications, ...ids])).slice(
-      -2000,
-    );
-    setReadNotifications(next);
-    try {
-      localStorage.setItem(
-        `enercore-notifications-${actor.id}`,
-        JSON.stringify(next),
-      );
-    } catch {
-      setToast("Read status could not be saved on this device.");
-    }
-  };
-  const openView = (next: WorkspaceView) => {
+  const openView = (next: WorkspaceView, query = "") => {
     if (next === "access" && !canManageUsers(actor)) return;
     setView(next);
     setSelfService(false);
@@ -544,10 +527,89 @@ export default function Workspace({
     window.history.pushState(
       null,
       "",
-      workspaceUrl(next, company),
+      workspaceUrl(next, company) + query,
     );
     window.scrollTo({ top: 0, behavior: "instant" });
   };
+
+  /* ------------------------------------------------------ notifications */
+
+  const [alerts, setAlerts] = useState<NotificationView[]>([]);
+  const dismissAlert = (id: string) => setAlerts((list) => list.filter((n) => n.id !== id));
+  /**
+   * Goes where a notification points. Nothing here grants access: a record
+   * is fetched through the normal records API (which applies the read rule)
+   * and a conversation through the Collaboration Hub's own checks.
+   */
+  async function openNotification(n: NotificationView) {
+    if (!n.readAt) void inbox.setRead([n.id], true);
+    dismissAlert(n.id);
+    const target = n.target;
+    if (!target) {
+      setToast("This item is no longer available to you.");
+      return;
+    }
+    if (target.kind === "profile") return openView("profile");
+    if (target.kind === "conversation") {
+      if (view === "collaboration" && !selfService) {
+        window.dispatchEvent(new CustomEvent("enercore:open-conversation", { detail: target }));
+        return;
+      }
+      const query = `?c=${encodeURIComponent(target.conversationId)}${target.messageId ? `&m=${encodeURIComponent(target.messageId)}` : ""}`;
+      return openView("collaboration", query);
+    }
+    let record = data.records.find((r) => r.id === target.recordId && !r.deletedAt) ?? null;
+    if (!record) {
+      try {
+        const response = await fetch(`/api/records?id=${encodeURIComponent(target.recordId)}`, { cache: "no-store" });
+        if (response.ok) record = ((await response.json()) as { record: RecordItem }).record;
+      } catch {}
+    }
+    if (!record || !canRead(actor, record)) {
+      setToast("This item is no longer available to you.");
+      return;
+    }
+    const module = moduleForKind(target.recordKind);
+    if (permitted.includes(module)) go(module, "All companies");
+    if (target.recordKind === "leave") setHrTab("leave");
+    setSelected(record);
+  }
+  const selectedRef = useRef<RecordItem | null>(null);
+  const placeRef = useRef<{ view: WorkspaceView | null; selfService: boolean }>({ view: null, selfService: false });
+  useEffect(() => {
+    selectedRef.current = selected;
+    placeRef.current = { view, selfService };
+  });
+  /**
+   * A live notification: one toast in the visible tab, or one desktop alert
+   * from a background tab — coordinated so several open tabs alert once —
+   * and nothing when the person is already looking at the thing itself.
+   */
+  async function onNotification(n: NotificationView, prefs: NotificationPreferences) {
+    if (!(await claimAlert(actor.id, n.id))) return;
+    const t = n.target;
+    if (document.visibilityState === "visible") {
+      const place = placeRef.current;
+      const inConversation =
+        t?.kind === "conversation" &&
+        place.view === "collaboration" &&
+        !place.selfService &&
+        new URLSearchParams(window.location.search).get("c") === t.conversationId;
+      const onRecord = t?.kind === "record" && selectedRef.current?.id === t.recordId;
+      if (inConversation || onRecord) return;
+      setAlerts((list) => [n, ...list.filter((x) => x.id !== n.id)].slice(0, 3));
+      setTimeout(() => dismissAlert(n.id), n.priority === "normal" ? 6000 : 9000);
+      return;
+    }
+    showDesktop(n, prefs, () => void openNotification(n));
+  }
+  const inbox = useNotifications(!preview, (n, prefs) => void onNotification(n, prefs));
+  // "(4) Enercore …" in the tab, from the unified unread count.
+  const baseTitle = useRef("");
+  useEffect(() => {
+    if (!baseTitle.current) baseTitle.current = document.title.replace(/^\(\d+\+?\) /, "");
+    document.title = titleWithCount(baseTitle.current, inbox.unread);
+  }, [inbox.unread]);
   const records = scoped.records.filter(
     (r) => company === "All companies" || r.company === company,
   );
@@ -939,13 +1001,15 @@ export default function Workspace({
             <ThemeToggle />
             <Button
               className="icon-button notification-button"
-              aria-label="Open notifications"
+              aria-label={inbox.unread ? `Open notifications, ${badgeCount(inbox.unread)} unread` : "Open notifications"}
               onClick={() => openView("notifications")}
             >
               <Bell size={19} />
-              {notificationItems.some(
-                (n) => !readNotifications.includes(n.id),
-              ) && <i />}
+              {inbox.unread > 0 && (
+                <span className="notify-badge" aria-hidden="true">
+                  {badgeCount(inbox.unread)}
+                </span>
+              )}
             </Button>
             <Button
               className="avatar small-avatar profile-trigger"
@@ -998,18 +1062,17 @@ export default function Workspace({
               {view === "appearance" && <AppearancePage />}
               {view === "notifications" && (
                 <NotificationsPage
-                  items={notificationItems}
-                  read={readNotifications}
-                  onRead={(id) => markRead([id])}
-                  onReadAll={() => markRead(notificationItems.map((n) => n.id))}
-                  onOpen={(id) => {
-                    const record = scoped.records.find((r) => r.id === id);
-                    if (record) setSelected(record);
-                    else
-                      setToast(
-                        "This update has no record available in your access scope.",
-                      );
-                  }}
+                  items={inbox.items}
+                  unread={inbox.unread}
+                  loaded={inbox.loaded || preview}
+                  error={inbox.error}
+                  hasMore={!!inbox.nextBefore}
+                  preferences={inbox.preferences}
+                  onOpen={(n) => void openNotification(n)}
+                  onRead={(ids, read) => void inbox.setRead(ids, read)}
+                  onReadAll={() => void inbox.readAll()}
+                  onMore={inbox.loadMore}
+                  onSavePreferences={inbox.savePreferences}
                 />
               )}
               {view === "access" && canManageUsers(actor) && (
@@ -1616,6 +1679,7 @@ export default function Workspace({
             onLog={() => setLogging(selectedCurrent)}
             onUpdate={(s) => update(selectedCurrent, s)}
             onAction={(action) => extraAction(selectedCurrent, action)}
+            onAssign={!preview && canAssign(actor, selectedCurrent) ? () => setAssigning(selectedCurrent) : undefined}
             onQuote={() => {
               setQuoteSource(selectedCurrent);
               setSelected(null);
@@ -1698,6 +1762,25 @@ export default function Workspace({
           </Button>
         </div>
       )}
+      <DialogPresence>
+        {assigning && (
+          <AssignDialog
+            record={assigning}
+            onClose={() => setAssigning(null)}
+            onAssigned={async (name) => {
+              setAssigning(null);
+              await reload().catch(() => {});
+              setToast(`Assigned to ${name}.`);
+            }}
+          />
+        )}
+      </DialogPresence>
+      <NotificationToasts
+        toasts={alerts}
+        preferences={inbox.preferences}
+        onOpen={(n) => void openNotification(n)}
+        onDismiss={dismissAlert}
+      />
       {toast && (
         <div className="toast" role="status">
           <CheckCircle2 size={18} />
@@ -2558,10 +2641,13 @@ function Detail({
   pinned,
   onPin,
   onLog,
+  onAssign,
 }: {
   record: RecordItem;
   actor: Actor;
   busy: boolean;
+  /** Present when this person may hand the record to someone else. */
+  onAssign?: () => void;
   /** Pinning is a per-person convenience; it never touches the record. */
   pinned: boolean;
   onPin: () => void;
@@ -2594,6 +2680,11 @@ function Detail({
         <Company name={r.company} />
         <Badge status={r.status} />
         <span className="detail-quick-actions">
+          {onAssign && (
+            <Button className="secondary" disabled={busy} onClick={onAssign}>
+              <UserPlus size={15} aria-hidden="true" /> Assign
+            </Button>
+          )}
           {LOGGABLE.includes(r.kind) && canWrite(actor, r) && (
             <Button className="secondary" onClick={onLog}>
               <Phone size={15} aria-hidden="true" /> Log activity

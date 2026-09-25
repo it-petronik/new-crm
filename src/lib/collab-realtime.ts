@@ -51,6 +51,27 @@ export async function publish(userIds: string[], event: CollabEvent) {
   else await delivery;
 }
 
+/**
+ * Runs follow-up work (notifications) after the response has been sent, so
+ * the person acting never waits on it. Without a Worker context it simply
+ * runs inline. Failures are logged, never thrown: a notification must never
+ * undo or fail the business change that caused it.
+ */
+export async function afterResponse(label: string, task: () => Promise<unknown>) {
+  const run = task().catch((cause) =>
+    console.error(
+      JSON.stringify({
+        event: "notification_failed",
+        label,
+        detail: cause instanceof Error ? `${cause.name}: ${cause.message}`.slice(0, 200) : "Unknown error",
+      }),
+    ),
+  );
+  const hub = await hubContext();
+  if (hub?.ctx?.waitUntil) hub.ctx.waitUntil(run);
+  else await run;
+}
+
 /* -------------------------------------------------------------- presence */
 
 /**

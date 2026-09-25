@@ -7,13 +7,18 @@ import {
 } from "@/lib/data";
 import { checkOrigin, currentActor } from "@/lib/auth";
 import {
+  canRead,
   canWrite,
   scopedWorkspace,
   stages,
   totalCents,
   type RecordItem,
 } from "@/lib/domain";
-import { transition, addNote, recordPayment } from "@/lib/workflow";
+import { transition, addNote, recordPayment, assign } from "@/lib/workflow";
+import { findUserById } from "@/lib/data";
+import { mayOwn } from "@/lib/notification-rules";
+import { toPerson } from "@/lib/notification-store";
+import { notifyRecordChange } from "@/lib/notify";
 import { quotationError } from "@/lib/quotation";
 import { mutateRecord } from "@/lib/record-mutations";
 import { isCashEntry, cashEntryError } from "@/lib/cashbook";
@@ -137,10 +142,21 @@ export async function GET(request: Request) {
       scopedWorkspace(actor, { records: [], audit: [] }),
       { headers: { "Cache-Control": "no-store" } },
     );
+  const url = new URL(request.url);
+  // One record by id, for a notification's deep link to something outside
+  // the loaded page. The normal read rule applies: a notification never
+  // grants access to what it points at.
+  const single = url.searchParams.get("id");
+  if (single) {
+    const row = single.length <= 100 ? await findRecord(db, single) : undefined;
+    const record = row?.payload as RecordItem | undefined;
+    if (!record || record.deletedAt || !canRead(actor, record))
+      return NextResponse.json({ error: "This record is not available to you." }, { status: 404 });
+    return NextResponse.json({ record }, { headers: { "Cache-Control": "no-store" } });
+  }
   // Company and branch scope are applied by the database, not by filtering a
   // full table read in memory; the page bound keeps one request inside the
   // Workers CPU budget however large the table grows.
-  const url = new URL(request.url);
   const limit = Number(url.searchParams.get("limit")) || RECORD_PAGE_LIMIT;
   const offset = Number(url.searchParams.get("offset")) || 0;
   const rows = await listRecordsForActor(
@@ -268,6 +284,7 @@ export async function POST(request: Request) {
       }
       throw error;
     }
+    await notifyRecordChange(db, { actor, after: record, version: 1 });
     return NextResponse.json({ record, duplicate: false }, { status: 201 });
   } catch {
     return NextResponse.json(
@@ -298,6 +315,11 @@ export async function PATCH(request: Request) {
         due: z.iso.date().optional(),
       }),
       z.object({
+        action: z.literal("assign"),
+        id: z.string().max(100),
+        assigneeId: z.string().max(100),
+      }),
+      z.object({
         action: z.literal("payment"),
         id: z.string().max(100),
         amountCents: z.number().int().positive(),
@@ -320,8 +342,18 @@ export async function PATCH(request: Request) {
       const peers = await listRecordsForCompany(db, record.company);
       before.records = peers.map((peer) => peer.payload as RecordItem);
     }
+    let assignee: { id: string; name: string } | undefined;
+    if (c.action === "assign") {
+      const target = await findUserById(db, c.assigneeId);
+      // One message whether the person is absent, inactive or out of scope.
+      if (!target || !mayOwn(toPerson(target), record))
+        throw new Error("That person can't be given this record.");
+      assignee = { id: target.id, name: target.name };
+    }
     const result =
-      c.action === "edit" || c.action === "delete"
+      c.action === "assign"
+        ? assign(before, actor, id, assignee!)
+        : c.action === "edit" || c.action === "delete"
         ? mutateRecord(before, actor, id, c.expectedUpdatedAt, c.action === "edit" ? c.values : undefined)
         : c.action === "status"
           ? transition(before, actor, id, c.status)
@@ -342,7 +374,7 @@ export async function PATCH(request: Request) {
         db,
         id,
         row.version,
-        { status: changed.status, payload: changed },
+        { status: changed.status, payload: changed, ownerId: changed.ownerId },
         {
           id: event.id, company: event.company, actor: event.actor, actorId: actor.id,
           action: event.action, recordId: event.recordId,
@@ -352,6 +384,13 @@ export async function PATCH(request: Request) {
       );
       if (!applied)
         throw new Error("Another user updated this record. Refresh and retry.");
+      await notifyRecordChange(db, {
+        actor,
+        before: record,
+        after: changed,
+        version: row.version + 1,
+        created: created.map((r) => r.payload as RecordItem),
+      });
     }
     return NextResponse.json({ ok: true });
   } catch (error) {
