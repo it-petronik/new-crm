@@ -9,7 +9,7 @@ export function POST(request: Request, { params }: Params) {
     const { actor, db } = await collabContext(request, true);
     const { meeting, canManage } = await requireMeeting(db, actor, (await params).id);
     if (!canManage) throw new CollabError(403, "Only the organiser can end this meeting for everyone.");
-    await endMeeting(db, meeting.id);
+    await endMeeting(db, meeting.id, actor.name);
     return json({ ok: true });
   });
 }

@@ -226,6 +226,8 @@ test.describe("with cameras and microphones", () => {
     await expect(a.page.locator(".meet-tile")).toHaveCount(1, { timeout: 20_000 });
     await a.page.getByRole("button", { name: "More options" }).click();
     await a.page.getByRole("menuitem", { name: "End meeting for everyone" }).click();
+    // A deliberate confirmation: everyone, guests included, is disconnected.
+    await a.page.getByRole("dialog", { name: "End the meeting for everyone?" }).getByRole("button", { name: "End for everyone" }).click();
     await expect(a.page.getByRole("heading", { name: "The meeting has ended" })).toBeVisible({ timeout: 20_000 });
     await expect.poll(async () => (await a.client.get(`/conversations/${room.id}/meetings`)).body.meetings[0]?.status).toBe("ended");
     // History records both people.

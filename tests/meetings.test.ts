@@ -81,6 +81,12 @@ test("a meeting notification opens the pre-join screen of that meeting only", ()
     meetingId: "m1",
     conversationId: "c1",
   });
-  // Without its conversation it has nowhere safe to go.
-  assert.equal(targetFor({ entityType: "meeting", entityId: "m1", conversationId: null, messageId: null }), null);
+  // A standalone meeting has no conversation: it opens by id alone, and the
+  // server still decides access (organiser or invitee, else the same 404).
+  assert.deepEqual(targetFor({ entityType: "meeting", entityId: "m1", conversationId: null, messageId: null }), {
+    kind: "meeting",
+    meetingId: "m1",
+    conversationId: null,
+  });
+  assert.equal(targetFor({ entityType: "meeting", entityId: "", conversationId: "c1", messageId: null }), null);
 });

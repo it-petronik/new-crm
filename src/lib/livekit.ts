@@ -89,7 +89,7 @@ export function joinToken(
       nbf: now - 10,
       exp: now + p.ttlSeconds,
       jti: crypto.randomUUID(),
-      metadata: JSON.stringify({ host: p.host }),
+      metadata: JSON.stringify({ host: p.host, guest: false }),
       video: {
         room: p.room,
         roomJoin: true,
@@ -97,6 +97,36 @@ export function joinToken(
         canSubscribe: true,
         canPublishData: true,
         canPublishSources: ["camera", "microphone", "screen_share", "screen_share_audio"],
+        canUpdateOwnMetadata: false,
+      },
+    },
+    config.apiSecret,
+  );
+}
+
+/**
+ * A guest's token: one meeting, camera and microphone only (no screen
+ * share, no data channel), and a name marked as a guest's. Issued only after
+ * the guest link and the host's admission (when required) were checked.
+ */
+export function guestToken(config: ProviderConfig, p: { identity: string; name: string; room: string; ttlSeconds: number; now?: number }) {
+  const now = Math.floor((p.now ?? Date.now()) / 1000);
+  return signJwt(
+    {
+      iss: config.apiKey,
+      sub: p.identity,
+      name: p.name,
+      nbf: now - 10,
+      exp: now + p.ttlSeconds,
+      jti: crypto.randomUUID(),
+      metadata: JSON.stringify({ host: false, guest: true }),
+      video: {
+        room: p.room,
+        roomJoin: true,
+        canPublish: true,
+        canSubscribe: true,
+        canPublishData: false,
+        canPublishSources: ["camera", "microphone"],
         canUpdateOwnMetadata: false,
       },
     },
@@ -112,9 +142,10 @@ function adminToken(config: ProviderConfig, room: string) {
 
 /* ----------------------------------------------------------- RoomService */
 
+const httpBase = (config: ProviderConfig) => config.url.replace(/^wss:/, "https:").replace(/^ws:/, "http:").replace(/\/+$/, "");
+
 async function roomService(config: ProviderConfig, room: string, method: string, body: Record<string, unknown>) {
-  const base = config.url.replace(/^wss:/, "https:").replace(/^ws:/, "http:").replace(/\/+$/, "");
-  const response = await fetch(`${base}/twirp/livekit.RoomService/${method}`, {
+  const response = await fetch(`${httpBase(config)}/twirp/livekit.RoomService/${method}`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${await adminToken(config, room)}` },
     body: JSON.stringify(body),
@@ -122,6 +153,63 @@ async function roomService(config: ProviderConfig, room: string, method: string,
   // A room or participant that is already gone is the outcome we wanted.
   if (!response.ok && response.status !== 404) throw new Error(`Meeting provider ${method} failed (${response.status}).`);
 }
+
+/**
+ * Room metadata every participant (guests included) receives live — used to
+ * announce recording, so it can never run unseen.
+ */
+export const setRoomMetadata = (config: ProviderConfig, room: string, metadata: Record<string, unknown>) =>
+  roomService(config, room, "UpdateRoomMetadata", { room, metadata: JSON.stringify(metadata) });
+
+/* ------------------------------------------------------------- recording */
+
+/**
+ * Where cloud recordings are written: private S3-compatible storage (the
+ * R2 bucket, through its S3 API). All four settings are Worker secrets;
+ * without them recording is simply unavailable.
+ */
+export type RecordingStorage = { endpoint: string; bucket: string; accessKey: string; secret: string };
+
+export function recordingStorageFrom(env: Record<string, unknown>): RecordingStorage | null {
+  const endpoint = env.RECORDING_S3_ENDPOINT, bucket = env.RECORDING_S3_BUCKET, accessKey = env.RECORDING_S3_ACCESS_KEY, secret = env.RECORDING_S3_SECRET;
+  if (![endpoint, bucket, accessKey, secret].every((v) => typeof v === "string" && v)) return null;
+  if (!/^https:\/\//.test(endpoint as string)) return null;
+  return { endpoint: endpoint as string, bucket: bucket as string, accessKey: accessKey as string, secret: secret as string };
+}
+
+async function egressCall(config: ProviderConfig, room: string, method: string, body: Record<string, unknown>) {
+  const now = Math.floor(Date.now() / 1000);
+  const token = await signJwt({ iss: config.apiKey, sub: "enercore-server", nbf: now - 10, exp: now + 60, video: { room, roomRecord: true } }, config.apiSecret);
+  const response = await fetch(`${httpBase(config)}/twirp/livekit.Egress/${method}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  });
+  const result = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!response.ok) throw new Error(`Recording ${method} failed (${response.status}).`);
+  return result;
+}
+
+/** Starts a composite (everyone, one file) MP4 recording of the room; returns the egress id. */
+export async function startRecording(config: ProviderConfig, storage: RecordingStorage, room: string, fileKey: string) {
+  const info = await egressCall(config, room, "StartRoomCompositeEgress", {
+    room_name: room,
+    layout: "grid",
+    file_outputs: [
+      {
+        file_type: "MP4",
+        filepath: fileKey,
+        disable_manifest: true,
+        s3: { access_key: storage.accessKey, secret: storage.secret, region: "auto", endpoint: storage.endpoint, bucket: storage.bucket, force_path_style: true },
+      },
+    ],
+  });
+  const id = (info.egress_id ?? info.egressId) as string | undefined;
+  if (!id) throw new Error("Recording did not start.");
+  return id;
+}
+
+export const stopRecording = (config: ProviderConfig, room: string, egressId: string) => egressCall(config, room, "StopEgress", { egress_id: egressId });
 
 /** Disconnects everyone and closes the room. */
 export const closeRoom = (config: ProviderConfig, room: string) => roomService(config, room, "DeleteRoom", { room });
@@ -139,7 +227,9 @@ export const muteTrack = (config: ProviderConfig, room: string, identity: string
 export type ProviderEvent = {
   event: string;
   room?: { name?: string };
-  participant?: { identity?: string };
+  participant?: { identity?: string; name?: string };
+  track?: { source?: string | number; type?: string | number };
+  egressInfo?: Record<string, unknown>;
   createdAt?: number | string;
 };
 

@@ -125,7 +125,9 @@ import { recentRecords, rememberRecord, pinnedIds, togglePin, resolveVisible } f
 import { NotificationsPage, NotificationToasts } from "./notification-center";
 import AssignDialog from "./assign-dialog";
 import MeetingLayer from "./meetings/meeting-layer";
-import { openPrejoin } from "@/lib/meeting-client";
+import RecordMeetings from "./meetings/record-meetings";
+import TodayMeetings from "./meetings/today-meetings";
+import { openPrejoin, useMeetingFlow } from "@/lib/meeting-client";
 import { useNotifications, claimAlert, showDesktop } from "@/lib/notifications-client";
 import { badgeCount, moduleForKind, titleWithCount, type NotificationView, type NotificationPreferences } from "@/lib/notification-types";
 import Link from "next/link";
@@ -345,7 +347,16 @@ export default function Workspace({
       const conversation = params.get("view") === "collaboration" ? params.get("c") : null;
       // …and a notification's deep link may also name the message (?m=).
       const message = conversation ? params.get("m") : null;
-      window.history.replaceState(null, "", workspaceUrl(self ? "my-requests" : params.get("view") || requested || "overview", params.get("company") || "All companies") + (conversation ? `?c=${encodeURIComponent(conversation)}${message ? `&m=${encodeURIComponent(message)}` : ""}` : ""));
+      // …as does Collaboration → Meetings (?tab=meetings&meeting=<id>).
+      const meetingsTab = params.get("view") === "collaboration" && params.get("tab") === "meetings";
+      const meeting = meetingsTab ? params.get("meeting") : null;
+      const report = meetingsTab && params.get("mview") === "report";
+      const suffix = conversation
+        ? `?c=${encodeURIComponent(conversation)}${message ? `&m=${encodeURIComponent(message)}` : ""}`
+        : meetingsTab
+          ? `?tab=meetings${meeting ? `&meeting=${encodeURIComponent(meeting)}${report ? "&mview=report" : ""}` : ""}`
+          : "";
+      window.history.replaceState(null, "", workspaceUrl(self ? "my-requests" : params.get("view") || requested || "overview", params.get("company") || "All companies") + suffix);
       setModule(
         requested && allowedModules(actor).includes(requested as Module)
           ? (requested as Module)
@@ -416,6 +427,24 @@ export default function Workspace({
   useEffect(() => { if (form && !editing) createKey.current = crypto.randomUUID(); }, [form, editing]);
   const [quoteSource, setQuoteSource] = useState<RecordItem | null>(null);
   const [selected, setSelected] = useState<RecordItem | null>(null);
+  // The meeting screens sit above the workspace, but a record's detail is a
+  // modal that would leave them unreachable: opening a meeting (from a
+  // record, a notification or a call) closes it first.
+  // Leaving the meeting brings the record back, as it was.
+  const meetingPhase = useMeetingFlow().phase;
+  const recordBeforeMeeting = useRef<RecordItem | null>(null);
+  useEffect(() => {
+    if (meetingPhase !== "idle") {
+      setSelected((current) => {
+        if (current) recordBeforeMeeting.current = current;
+        return null;
+      });
+    } else if (recordBeforeMeeting.current) {
+      const back = recordBeforeMeeting.current;
+      recordBeforeMeeting.current = null;
+      setSelected(back);
+    }
+  }, [meetingPhase]);
   const [board, setBoard] = useState(true);
   // Dashboard period lives here so its control can sit beside the company filter.
   const [period, setPeriod] = useState("all");
@@ -562,10 +591,14 @@ export default function Workspace({
     }
     // A meeting opens its pre-join screen; joining re-checks access.
     if (target.kind === "meeting") return openPrejoin(target.meetingId);
-    let record = data.records.find((r) => r.id === target.recordId && !r.deletedAt) ?? null;
+    await openRecordById(target.recordKind, target.recordId);
+  }
+  /** Opens one record's detail through the normal records API (its read rule applies). */
+  async function openRecordById(kind: Kind, id: string) {
+    let record = data.records.find((r) => r.id === id && !r.deletedAt) ?? null;
     if (!record) {
       try {
-        const response = await fetch(`/api/records?id=${encodeURIComponent(target.recordId)}`, { cache: "no-store" });
+        const response = await fetch(`/api/records?id=${encodeURIComponent(id)}`, { cache: "no-store" });
         if (response.ok) record = ((await response.json()) as { record: RecordItem }).record;
       } catch {}
     }
@@ -573,11 +606,38 @@ export default function Workspace({
       setToast("This item is no longer available to you.");
       return;
     }
-    const module = moduleForKind(target.recordKind);
+    const module = moduleForKind(kind);
     if (permitted.includes(module)) go(module, "All companies");
-    if (target.recordKind === "leave") setHrTab("leave");
+    if (kind === "leave") setHrTab("leave");
     setSelected(record);
   }
+  // A meeting's related record, or a record's meeting page, from anywhere.
+  const openRecordRef = useRef(openRecordById);
+  const openViewRef = useRef(openView);
+  const viewRef = useRef(view);
+  useEffect(() => {
+    openRecordRef.current = openRecordById;
+    openViewRef.current = openView;
+    viewRef.current = view;
+  });
+  useEffect(() => {
+    const onRecord = (e: Event) => {
+      const { kind, id } = (e as CustomEvent<{ kind: Kind; id: string }>).detail;
+      void openRecordRef.current(kind, id);
+    };
+    const onMeeting = (e: Event) => {
+      const { meetingId, view: page } = (e as CustomEvent<{ meetingId: string; view: "details" | "report" }>).detail;
+      setSelected(null);
+      if (viewRef.current === "collaboration") window.dispatchEvent(new CustomEvent("enercore:meeting-details", { detail: { meetingId, view: page } }));
+      else openViewRef.current("collaboration", `?tab=meetings&meeting=${encodeURIComponent(meetingId)}${page === "report" ? "&mview=report" : ""}`);
+    };
+    window.addEventListener("enercore:open-record", onRecord);
+    window.addEventListener("enercore:open-meeting-page", onMeeting);
+    return () => {
+      window.removeEventListener("enercore:open-record", onRecord);
+      window.removeEventListener("enercore:open-meeting-page", onMeeting);
+    };
+  }, []);
   const selectedRef = useRef<RecordItem | null>(null);
   const placeRef = useRef<{ view: WorkspaceView | null; selfService: boolean }>({ view: null, selfService: false });
   useEffect(() => {
@@ -1240,6 +1300,7 @@ export default function Workspace({
                 )
               ) : module === "overview" ? (
                 <Overview
+                  meetingsToday={preview ? null : <TodayMeetings />}
                   records={records}
                   actor={actor}
                   executive={executive}
@@ -1686,6 +1747,7 @@ export default function Workspace({
             onUpdate={(s) => update(selectedCurrent, s)}
             onAction={(action) => extraAction(selectedCurrent, action)}
             onAssign={!preview && canAssign(actor, selectedCurrent) ? () => setAssigning(selectedCurrent) : undefined}
+            showMeetings={!preview}
             onQuote={() => {
               setQuoteSource(selectedCurrent);
               setSelected(null);
@@ -1781,7 +1843,7 @@ export default function Workspace({
           />
         )}
       </DialogPresence>
-      {!preview && <MeetingLayer meId={actor.id} />}
+      {!preview && <MeetingLayer />}
       <NotificationToasts
         toasts={alerts}
         preferences={inbox.preferences}
@@ -1810,6 +1872,8 @@ type RecordActionsProps = {
 
 /** Kinds where "I contacted them" is a real event. */
 const LOGGABLE = ["leads", "customers", "suppliers", "quotations", "orders"];
+/** Records a meeting can be about (see meeting-related.ts). */
+const MEETING_KINDS = ["leads", "customers", "quotations", "orders"];
 /** The next action, with its date kept as secondary detail. */
 function NextActionCell({ record }: { record: RecordItem }) {
   const action = nextAction(record);
@@ -2053,7 +2117,10 @@ function Overview({
   onFollowUp,
   onQuickAdd,
   busy,
+  meetingsToday,
 }: {
+  /** Today's meetings for My Day (live workspace only). */
+  meetingsToday?: React.ReactNode;
   records: RecordItem[];
   actor: Actor;
   approvals: RecordItem[];
@@ -2256,6 +2323,7 @@ function Overview({
     return (
       <>
         <MyDay
+          meetings={meetingsToday}
           actor={actor}
           records={allRecords}
           company={company}
@@ -2660,10 +2728,13 @@ function Detail({
   onPin,
   onLog,
   onAssign,
+  showMeetings = false,
 }: {
   record: RecordItem;
   actor: Actor;
   busy: boolean;
+  /** Live workspace only: the record's meetings (schedule, start, history). */
+  showMeetings?: boolean;
   /** Present when this person may hand the record to someone else. */
   onAssign?: () => void;
   /** Pinning is a per-person convenience; it never touches the record. */
@@ -2785,6 +2856,9 @@ function Detail({
             <p className="muted small">Connected record: {r.parentId}</p>
           )}
         </>
+      )}
+      {showMeetings && MEETING_KINDS.includes(r.kind) && !isCashEntry(r) && (
+        <RecordMeetings record={{ id: r.id, title: r.title, ownerId: r.ownerId, owner: r.owner }} meId={actor.id} canCreate={canRead(actor, r)} />
       )}
       {/* One footer for the whole detail view (see DialogActions):
           destructive and contextual controls on the left, then Close, Edit

@@ -18,7 +18,7 @@ export type NotificationTarget =
   | { kind: "record"; recordKind: Kind; recordId: string }
   | { kind: "conversation"; conversationId: string; messageId: string | null }
   // Opens the meeting's pre-join screen (never joins by itself).
-  | { kind: "meeting"; meetingId: string; conversationId: string }
+  | { kind: "meeting"; meetingId: string; conversationId: string | null }
   | { kind: "profile" };
 
 export type NotificationView = {
@@ -79,8 +79,7 @@ export function targetFor(row: {
 }): NotificationTarget | null {
   if (RECORD_KINDS.includes(row.entityType))
     return { kind: "record", recordKind: row.entityType as Kind, recordId: row.entityId };
-  if (row.entityType === "meeting" && row.conversationId)
-    return { kind: "meeting", meetingId: row.entityId, conversationId: row.conversationId };
+  if (row.entityType === "meeting") return !row.entityId ? null : { kind: "meeting", meetingId: row.entityId, conversationId: row.conversationId };
   if (row.entityType === "conversation")
     return { kind: "conversation", conversationId: row.conversationId ?? row.entityId, messageId: row.messageId };
   if (row.entityType === "account") return { kind: "profile" };

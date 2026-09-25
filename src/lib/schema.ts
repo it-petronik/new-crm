@@ -426,16 +426,15 @@ export const meetings = sqliteTable(
   "Meeting",
   {
     id: text("id").primaryKey(),
-    conversationId: text("conversationId")
-      .notNull()
-      .references(() => conversations.id, { onDelete: "cascade" }),
+    // NULL for a standalone meeting (its own invitees, no chat room).
+    conversationId: text("conversationId").references(() => conversations.id, { onDelete: "cascade" }),
     createdBy: text("createdBy").notNull(),
     title: text("title").notNull(),
     // "instant": started now; "scheduled": has a start time.
     kind: text("kind").$type<"instant" | "scheduled">().notNull(),
     // What joining offers first: a voice call starts with the camera off.
     media: text("media").$type<"video" | "voice">().notNull(),
-    status: text("status").$type<"scheduled" | "live" | "ended" | "cancelled">().notNull(),
+    status: text("status").$type<"scheduled" | "live" | "ended" | "cancelled" | "missed">().notNull(),
     scheduledAt: integer("scheduledAt", { mode: "timestamp_ms" }),
     durationMin: integer("durationMin"),
     startedAt: integer("startedAt", { mode: "timestamp_ms" }),
@@ -444,6 +443,16 @@ export const meetings = sqliteTable(
     providerRoom: text("providerRoom").notNull(),
     reminderSentAt: integer("reminderSentAt", { mode: "timestamp_ms" }),
     createdAt: integer("createdAt", { mode: "timestamp_ms" }).notNull(),
+    // Guests (people without an account): "off", "open" (anyone with a
+    // valid link) or "admit" (the host lets each one in).
+    guestAccess: text("guestAccess").$type<"off" | "open" | "admit">().notNull().default("off"),
+    // An optional CRM record the meeting is about (a lead, customer,
+    // quotation or order). Its kind is copied from the record by the server,
+    // never taken from a client. It grants nothing either way: seeing the
+    // meeting never lets anyone read the record, and reading the record never
+    // lets anyone into a private meeting.
+    relatedRecordId: text("relatedRecordId"),
+    relatedRecordKind: text("relatedRecordKind").$type<"leads" | "customers" | "quotations" | "orders">(),
   },
   (table) => [
     index("Meeting_conversationId_createdAt_idx").on(table.conversationId, table.createdAt),
@@ -453,6 +462,7 @@ export const meetings = sqliteTable(
     // two people pressing Start at the same moment get one meeting, never
     // two (the loser's insert is ignored and it joins the winner's).
     uniqueIndex("Meeting_one_live_per_conversation").on(table.conversationId).where(sql`"status" = 'live'`),
+    index("Meeting_relatedRecordId_idx").on(table.relatedRecordId),
   ],
 );
 
@@ -474,6 +484,138 @@ export const meetingAttendance = sqliteTable(
   (table) => [
     primaryKey({ columns: [table.meetingId, table.userId] }),
     index("MeetingAttendance_userId_leftAt_idx").on(table.userId, table.leftAt),
+  ],
+);
+
+/** Internal invitees of a standalone meeting (a room's meeting uses the room's members). */
+export const meetingInvitees = sqliteTable(
+  "MeetingInvitee",
+  {
+    meetingId: text("meetingId")
+      .notNull()
+      .references(() => meetings.id, { onDelete: "cascade" }),
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    invitedBy: text("invitedBy").notNull(),
+    invitedAt: integer("invitedAt", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.meetingId, table.userId] }), index("MeetingInvitee_userId_idx").on(table.userId)],
+);
+
+/**
+ * A guest link. Only the SHA-256 of its random token is stored; the raw
+ * token exists only in the URL given to the organiser. It grants joining
+ * THIS meeting while valid — never a CRM session, never recordings.
+ */
+export const meetingGuestInvites = sqliteTable(
+  "MeetingGuestInvite",
+  {
+    id: text("id").primaryKey(),
+    meetingId: text("meetingId")
+      .notNull()
+      .references(() => meetings.id, { onDelete: "cascade" }),
+    tokenHash: text("tokenHash").notNull(),
+    createdBy: text("createdBy").notNull(),
+    createdAt: integer("createdAt", { mode: "timestamp_ms" }).notNull(),
+    // NULL = valid until the meeting ends.
+    expiresAt: integer("expiresAt", { mode: "timestamp_ms" }),
+    revokedAt: integer("revokedAt", { mode: "timestamp_ms" }),
+  },
+  (table) => [uniqueIndex("MeetingGuestInvite_tokenHash_key").on(table.tokenHash), index("MeetingGuestInvite_meetingId_idx").on(table.meetingId)],
+);
+
+/**
+ * A guest asking to join: their chosen name and the host's decision. The
+ * guest holds a random secret (only its hash is here) to learn the decision
+ * and to receive their meeting token; it is useless for anything else.
+ */
+export const meetingGuests = sqliteTable(
+  "MeetingGuest",
+  {
+    id: text("id").primaryKey(),
+    meetingId: text("meetingId")
+      .notNull()
+      .references(() => meetings.id, { onDelete: "cascade" }),
+    inviteId: text("inviteId").notNull(),
+    name: text("name").notNull(),
+    secretHash: text("secretHash").notNull(),
+    status: text("status").$type<"waiting" | "admitted" | "declined" | "left">().notNull(),
+    createdAt: integer("createdAt", { mode: "timestamp_ms" }).notNull(),
+    decidedAt: integer("decidedAt", { mode: "timestamp_ms" }),
+    decidedBy: text("decidedBy"),
+  },
+  (table) => [uniqueIndex("MeetingGuest_secretHash_key").on(table.secretHash), index("MeetingGuest_meetingId_status_idx").on(table.meetingId, table.status)],
+);
+
+/**
+ * Attendance, one row per connection. Reconnecting starts a new session,
+ * so nothing is overwritten and totals are the sum of sessions. Written
+ * from the provider's webhooks.
+ */
+export const meetingSessions = sqliteTable(
+  "MeetingSession",
+  {
+    id: text("id").primaryKey(),
+    meetingId: text("meetingId")
+      .notNull()
+      .references(() => meetings.id, { onDelete: "cascade" }),
+    participantIdentity: text("participantIdentity").notNull(),
+    userId: text("userId"),
+    guestName: text("guestName"),
+    kind: text("kind").$type<"internal" | "guest">().notNull(),
+    joinedAt: integer("joinedAt", { mode: "timestamp_ms" }).notNull(),
+    leftAt: integer("leftAt", { mode: "timestamp_ms" }),
+    durationSeconds: integer("durationSeconds"),
+  },
+  (table) => [
+    index("MeetingSession_meetingId_joinedAt_idx").on(table.meetingId, table.joinedAt),
+    index("MeetingSession_userId_leftAt_idx").on(table.userId, table.leftAt),
+    index("MeetingSession_identity_idx").on(table.meetingId, table.participantIdentity, table.leftAt),
+  ],
+);
+
+/** What happened in a meeting, for its report: started, ended, screen share, recording. */
+export const meetingActivity = sqliteTable(
+  "MeetingActivity",
+  {
+    id: text("id").primaryKey(),
+    meetingId: text("meetingId")
+      .notNull()
+      .references(() => meetings.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    actorName: text("actorName"),
+    at: integer("at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [index("MeetingActivity_meetingId_at_idx").on(table.meetingId, table.at)],
+);
+
+/**
+ * A cloud recording (LiveKit Egress). Metadata only: the file lives in
+ * private object storage under `fileKey` and is served only after the
+ * meeting's normal access check. Guests never reach recordings.
+ */
+export const meetingRecordings = sqliteTable(
+  "MeetingRecording",
+  {
+    id: text("id").primaryKey(),
+    meetingId: text("meetingId")
+      .notNull()
+      .references(() => meetings.id, { onDelete: "cascade" }),
+    egressId: text("egressId"),
+    startedBy: text("startedBy").notNull(),
+    startedAt: integer("startedAt", { mode: "timestamp_ms" }).notNull(),
+    stoppedAt: integer("stoppedAt", { mode: "timestamp_ms" }),
+    status: text("status").$type<"starting" | "recording" | "processing" | "saved" | "failed">().notNull(),
+    fileKey: text("fileKey"),
+    durationSeconds: integer("durationSeconds"),
+    error: text("error"),
+  },
+  (table) => [
+    index("MeetingRecording_meetingId_idx").on(table.meetingId),
+    uniqueIndex("MeetingRecording_egressId_key").on(table.egressId),
+    // At most one recording running per meeting.
+    uniqueIndex("MeetingRecording_one_active").on(table.meetingId).where(sql`"status" IN ('starting', 'recording')`),
   ],
 );
 

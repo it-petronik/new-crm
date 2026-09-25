@@ -70,6 +70,10 @@ export const people: TestPerson[] = [
   person("mtd", "Marek Dubai", ["Petronik"], ["Dubai"]),
   person("mtf", "Mona Afrilube", ["Afrilube"], []),
   person("mtx", "Milo Leaver", ["Petronik"], []),
+  // Meetings V3.1: standalone, guests, reports, CRM relation.
+  ...range(12).map((i) => person(`mv${i}`, `Mina Vee${i}`, ["Petronik"], [])),
+  person("mvs", "Sami Seller", ["Petronik"], [], "Sales Executive"),
+  person("mvs2", "Sara Seller", ["Petronik"], [], "Sales Executive"),
 ];
 
 export const byKey = (key: string) => {

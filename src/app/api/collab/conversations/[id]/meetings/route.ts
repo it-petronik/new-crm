@@ -16,7 +16,7 @@ export function GET(request: Request, { params }: Params) {
     const access = await requireRead(db, actor, (await params).id);
     const rows = await conversationMeetings(db, access.conversation.id);
     return json({
-      meetings: await meetingViews(db, rows, canManageFor(actor, access)),
+      meetings: await meetingViews(db, rows, canManageFor(actor, access), actor.id),
       // Whether the provider is configured here; the UI explains if not.
       available: !!(await providerConfig()),
     });
@@ -24,7 +24,14 @@ export function GET(request: Request, { params }: Params) {
 }
 
 const input = z.discriminatedUnion("mode", [
-  z.object({ mode: z.literal("now"), media: z.enum(["video", "voice"]), title: z.string().max(MEETING_TITLE_MAX * 2).optional() }).strict(),
+  z
+    .object({
+      mode: z.literal("now"),
+      media: z.enum(["video", "voice"]),
+      title: z.string().max(MEETING_TITLE_MAX * 2).optional(),
+      guestAccess: z.enum(["off", "open", "admit"]).optional(),
+    })
+    .strict(),
   z
     .object({
       mode: z.literal("schedule"),
@@ -32,6 +39,7 @@ const input = z.discriminatedUnion("mode", [
       title: z.string().min(1).max(MEETING_TITLE_MAX * 2),
       scheduledAt: z.iso.datetime({ offset: true }),
       durationMin: z.number().int().refine((n) => DURATIONS.includes(n)).nullable().optional(),
+      guestAccess: z.enum(["off", "open", "admit"]).optional(),
     })
     .strict(),
 ]);
@@ -80,6 +88,9 @@ export function POST(request: Request, { params }: Params) {
       providerRoom: providerRoomName(),
       reminderSentAt: null,
       createdAt: now,
+      guestAccess: body.guestAccess ?? "off",
+      relatedRecordId: null,
+      relatedRecordKind: null,
     });
     if (!row) {
       // Someone else started one at the same moment: the database kept

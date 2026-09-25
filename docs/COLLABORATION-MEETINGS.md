@@ -104,3 +104,117 @@ Add it later through LiveKit Egress. It must have:
 - a storage decision (for example the private R2 bucket);
 - a retention policy;
 - recordings served only through the same conversation access check.
+
+## V3.1: meeting management, guests, attendance and recording
+
+### Kinds of meeting
+
+- **Room meeting** and **DM call** (linked to a conversation). Access is the
+  conversation's. The database still allows one live meeting per
+  conversation.
+- **Standalone meeting** (`conversationId` NULL), from Collaboration →
+  Meetings → New meeting. The organiser invites colleagues who share a
+  company with them. Access is the organiser plus current invitees.
+- **Guest link** on a room or standalone meeting, never a DM:
+  - the link is `/meet/<token>`, a 256-bit token;
+  - only its SHA-256 is stored;
+  - expiry is 1 hour, 24 hours, 7 days, or until the meeting ends;
+  - it can be regenerated, which revokes older links, or revoked;
+  - admission is either "host must admit" (the default) or "anyone with
+    the link".
+
+### Guests
+
+A guest uses only `/api/meet/*`. They never get a CRM session, and CRM APIs
+refuse them.
+
+1. `lookup` returns only the title, time and organiser's first name.
+2. `join` takes a name. The guest either waits, and the hosts are told live
+   and in their inbox, or is admitted.
+3. `status` is polled with the guest's own random secret. It returns the
+   decision, and a fresh meeting token once admitted.
+
+The guest token can publish camera and microphone only, for this one meeting.
+Guests never reach recordings, chat or anything else.
+
+### Attendance and reports
+
+- `MeetingSession` holds one row per connection, written from LiveKit
+  webhooks. Reconnects add rows, and totals are summed.
+- Migration 0007 carries the earlier `MeetingAttendance` rows across.
+- `MeetingActivity` records started, ended, screen share start/stop and
+  recording start/stop.
+- The report shows participants (internal or guest, first joined, last left,
+  total), invited versus attended, activity and recordings. It exports to CSV
+  (formula-safe) or print/PDF.
+- Scheduled meetings nobody started become "missed". History is never
+  deleted when a provider room ends.
+
+### Recording (LiveKit Egress)
+
+A host starts and stops recording. Starting sets the room's metadata, so
+every participant, guests included, sees "● Recording" and who started it.
+The database allows one running recording per meeting. The file is written
+by Egress to private S3-compatible storage (R2 via its S3 API); D1 keeps
+metadata only. Downloads go through `/api/collab/recordings/:id` with the
+meeting's normal access check.
+
+Recording needs all of the following. Without them it reports "not set up".
+
+- LiveKit Cloud with Egress available on the plan.
+- R2 enabled, the private bucket `enercore-collab-files`, and the
+  `COLLAB_FILES` binding restored in `wrangler.jsonc`, used for downloads.
+- An R2 API token with write access to that bucket, set as Worker secrets:
+  `RECORDING_S3_ENDPOINT` (`https://<account>.r2.cloudflarestorage.com`),
+  `RECORDING_S3_BUCKET`, `RECORDING_S3_ACCESS_KEY`, `RECORDING_S3_SECRET`.
+- The LiveKit webhook (already configured). It also delivers
+  `egress_ended`, which marks recordings saved or failed.
+
+Local recording ("save to this computer") is deliberately not offered.
+Capturing everyone reliably in the browser would need a tab capture that
+omits the recorder's own microphone and varies by browser, and a partial
+recording must never pass for the meeting's record.
+
+### Meetings and CRM records
+
+A meeting may be about one lead, customer, quotation or order
+(`relatedRecordId`, plus `relatedRecordKind`, which the server copies from
+the record).
+
+- **Creating one:** from the record's detail (Schedule meeting / Start now).
+  This creates a standalone meeting titled "Meeting with …", with the record's
+  owner invited and the record linked. No chat room is created.
+- **Showing the link:** the meeting names its record only to readers who may
+  read that record now (`attachRelated`). Other invitees see the meeting but
+  not the record. Guests see neither.
+- **Listing a record's meetings:** only meetings the reader could already
+  reach. Reading a lead never opens its private meetings.
+- **Log outcome:** after the meeting, this writes an ordinary audited note,
+  an optional next follow-up and an optional status change through the
+  records API, with the record's own permissions and workflow rules.
+- **My Day** lists today's meetings.
+
+### Migration 0007
+
+0007 rebuilds `Meeting` to make `conversationId` nullable. The rebuild:
+
+- copies every row column by column;
+- keeps `MeetingAttendance` aside across the drop, because D1's foreign keys
+  would otherwise cascade-delete it, and restores it;
+- carries attendance into `MeetingSession`;
+- recreates every index, including the one-live-meeting guard.
+
+It was dry-run on SQLite with foreign keys enforced, then applied to local D1
+with before/after comparisons.
+
+**Recovery.** The release takes `npm run db:backup` immediately before
+`db:migrate:remote`. If 0007 ever needed undoing:
+
+1. Restore that backup into a scratch database with
+   `scripts/restore-d1.sh <scratch-db> <backup.sql>`, and verify it.
+2. Then either point the Worker at it, or restore production itself (see
+   `docs/DEPLOYMENT.md`).
+3. Redeploy the commit before 0007.
+
+The migration never modifies conversations, messages or CRM records, so
+nothing outside the meeting tables needs recovering.

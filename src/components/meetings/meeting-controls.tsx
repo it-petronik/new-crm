@@ -1,19 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CalendarPlus, ChevronDown, Phone, Video, CalendarClock, History, Users, X } from "lucide-react";
-import { Button, DatePicker, Dialog, DialogActions, DialogPresence, Field, Input, Select } from "../ui/controls";
+import * as Popover from "@radix-ui/react-popover";
+import { CalendarPlus, ChevronDown, Phone, Video, CalendarClock, History, Info, Users, X } from "lucide-react";
+import { Button, DialogPresence } from "../ui/controls";
+import MeetingForm from "./meeting-form";
 import type { ConversationSummary } from "@/lib/collab";
 import {
   canManageMeeting,
   cancelMeeting,
   liveOf,
+  openMeetingDetails,
   openPrejoin,
-  scheduleMeeting,
   startMeeting,
 } from "@/lib/meeting-client";
-import { DURATIONS, MEETING_TITLE_MAX, durationLabel, joinable, type MeetingMedia, type MeetingView } from "@/lib/meetings";
-import { businessClock, businessInstant, businessStamp, businessTime, businessToday } from "@/lib/gst";
+import { durationLabel, joinable, type MeetingMedia, type MeetingView } from "@/lib/meetings";
+import { businessStamp, businessTime } from "@/lib/gst";
 
 /**
  * Meeting entry points inside Collaboration: the header's call / meeting
@@ -70,12 +72,15 @@ export function MeetingActions({ conversation, meetings }: { conversation: Conve
           <Video size={15} aria-hidden="true" /> Join
         </Button>
       ) : (
-        <div className="meet-start">
-          <Button className="secondary compact" aria-expanded={menu} aria-haspopup="menu" disabled={busy} onClick={() => setMenu(!menu)}>
-            <Video size={15} aria-hidden="true" /> Start meeting <ChevronDown size={14} aria-hidden="true" />
-          </Button>
-          {menu && (
-            <div className="meet-start-menu" role="menu" onKeyDown={(e) => e.key === "Escape" && setMenu(false)}>
+        // A popover: closes on an outside click, Escape, or choosing an item.
+        <Popover.Root open={menu} onOpenChange={setMenu}>
+          <Popover.Trigger asChild>
+            <Button className="secondary compact" aria-haspopup="menu" disabled={busy}>
+              <Video size={15} aria-hidden="true" /> Start meeting <ChevronDown size={14} aria-hidden="true" />
+            </Button>
+          </Popover.Trigger>
+          <Popover.Portal>
+            <Popover.Content className="meet-start-menu" role="menu" align="end" sideOffset={6}>
               <button type="button" role="menuitem" onClick={() => void start("video")}>
                 <Video size={16} aria-hidden="true" /> Video meeting
               </button>
@@ -85,9 +90,9 @@ export function MeetingActions({ conversation, meetings }: { conversation: Conve
               <button type="button" role="menuitem" onClick={() => (setMenu(false), setScheduling(true))}>
                 <CalendarPlus size={16} aria-hidden="true" /> Schedule a meeting…
               </button>
-            </div>
-          )}
-        </div>
+            </Popover.Content>
+          </Popover.Portal>
+        </Popover.Root>
       )}
       {error && (
         <p className="meet-action-error" role="alert">
@@ -95,7 +100,7 @@ export function MeetingActions({ conversation, meetings }: { conversation: Conve
         </p>
       )}
       <DialogPresence>
-        {scheduling && <ScheduleDialog conversation={conversation} onClose={() => setScheduling(false)} />}
+        {scheduling && <MeetingForm mode={{ kind: "room", conversation }} onClose={() => setScheduling(false)} />}
       </DialogPresence>
     </div>
   );
@@ -112,6 +117,23 @@ export function MeetingBanner({ meetings }: { meetings: MeetingView[] }) {
   }, []);
   const live = liveOf(meetings);
   const soon = live ? null : meetings.find((m) => m.status === "scheduled" && joinable(m, now));
+  // Otherwise the next upcoming one, so a scheduled meeting is visible in
+  // its room from the moment it is scheduled, not just before it starts.
+  const next = live || soon ? null : meetings
+    .filter((m) => m.status === "scheduled" && m.scheduledAt && new Date(m.scheduledAt).getTime() > now)
+    .sort((a, b) => a.scheduledAt!.localeCompare(b.scheduledAt!))[0];
+  if (next)
+    return (
+      <div className="meet-banner is-upcoming" role="status">
+        <CalendarClock size={15} aria-hidden="true" />
+        <span className="meet-banner-text">
+          <b>{next.title}</b> · {businessStamp(next.scheduledAt!)}
+        </span>
+        <Button className="secondary compact" onClick={() => openMeetingDetails(next.id)}>
+          Details
+        </Button>
+      </div>
+    );
   const m = live ?? soon;
   if (!m) return null;
   const inCall = m.participants.length;
@@ -138,102 +160,6 @@ export function MeetingBanner({ meetings }: { meetings: MeetingView[] }) {
   );
 }
 
-/* -------------------------------------------------------- scheduling */
-
-function ScheduleDialog({ conversation, onClose }: { conversation: ConversationSummary; onClose: () => void }) {
-  const [title, setTitle] = useState(`${conversation.title} meeting`.slice(0, MEETING_TITLE_MAX));
-  const [date, setDate] = useState(businessToday());
-  // The next half hour, Dubai time.
-  const [time, setTime] = useState(() => {
-    const at = new Date(Math.ceil((Date.now() + 5 * 60_000) / (30 * 60_000)) * 30 * 60_000);
-    return businessClock(at);
-  });
-  const [duration, setDuration] = useState("30");
-  const [media, setMedia] = useState<MeetingMedia>("video");
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  async function save() {
-    const at = businessInstant(date, time);
-    if (!title.trim()) return setError("Give the meeting a title.");
-    if (!at) return setError("Choose a valid date and time.");
-    if (at.getTime() < Date.now() - 60_000) return setError("Choose a time in the future.");
-    setBusy(true);
-    setError("");
-    try {
-      await scheduleMeeting(conversation.id, {
-        title: title.trim(),
-        media,
-        scheduledAt: at.toISOString(),
-        durationMin: duration ? Number(duration) : null,
-      });
-      onClose();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "The meeting couldn't be scheduled.");
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Dialog title="Schedule a meeting" onClose={() => !busy && onClose()} className="dialog-compact meet-schedule-dialog">
-      <form
-        className="ui-form-stack"
-        noValidate
-        onSubmit={(e) => {
-          e.preventDefault();
-          void save();
-        }}
-      >
-        <Field>
-          Title
-          <Input value={title} maxLength={MEETING_TITLE_MAX} onChange={(e) => setTitle(e.target.value)} required autoFocus />
-        </Field>
-        <div className="meet-schedule-row">
-          <Field>
-            Date
-            <DatePicker value={date} onChange={(e) => setDate(e.target.value)} />
-          </Field>
-          <Field hint="Gulf Standard Time (GST)">
-            Time
-            <Input type="time" value={time} step={300} onChange={(e) => setTime(e.target.value)} required />
-          </Field>
-        </div>
-        <div className="meet-schedule-row">
-          <Field>
-            Duration
-            <Select value={duration} onChange={(e) => setDuration(e.target.value)}>
-              {DURATIONS.map((d) => (
-                <option key={d} value={String(d)}>
-                  {durationLabel(d * 60_000)}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field>
-            Type
-            <Select value={media} onChange={(e) => setMedia(e.target.value as MeetingMedia)}>
-              <option value="video">Video meeting</option>
-              <option value="voice">Voice meeting</option>
-            </Select>
-          </Field>
-        </div>
-        <p className="small muted">
-          Everyone in {conversation.kind === "direct" ? "this conversation" : "this room"} can see and join it, and will get a reminder 10 minutes before.
-        </p>
-        {error && (
-          <p className="form-error" role="alert">
-            {error}
-          </p>
-        )}
-        <DialogActions
-          onCancel={onClose}
-          primary={{ type: "submit", label: "Schedule meeting", pendingLabel: "Scheduling…", pending: busy, icon: <CalendarPlus size={16} aria-hidden="true" /> }}
-        />
-      </form>
-    </Dialog>
-  );
-}
-
 /* ------------------------------------------------- details: meetings */
 
 /** Upcoming and recent meetings for the details panel. */
@@ -248,7 +174,7 @@ export function MeetingsSection({
 }) {
   const [error, setError] = useState("");
   const upcoming = meetings.filter((m) => m.status === "scheduled" || m.status === "live");
-  const past = meetings.filter((m) => m.status === "ended").slice(0, 5);
+  const past = meetings.filter((m) => m.status === "ended" || m.status === "missed").slice(0, 5);
   if (!upcoming.length && !past.length) return null;
   return (
     <section className="collab-details-section meet-section">
@@ -270,6 +196,9 @@ export function MeetingsSection({
                   Join
                 </Button>
               )}
+              <Button className="icon-button" aria-label={`Details of ${m.title}`} title="Details" onClick={() => openMeetingDetails(m.id)}>
+                <Info size={15} />
+              </Button>
               {m.status === "scheduled" && canManageMeeting(m, meId, conversation) && (
                 <Button
                   className="icon-button"
@@ -289,7 +218,7 @@ export function MeetingsSection({
           {past.map((m) => (
             <li key={m.id}>
               <History size={15} aria-hidden="true" />
-              <span className="meet-list-main">
+              <button type="button" className="meet-list-main meet-list-link" onClick={() => openMeetingDetails(m.id)} aria-label={`Details of ${m.title}`}>
                 <b>{m.title}</b>
                 <small>
                   {m.startedAt ? businessStamp(m.startedAt) : ""}
@@ -300,7 +229,7 @@ export function MeetingsSection({
                     <Users size={12} aria-hidden="true" /> {m.participants.map((p) => p.name).join(", ")}
                   </small>
                 )}
-              </span>
+              </button>
             </li>
           ))}
         </ul>

@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AtSign, Compass, Hash, MessageSquarePlus, Plus, RotateCcw, Search } from "lucide-react";
+import { AtSign, CalendarClock, ChevronRight, Compass, Hash, MessageSquarePlus, Plus, RotateCcw, Search } from "lucide-react";
+import dynamic from "next/dynamic";
 import type {
   CollabEvent,
   ConversationDetail,
@@ -23,6 +24,31 @@ import type { PresenceView } from "@/lib/collab";
 import Details from "./details";
 import { useOverflowFade } from "@/lib/use-overflow-fade";
 import { useConversationMeetings } from "@/lib/meeting-client";
+
+// The Meetings page loads when first opened.
+const MeetingsPage = dynamic(() => import("../meetings/meetings-page"), { ssr: false });
+
+/** `?tab=meetings` (and `&meeting=<id>`) open the Meetings page. */
+function meetingsFromUrl() {
+  if (typeof window === "undefined") return null;
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("tab") !== "meetings") return null;
+  const id = params.get("meeting");
+  return { details: id && /^[A-Za-z0-9-]{8,64}$/.test(id) ? id : null, report: params.get("mview") === "report" };
+}
+function writeMeetingsTab(open: boolean) {
+  const url = new URL(window.location.href);
+  if (open) {
+    url.searchParams.set("tab", "meetings");
+    url.searchParams.delete("c");
+    url.searchParams.delete("m");
+  } else {
+    url.searchParams.delete("tab");
+    url.searchParams.delete("meeting");
+    url.searchParams.delete("mview");
+  }
+  window.history.replaceState(window.history.state, "", url);
+}
 import { BrowseRoomsDialog, NewDirectDialog, NewRoomDialog } from "./dialogs";
 import { MessageText, listStamp } from "./message-text";
 
@@ -121,6 +147,23 @@ export default function CollaborationHub({
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [jumpTo, setJumpTo] = useState<string | null>(null);
+  // Collaboration → Meetings (null while showing conversations).
+  const [meetingsPane, setMeetingsPane] = useState<{ details: string | null; report?: boolean } | null>(null);
+  useEffect(() => {
+    const fromUrl = meetingsFromUrl();
+    if (fromUrl) setMeetingsPane(fromUrl);
+  }, []);
+  // "Details" anywhere in Collaboration opens the meeting on the Meetings page.
+  useEffect(() => {
+    const onDetails = (e: Event) => {
+      const { meetingId: id, view } = (e as CustomEvent<{ meetingId: string; view?: "details" | "report" }>).detail;
+      setMeetingsPane((pane) => pane ?? { details: id, report: view === "report" });
+      setSelectedId(null);
+      writeMeetingsTab(true);
+    };
+    window.addEventListener("enercore:meeting-details", onDetails);
+    return () => window.removeEventListener("enercore:meeting-details", onDetails);
+  }, []);
   // The open conversation's meetings: header actions, banner and details.
   const meetings = useConversationMeetings(selectedId, enabled);
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
@@ -322,9 +365,17 @@ export default function CollaborationHub({
   /* ------------------------------------------------------------ actions */
 
   const open = (id: string, messageId: string | null = null) => {
+    setMeetingsPane(null);
     setSelectedId(id);
     setJumpTo(messageId);
     writeSelection(id);
+  };
+  const openMeetings = (details: string | null = null) => {
+    setSelectedId(null);
+    setDetailsOpen(false);
+    writeSelection(null);
+    setMeetingsPane({ details });
+    writeMeetingsTab(true);
   };
 
   const onOpened = (conversation: ConversationSummary) => {
@@ -435,7 +486,7 @@ export default function CollaborationHub({
     <div
       className={[
         "collab",
-        selectedId ? "has-selection" : "",
+        selectedId || meetingsPane ? "has-selection" : "",
         detailsOpen && selectedId ? "has-details" : "",
       ]
         .filter(Boolean)
@@ -465,6 +516,16 @@ export default function CollaborationHub({
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
+        <button
+          type="button"
+          className={`collab-meetings-entry${meetingsPane ? " is-active" : ""}`}
+          aria-current={meetingsPane ? "page" : undefined}
+          onClick={() => openMeetings()}
+        >
+          <CalendarClock size={17} aria-hidden="true" />
+          <span>Meetings</span>
+          <ChevronRight size={15} aria-hidden="true" />
+        </button>
         <div ref={filterStrip} className="collab-filters overflow-fade-x" role="tablist" aria-label="Show">
           {filters.map((f) => {
             const n = f.id === "unread" ? counts.unread : f.id === "mentions" ? counts.mentions : 0;
@@ -533,7 +594,17 @@ export default function CollaborationHub({
       </aside>
 
       <main className="collab-main">
-        {selected ? (
+        {meetingsPane ? (
+          <MeetingsPage
+            meId={actor.id}
+            initialDetails={meetingsPane.details}
+            initialReport={!!meetingsPane.report}
+            onBack={() => {
+              setMeetingsPane(null);
+              writeMeetingsTab(false);
+            }}
+          />
+        ) : selected ? (
           <Thread
             key={selected.id}
             conversation={selected}

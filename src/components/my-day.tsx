@@ -15,8 +15,10 @@ import { allowedModules, money, type Actor, type Kind, type RecordItem } from "@
  * work can be done without navigating anywhere.
  */
 export default function MyDay({
-  actor, records, company, onOpen, onFollowUp, onQuickAdd, onGo, busy,
+  actor, records, company, onOpen, onFollowUp, onQuickAdd, onGo, busy, meetings,
 }: {
+  /** Today's meetings (live workspace only), shown above the day's follow-ups. */
+  meetings?: React.ReactNode;
   actor: Actor;
   records: RecordItem[];
   company: string;
@@ -107,6 +109,8 @@ export default function MyDay({
           busy={busy}
         />
       )}
+
+      {meetings}
 
       {day.clear && (
         <section className="panel my-day-clear">

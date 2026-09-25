@@ -6,6 +6,8 @@ import {
   businessRecords,
   conversationMembers,
   conversations,
+  meetingInvitees,
+  meetings,
   messages,
   notificationPreferences,
   notifications,
@@ -157,10 +159,22 @@ async function redact(db: Database, actor: Actor, rows: NotificationView[], sour
   const conversationIds = [
     ...new Set(
       source
-        .filter((r) => r.entityType === "conversation" || r.entityType === "meeting")
+        .filter((r) => r.entityType === "conversation" || (r.entityType === "meeting" && r.conversationId))
         .map((r) => r.conversationId ?? r.entityId),
     ),
   ];
+  // A standalone meeting: its organiser and current invitees only.
+  const standaloneIds = [...new Set(source.filter((r) => r.entityType === "meeting" && !r.conversationId).map((r) => r.entityId))];
+  const standaloneOk = new Set<string>();
+  for (const ids of chunks(standaloneIds)) {
+    const own = await db.select({ id: meetings.id }).from(meetings).where(and(inArray(meetings.id, ids), eq(meetings.createdBy, actor.id))).all();
+    const invited = await db
+      .select({ id: meetingInvitees.meetingId })
+      .from(meetingInvitees)
+      .where(and(inArray(meetingInvitees.meetingId, ids), eq(meetingInvitees.userId, actor.id)))
+      .all();
+    for (const r of [...own, ...invited]) standaloneOk.add(r.id);
+  }
   const messageIds = [...new Set(source.map((r) => r.messageId).filter((id): id is string => !!id))];
 
   const readable = new Set<string>();
@@ -195,7 +209,8 @@ async function redact(db: Database, actor: Actor, rows: NotificationView[], sour
       !target ||
       target.kind === "profile" ||
       (target.kind === "record" && readable.has(target.recordId)) ||
-      ((target.kind === "conversation" || target.kind === "meeting") && reachable.has(target.conversationId));
+      (target.kind === "conversation" && reachable.has(target.conversationId)) ||
+      (target.kind === "meeting" && (target.conversationId ? reachable.has(target.conversationId) : standaloneOk.has(target.meetingId)));
     if (!allowed) return { ...item, body: "No longer available to you.", target: null, needsAction: false };
     if (row.messageId && deletedMessages.has(row.messageId)) return { ...item, body: "Message deleted" };
     return item;

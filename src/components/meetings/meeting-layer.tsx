@@ -5,8 +5,8 @@ import dynamic from "next/dynamic";
 import { Phone, PhoneOff, Video } from "lucide-react";
 import { Button } from "../ui/controls";
 import { Avatar } from "../avatar";
-import { useCollabEvents } from "@/lib/collab-client";
-import { openPrejoin, useMeetingFlow } from "@/lib/meeting-client";
+import { CollabRequestError, useCollabEvents } from "@/lib/collab-client";
+import { closeMeeting, openPrejoin, reportLeft, requestJoin, sessionFromGrant, useMeetingFlow } from "@/lib/meeting-client";
 import type { MeetingView } from "@/lib/meetings";
 
 // Loaded only when someone actually opens a meeting, so the provider's
@@ -20,7 +20,7 @@ const MeetingRoom = dynamic(() => import("./meeting-room"), { ssr: false });
  * open the CRM underneath is covered (and inert to assistive tech); leaving
  * reveals it exactly as it was.
  */
-export default function MeetingLayer({ meId }: { meId: string }) {
+export default function MeetingLayer() {
   const flow = useMeetingFlow();
   const open = flow.phase !== "idle";
 
@@ -35,7 +35,29 @@ export default function MeetingLayer({ meId }: { meId: string }) {
     <>
       <IncomingCall busy={flow.phase === "room"} />
       {flow.phase === "prejoin" && <Prejoin meetingId={flow.meetingId} />}
-      {flow.phase === "room" && <MeetingRoom key={flow.grant.token} meetingId={flow.meetingId} grant={flow.grant} choices={flow.choices} meId={meId} />}
+      {flow.phase === "room" && (
+        <MeetingRoom
+          key={flow.session.token}
+          session={flow.session}
+          choices={flow.choices}
+          onLeave={() => {
+            void reportLeft(flow.meetingId);
+            closeMeeting();
+          }}
+          onRejoin={async () => {
+            // A fresh token re-checks access from scratch.
+            try {
+              return sessionFromGrant(await requestJoin(flow.meetingId));
+            } catch (e) {
+              const status = e instanceof CollabRequestError ? e.status : 0;
+              return {
+                error: status === 404 ? "You no longer have access to this meeting." : e instanceof Error ? e.message : "Check your connection and try again.",
+                final: status === 404 || status === 410,
+              };
+            }
+          }}
+        />
+      )}
     </>
   );
 }

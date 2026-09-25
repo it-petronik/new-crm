@@ -11,8 +11,8 @@ import {
   inMeeting,
   insertMeeting,
   liveMeeting,
-  markJoined,
-  markLeft,
+  openSession,
+  closeSession,
 } from "../src/lib/meeting-data";
 import { endMeeting, evictFromMeetings, requireMeeting } from "../src/lib/meeting-service";
 import { runMeetingSweep } from "../src/realtime/meeting-sweep";
@@ -63,6 +63,9 @@ const meeting = (conversationId: string, extra: Partial<MeetingRow> = {}): Meeti
   providerRoom: `enc-${seq}-${Math.random().toString(16).slice(2)}`,
   reminderSentAt: null,
   createdAt: new Date(NOW),
+  guestAccess: "off",
+  relatedRecordId: null,
+  relatedRecordKind: null,
   ...extra,
 });
 const actor = (id: string, extra: Partial<Actor> = {}): Actor => ({ id, name: id, role: "Sales Manager", companies: ["Petronik"], branches: [], ...extra });
@@ -132,13 +135,13 @@ test("attendance, In a meeting, ending and the guard freeing up", async () => {
   const { db, room } = setup([{ id: "owner" }, { id: "member" }]);
   room("room-00005", [["owner", "owner"], ["member", "member"]]);
   const m = (await insertMeeting(db, meeting("room-00005")))!;
-  await markJoined(db, m.id, "owner");
-  await markJoined(db, m.id, "member");
+  await openSession(db, { meetingId: m.id, identity: "owner", userId: "owner", guestName: null, at: new Date() });
+  await openSession(db, { meetingId: m.id, identity: "member", userId: "member", guestName: null, at: new Date() });
   assert.deepEqual([...(await inMeeting(db, ["owner", "member", "nobody"]))].sort(), ["member", "owner"]);
-  await markLeft(db, m.id, "member");
+  await closeSession(db, m.id, "member");
   assert.deepEqual([...(await inMeeting(db, ["owner", "member"]))], ["owner"]);
   // Rejoining clears the leave.
-  await markJoined(db, m.id, "member");
+  await openSession(db, { meetingId: m.id, identity: "member", userId: "member", guestName: null, at: new Date() });
   assert.equal((await inMeeting(db, ["member"])).size, 1);
 
   const ended = await endMeeting(db, m.id);
@@ -153,7 +156,7 @@ test("losing access disconnects from the conversation's live meeting", async () 
   const { db, sqlite, room } = setup([{ id: "owner" }, { id: "member" }, { id: "other" }]);
   room("room-00006", [["owner", "owner"], ["member", "member"], ["other", "member"]]);
   const m = (await insertMeeting(db, meeting("room-00006")))!;
-  for (const u of ["member", "other"]) await markJoined(db, m.id, u);
+  for (const u of ["member", "other"]) await openSession(db, { meetingId: m.id, identity: u, userId: u, guestName: null, at: new Date() });
   // Still a member: nothing happens.
   await evictFromMeetings(db, "other");
   assert.equal((await inMeeting(db, ["other"])).size, 1);
@@ -177,14 +180,14 @@ test("the sweep: one reminder 10 minutes before, idle meetings closed, 12-hour l
   const later = (await insertMeeting(db, meeting("room-00007", { kind: "scheduled", status: "scheduled", startedAt: null, scheduledAt: new Date(NOW + 3 * 3_600_000) })))!;
   // Everyone left 15 minutes ago.
   const idle = (await insertMeeting(db, meeting("room-00008", { startedAt: new Date(NOW - 60 * 60_000) })))!;
-  await markJoined(db, idle.id, "owner", new Date(NOW - 50 * 60_000));
-  await markLeft(db, idle.id, "owner", new Date(NOW - 15 * 60_000));
+  await openSession(db, { meetingId: idle.id, identity: "owner", userId: "owner", guestName: null, at: new Date(NOW - 50 * 60_000) });
+  await closeSession(db, idle.id, "owner", new Date(NOW - 15 * 60_000));
   // Still in use.
   const busy = (await insertMeeting(db, meeting("room-00009", { startedAt: new Date(NOW - 60 * 60_000) })))!;
-  await markJoined(db, busy.id, "owner", new Date(NOW - 50 * 60_000));
+  await openSession(db, { meetingId: busy.id, identity: "owner", userId: "owner", guestName: null, at: new Date(NOW - 50 * 60_000) });
   // Thirteen hours old, someone still connected: closed anyway.
   const marathon = (await insertMeeting(db, meeting("room-00010", { startedAt: new Date(NOW - 13 * 3_600_000) })))!;
-  await markJoined(db, marathon.id, "owner", new Date(NOW - 13 * 3_600_000));
+  await openSession(db, { meetingId: marathon.id, identity: "owner", userId: "owner", guestName: null, at: new Date(NOW - 13 * 3_600_000) });
 
   const delivered: { to: string; type: string }[] = [];
   const hub = {
@@ -198,7 +201,7 @@ test("the sweep: one reminder 10 minutes before, idle meetings closed, 12-hour l
   };
   const env = { DB: binding as never, COLLAB_HUB: hub, APP_MODE: "production" };
   const first = await runMeetingSweep(env, NOW);
-  assert.deepEqual(first, { reminded: 2, closed: 2 });
+  assert.deepEqual(first, { reminded: 2, closed: 2, missed: 0 });
   assert.ok((await findMeeting(db, soon.id))?.reminderSentAt);
   assert.equal((await findMeeting(db, later.id))?.reminderSentAt, null);
   assert.equal((await findMeeting(db, idle.id))?.status, "ended");
@@ -207,7 +210,7 @@ test("the sweep: one reminder 10 minutes before, idle meetings closed, 12-hour l
   assert.ok(delivered.some((d) => d.type === "notification.created" && d.to === "member"));
   assert.ok(delivered.some((d) => d.type === "meeting.ended"));
   // Nothing twice.
-  assert.deepEqual(await runMeetingSweep(env, NOW + 60_000), { reminded: 0, closed: 0 });
+  assert.deepEqual(await runMeetingSweep(env, NOW + 60_000), { reminded: 0, closed: 0, missed: 0 });
   // Preview never runs it.
-  assert.deepEqual(await runMeetingSweep({ ...env, APP_MODE: "preview" }, NOW), { reminded: 0, closed: 0 });
+  assert.deepEqual(await runMeetingSweep({ ...env, APP_MODE: "preview" }, NOW), { reminded: 0, closed: 0, missed: 0 });
 });

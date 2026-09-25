@@ -589,11 +589,18 @@ export function Dialog({
   children,
   onClose,
   className,
+  dismissOnOutside = true,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   className?: string;
+  /**
+   * Whether a click outside closes the dialog. Pass false while a submission
+   * is pending or unsaved input would be lost; Escape, the X and Cancel
+   * still close it, as deliberate choices.
+   */
+  dismissOnOutside?: boolean;
 }) {
   const present = useContext(PresenceContext);
   const [footer, setFooter] = useState<HTMLDivElement | null>(null);
@@ -621,6 +628,9 @@ export function Dialog({
         <DialogPrimitive.Content
           className={cx("modal ui-dialog", className)}
           aria-describedby={undefined}
+          onInteractOutside={(event) => {
+            if (!dismissOnOutside) event.preventDefault();
+          }}
           onCloseAutoFocus={(event) => {
             if (opener.current?.isConnected) {
               event.preventDefault();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   LiveKitRoom,
   RoomAudioRenderer,
@@ -8,109 +8,114 @@ import {
   isTrackReference,
   useConnectionState,
   useIsMuted,
+  useIsRecording,
   useIsSpeaking,
   useLocalParticipant,
   useMediaDeviceSelect,
   useParticipants,
   useRoomContext,
+  useRoomInfo,
   useSpeakingParticipants,
   useTracks,
   type TrackReferenceOrPlaceholder,
 } from "@livekit/components-react";
 import { ConnectionState, DisconnectReason, MediaDeviceFailure, Track, type Participant } from "livekit-client";
 import {
+  Circle,
+  Crown,
   LayoutGrid,
+  MessageSquare,
   Mic,
   MicOff,
   MonitorUp,
   MonitorX,
   MoreHorizontal,
-  MessageSquare,
   PhoneOff,
   RefreshCw,
+  Square,
   SwitchCamera,
+  UserMinus,
   Users,
   Video,
   VideoOff,
   X,
-  Crown,
-  UserMinus,
-  Square,
 } from "lucide-react";
-import { Button } from "../ui/controls";
+import { Button, Dialog, DialogActions, DialogPresence } from "../ui/controls";
 import { Avatar } from "../avatar";
-import { CollabRequestError, useCollabEvents } from "@/lib/collab-client";
-import { closeMeeting, endMeetingForAll, enterRoom, hostAction, reportLeft, requestJoin, type JoinChoices } from "@/lib/meeting-client";
-import { durationLabel, type JoinGrant } from "@/lib/meetings";
+import { useCollabEvents } from "@/lib/collab-client";
+import { decideGuest, endMeetingForAll, hostAction, recordingAction, waitingGuestsOf, type JoinChoices } from "@/lib/meeting-client";
+import { durationLabel, type RoomSession } from "@/lib/meetings";
 import MeetingChat from "./meeting-chat";
+import { DeviceSelect } from "./device-setup";
 
 /**
- * The meeting itself. The provider (LiveKit) carries audio, video and
- * screens; this is the Enercore interface around it: stage and grid,
- * controls, participants, the conversation's chat, host controls (via the
- * server) and every failure state in plain words.
+ * The meeting itself, for employees and guests alike. The provider (LiveKit)
+ * carries audio, video and screens; this is the Enercore interface around
+ * it: stage and grid, controls, participants, the conversation's chat,
+ * host controls (via the server), the guest waiting room, recording, and
+ * every failure state in plain words.
  *
- * Full-viewport: the CRM sidebar and header are covered while in a call;
- * leaving returns to the exact page underneath.
+ * Guests get the meeting only: no CRM chat, no moderation, no Collaboration
+ * connection. Recording is announced to everyone, guests included, by the
+ * provider itself — it can never run unseen.
  */
 
 type Ending = { title: string; detail: string; rejoin?: boolean };
 
-const isHost = (p: Participant) => {
+const metaOf = (p: Participant) => {
   try {
-    return !!JSON.parse(p.metadata || "{}").host;
+    return JSON.parse(p.metadata || "{}") as { host?: boolean; guest?: boolean };
   } catch {
-    return false;
+    return {};
   }
 };
 
-export default function MeetingRoom({ meetingId, grant, choices, meId }: { meetingId: string; grant: JoinGrant; choices: JoinChoices; meId: string }) {
+export default function MeetingRoom({
+  session,
+  choices,
+  onLeave,
+  onRejoin,
+  closeLabel = "Back to Enercore",
+}: {
+  session: RoomSession;
+  choices: JoinChoices;
+  /** Called after leaving or when the person closes an ended/removed screen. */
+  onLeave: () => void;
+  /** A fresh session (re-checks access), or an error message to show. */
+  onRejoin: () => Promise<RoomSession | { error: string; final: boolean }>;
+  closeLabel?: string;
+}) {
+  const [current, setCurrent] = useState(session);
   const [ending, setEnding] = useState<Ending | null>(null);
   const [notice, setNotice] = useState("");
   const [rejoining, setRejoining] = useState(false);
-  const meeting = grant.meeting;
 
-  const leave = () => {
-    void reportLeft(meetingId);
-    closeMeeting();
-  };
-
-  // The meeting ended elsewhere, or this person lost the conversation.
-  useCollabEvents(true, (event) => {
-    if (event.type === "meeting.ended" && event.meeting.id === meetingId)
-      setEnding({ title: "The meeting has ended", detail: "Everyone has been disconnected." });
-    if (event.type === "conversation.removed" && event.conversationId === meeting.conversationId)
+  // Employees hear the meeting end or their access go through Collaboration.
+  useCollabEvents(!current.guest, (event) => {
+    if (event.type === "meeting.ended" && event.meeting.id === current.meetingId) setEnding({ title: "The meeting has ended", detail: "Everyone has been disconnected." });
+    if (event.type === "conversation.removed" && current.conversationId && event.conversationId === current.conversationId)
       setEnding({ title: "You no longer have access", detail: "You were removed from this conversation, so you have left its meeting." });
   });
 
   const onDisconnected = (reason?: DisconnectReason) => {
-    if (reason === DisconnectReason.CLIENT_INITIATED) return leave();
-    void reportLeft(meetingId);
+    if (reason === DisconnectReason.CLIENT_INITIATED) return onLeave();
     if (reason === DisconnectReason.ROOM_DELETED || reason === DisconnectReason.ROOM_CLOSED)
       setEnding({ title: "The meeting has ended", detail: "Everyone has been disconnected." });
     else if (reason === DisconnectReason.PARTICIPANT_REMOVED)
-      setEnding({ title: "You were removed from the meeting", detail: "The organiser removed you, or your access to this conversation changed." });
+      setEnding({ title: "You were removed from the meeting", detail: current.guest ? "The host removed you from this meeting." : "The organiser removed you, or your access to this meeting changed." });
     else if (reason === DisconnectReason.DUPLICATE_IDENTITY)
       setEnding({ title: "You joined somewhere else", detail: "This meeting is now open in another tab or on another device." });
     else setEnding({ title: "Connection lost", detail: "The connection to the meeting dropped and could not be restored.", rejoin: true });
   };
 
-  // Rejoin asks for a fresh token, which re-checks access from scratch.
   async function rejoin() {
     setRejoining(true);
-    try {
-      const fresh = await requestJoin(meetingId);
+    const result = await onRejoin();
+    setRejoining(false);
+    if ("error" in result) setEnding({ title: result.final ? "You can't rejoin" : "Couldn't rejoin", detail: result.error, rejoin: !result.final });
+    else {
       setEnding(null);
-      enterRoom(meetingId, fresh, choices);
-    } catch (e) {
-      const status = e instanceof CollabRequestError ? e.status : 0;
-      setEnding({
-        title: status === 404 ? "You no longer have access" : status === 410 ? "The meeting has ended" : "Couldn't rejoin",
-        detail: e instanceof Error ? e.message : "Check your connection and try again.",
-        rejoin: status !== 404 && status !== 410,
-      });
-    } finally {
-      setRejoining(false);
+      setCurrent(result);
     }
   }
 
@@ -126,8 +131,8 @@ export default function MeetingRoom({ meetingId, grant, choices, meId }: { meeti
                 <RefreshCw size={16} aria-hidden="true" /> {rejoining ? "Rejoining…" : "Rejoin"}
               </Button>
             )}
-            <Button className="secondary" onClick={closeMeeting}>
-              Back to Enercore
+            <Button className="secondary" onClick={onLeave}>
+              {closeLabel}
             </Button>
           </div>
         </div>
@@ -136,10 +141,10 @@ export default function MeetingRoom({ meetingId, grant, choices, meId }: { meeti
 
   return (
     <LiveKitRoom
-      key={grant.token}
+      key={current.token}
       className="meet-room"
-      serverUrl={grant.serverUrl}
-      token={grant.token}
+      serverUrl={current.serverUrl}
+      token={current.token}
       connect
       audio={choices.audio ? { deviceId: choices.audioDeviceId } : false}
       video={choices.video ? { deviceId: choices.videoDeviceId } : false}
@@ -160,20 +165,19 @@ export default function MeetingRoom({ meetingId, grant, choices, meId }: { meeti
       }}
       role="dialog"
       aria-modal="true"
-      aria-label={meeting.title}
+      aria-label={current.title}
     >
       <RoomAudioRenderer />
-      <Stage meeting={grant} meId={meId} notice={notice} setNotice={setNotice} />
+      <Stage session={current} notice={notice} setNotice={setNotice} />
     </LiveKitRoom>
   );
 }
 
 /* --------------------------------------------------------------- inside */
 
-function Stage({ meeting: grant, meId, notice, setNotice }: { meeting: JoinGrant; meId: string; notice: string; setNotice: (s: string) => void }) {
+function Stage({ session, notice, setNotice }: { session: RoomSession; notice: string; setNotice: (s: string) => void }) {
   const room = useRoomContext();
   const state = useConnectionState();
-  const meeting = grant.meeting;
   const { localParticipant, isMicrophoneEnabled, isCameraEnabled, isScreenShareEnabled } = useLocalParticipant();
   const tracks = useTracks(
     [
@@ -186,11 +190,58 @@ function Stage({ meeting: grant, meId, notice, setNotice }: { meeting: JoinGrant
   const speaking = useSpeakingParticipants();
   const [panel, setPanel] = useState<"people" | "chat" | null>(null);
   const [more, setMore] = useState(false);
+  const [confirm, setConfirm] = useState<"end" | "record" | null>(null);
+  const [busy, setBusy] = useState(false);
   const [layout, setLayout] = useState<"gallery" | "speaker">("gallery");
   const [lastSpeaker, setLastSpeaker] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
   const cameras = useMediaDeviceSelect({ kind: "videoinput", room });
   const mics = useMediaDeviceSelect({ kind: "audioinput", room });
+  const moderator = session.host && !session.guest;
+
+  /* ----------------------------------------------------- recording state */
+  const info = useRoomInfo();
+  const providerRecording = useIsRecording();
+  const recordingBy = useMemo(() => {
+    try {
+      return (JSON.parse(info.metadata || "{}") as { recording?: { by?: string } | null }).recording?.by ?? null;
+    } catch {
+      return null;
+    }
+  }, [info.metadata]);
+  const recording = providerRecording || !!recordingBy;
+  const [recordingSeen, setRecordingSeen] = useState(false);
+  useEffect(() => {
+    if (recording && !recordingSeen) {
+      setRecordingSeen(true);
+      setNotice(recordingBy ? `Recording started by ${recordingBy}.` : "This meeting is being recorded.");
+    } else if (!recording && recordingSeen) {
+      setRecordingSeen(false);
+      setNotice("Recording stopped.");
+    }
+  }, [recording, recordingBy, recordingSeen, setNotice]);
+
+  /* ------------------------------------------------------- waiting room */
+  const [waiting, setWaiting] = useState<{ id: string; name: string }[]>([]);
+  const loadWaiting = useCallback(() => {
+    if (!moderator) return;
+    void waitingGuestsOf(session.meetingId)
+      .then((r) => setWaiting(r.guests))
+      .catch(() => {});
+  }, [moderator, session.meetingId]);
+  useEffect(loadWaiting, [loadWaiting]);
+  useCollabEvents(moderator, (event) => {
+    if (event.type === "meeting.guest_waiting" && event.meetingId === session.meetingId)
+      setWaiting((w) => (w.some((g) => g.id === event.guest.id) ? w : [...w, event.guest]));
+    if (event.type === "meeting.guest_decided" && event.meetingId === session.meetingId) setWaiting((w) => w.filter((g) => g.id !== event.guestId));
+  }, loadWaiting);
+  const decide = (guestId: string, decision: "admit" | "decline") => {
+    setWaiting((w) => w.filter((g) => g.id !== guestId));
+    void decideGuest(session.meetingId, guestId, decision).catch((e) => {
+      setNotice(e instanceof Error ? e.message : "That didn't work.");
+      loadWaiting();
+    });
+  };
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30_000);
@@ -233,9 +284,9 @@ function Stage({ meeting: grant, meId, notice, setNotice }: { meeting: JoinGrant
     }
   };
 
-  const canShare = !!navigator.mediaDevices && "getDisplayMedia" in navigator.mediaDevices;
+  const canShare = !session.guest && typeof navigator !== "undefined" && !!navigator.mediaDevices && "getDisplayMedia" in navigator.mediaDevices;
   const otherSharing = !!sharer && !sharer.isLocal;
-  const started = meeting.startedAt ? new Date(meeting.startedAt).getTime() : now;
+  const started = session.startedAt ? new Date(session.startedAt).getTime() : now;
   const reconnecting = state === ConnectionState.Reconnecting || state === ConnectionState.SignalReconnecting;
   const connecting = state === ConnectionState.Connecting;
 
@@ -246,21 +297,60 @@ function Stage({ meeting: grant, meId, notice, setNotice }: { meeting: JoinGrant
     await run("camera", () => cameras.setActiveMediaDevice(list[(index + 1) % list.length].deviceId));
   };
 
+  const hostCall = async (fn: () => Promise<unknown>, fallback: string) => {
+    setBusy(true);
+    try {
+      await fn();
+      setConfirm(null);
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : fallback);
+      setConfirm(null);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className={`meet-shell${panel ? " has-panel" : ""}`}>
       <header className="meet-top">
         <div className="meet-title">
-          <h1>{meeting.title}</h1>
+          <h1>{session.title}</h1>
           <span>
             {durationLabel(now - started)} · {participants.length} {participants.length === 1 ? "person" : "people"}
           </span>
         </div>
-        {(reconnecting || connecting) && (
-          <span className="meet-status" role="status">
-            {connecting ? "Connecting…" : "Reconnecting…"}
-          </span>
-        )}
+        <div className="meet-top-status">
+          {recording && (
+            <span className="meet-recording" role="status" aria-live="polite">
+              <Circle size={10} fill="currentColor" aria-hidden="true" /> Recording
+            </span>
+          )}
+          {(reconnecting || connecting) && (
+            <span className="meet-status" role="status">
+              {connecting ? "Connecting…" : "Reconnecting…"}
+            </span>
+          )}
+        </div>
       </header>
+
+      {waiting.length > 0 && (
+        <div className="meet-waiting" role="region" aria-label="Guests waiting">
+          {waiting.slice(0, 3).map((g) => (
+            <div className="meet-waiting-row" key={g.id}>
+              <span>
+                <b>{g.name}</b> is waiting
+              </span>
+              <Button className="secondary compact" onClick={() => decide(g.id, "decline")}>
+                Decline
+              </Button>
+              <Button className="primary compact" onClick={() => decide(g.id, "admit")}>
+                Admit
+              </Button>
+            </div>
+          ))}
+          {waiting.length > 3 && <small>and {waiting.length - 3} more — see People.</small>}
+        </div>
+      )}
 
       {notice && (
         <div className="meet-toast" role="alert">
@@ -274,12 +364,12 @@ function Stage({ meeting: grant, meId, notice, setNotice }: { meeting: JoinGrant
       <main className={`meet-stage${featured ? " has-featured" : ""}`} aria-label="Meeting">
         {featured && (
           <div className="meet-featured">
-            <Tile trackRef={featured} meId={meId} featured />
+            <Tile trackRef={featured} meId={session.identity} featured />
           </div>
         )}
         <div className={`meet-grid count-${Math.min(strip.length, 9)}${featured ? " is-strip" : ""}`}>
           {strip.map((t) => (
-            <Tile key={`${t.participant.identity}-${t.source}`} trackRef={t} meId={meId} />
+            <Tile key={`${t.participant.identity}-${t.source}`} trackRef={t} meId={session.identity} />
           ))}
         </div>
       </main>
@@ -294,12 +384,28 @@ function Stage({ meeting: grant, meId, notice, setNotice }: { meeting: JoinGrant
           </div>
           {panel === "people" ? (
             <ul className="meet-people">
+              {moderator &&
+                waiting.map((g) => (
+                  <li className="meet-person is-waiting" key={g.id}>
+                    <Avatar name={g.name} size={32} />
+                    <span className="meet-person-name">
+                      <b>{g.name}</b>
+                      <small>Guest · waiting</small>
+                    </span>
+                    <span className="meet-person-actions">
+                      <Button className="secondary compact" onClick={() => decide(g.id, "decline")}>Decline</Button>
+                      <Button className="primary compact" onClick={() => decide(g.id, "admit")}>Admit</Button>
+                    </span>
+                  </li>
+                ))}
               {participants.map((p) => (
-                <PersonRow key={p.identity} p={p} meId={meId} canModerate={grant.host} meetingId={meeting.id} onError={setNotice} />
+                <PersonRow key={p.identity} p={p} meId={session.identity} canModerate={moderator} meetingId={session.meetingId} onError={setNotice} />
               ))}
             </ul>
+          ) : session.conversationId ? (
+            <MeetingChat conversationId={session.conversationId} meId={session.identity} />
           ) : (
-            <MeetingChat conversationId={meeting.conversationId} meId={meId} />
+            <p className="meet-chat-empty meet-panel-note">This meeting has no chat room. Share notes in Collaboration after the meeting.</p>
           )}
         </aside>
       )}
@@ -349,17 +455,19 @@ function Stage({ meeting: grant, meId, notice, setNotice }: { meeting: JoinGrant
           onClick={() => setPanel(panel === "people" ? null : "people")}
         >
           <Users size={20} />
-          <span>People</span>
+          <span>People{moderator && waiting.length ? ` (${waiting.length})` : ""}</span>
         </Button>
-        <Button
-          className={`meet-control${panel === "chat" ? " is-active" : ""}`}
-          aria-pressed={panel === "chat"}
-          aria-label="Chat"
-          onClick={() => setPanel(panel === "chat" ? null : "chat")}
-        >
-          <MessageSquare size={20} />
-          <span>Chat</span>
-        </Button>
+        {!session.guest && (
+          <Button
+            className={`meet-control${panel === "chat" ? " is-active" : ""}`}
+            aria-pressed={panel === "chat"}
+            aria-label="Chat"
+            onClick={() => setPanel(panel === "chat" ? null : "chat")}
+          >
+            <MessageSquare size={20} />
+            <span>Chat</span>
+          </Button>
+        )}
         <div className="meet-more">
           <Button className={`meet-control${more ? " is-active" : ""}`} aria-expanded={more} aria-label="More options" onClick={() => setMore(!more)}>
             <MoreHorizontal size={20} />
@@ -370,36 +478,27 @@ function Stage({ meeting: grant, meId, notice, setNotice }: { meeting: JoinGrant
               <button type="button" role="menuitem" onClick={() => (setLayout(layout === "gallery" ? "speaker" : "gallery"), setMore(false))}>
                 <LayoutGrid size={16} aria-hidden="true" /> {layout === "gallery" ? "Speaker view" : "Gallery view"}
               </button>
-              {mics.devices.length > 0 && (
-                <label className="meet-menu-select">
-                  <span>Microphone</span>
-                  <select value={mics.activeDeviceId} onChange={(e) => void run("microphone", () => mics.setActiveMediaDevice(e.target.value))}>
-                    {mics.devices.map((d, i) => (
-                      <option key={d.deviceId} value={d.deviceId}>{d.label || `Microphone ${i + 1}`}</option>
-                    ))}
-                  </select>
-                </label>
+              <div className="meet-menu-devices">
+                <DeviceSelect
+                  kind="audioinput"
+                  devices={mics.devices}
+                  value={mics.activeDeviceId}
+                  onChange={(id) => void run("microphone", () => mics.setActiveMediaDevice(id))}
+                />
+                <DeviceSelect
+                  kind="videoinput"
+                  devices={cameras.devices}
+                  value={cameras.activeDeviceId}
+                  onChange={(id) => void run("camera", () => cameras.setActiveMediaDevice(id))}
+                />
+              </div>
+              {moderator && (
+                <button type="button" role="menuitem" onClick={() => (setMore(false), setConfirm("record"))}>
+                  <Circle size={16} aria-hidden="true" /> {recording ? "Stop recording" : "Record meeting"}
+                </button>
               )}
-              {cameras.devices.length > 0 && (
-                <label className="meet-menu-select">
-                  <span>Camera</span>
-                  <select value={cameras.activeDeviceId} onChange={(e) => void run("camera", () => cameras.setActiveMediaDevice(e.target.value))}>
-                    {cameras.devices.map((d, i) => (
-                      <option key={d.deviceId} value={d.deviceId}>{d.label || `Camera ${i + 1}`}</option>
-                    ))}
-                  </select>
-                </label>
-              )}
-              {grant.host && (
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="is-danger"
-                  onClick={() => {
-                    setMore(false);
-                    void endMeetingForAll(meeting.id).catch((e) => setNotice(e instanceof Error ? e.message : "Couldn't end the meeting."));
-                  }}
-                >
+              {moderator && (
+                <button type="button" role="menuitem" className="is-danger" onClick={() => (setMore(false), setConfirm("end"))}>
                   <Square size={16} aria-hidden="true" /> End meeting for everyone
                 </button>
               )}
@@ -411,6 +510,37 @@ function Stage({ meeting: grant, meId, notice, setNotice }: { meeting: JoinGrant
           <span>Leave</span>
         </Button>
       </nav>
+
+      <DialogPresence>
+        {confirm === "end" && (
+          <Dialog title="End the meeting for everyone?" onClose={() => !busy && setConfirm(null)} dismissOnOutside={!busy} className="dialog-compact meet-dialog">
+            <p>Everyone, including guests, will be disconnected. The meeting's history and report are kept.</p>
+            <DialogActions
+              cancel="Keep meeting"
+              onCancel={() => setConfirm(null)}
+              primary={{ label: "End for everyone", pendingLabel: "Ending…", tone: "danger", pending: busy, onClick: () => void hostCall(() => endMeetingForAll(session.meetingId), "Couldn't end the meeting.") }}
+            />
+          </Dialog>
+        )}
+        {confirm === "record" && (
+          <Dialog title={recording ? "Stop recording?" : "Record this meeting?"} onClose={() => !busy && setConfirm(null)} dismissOnOutside={!busy} className="dialog-compact meet-dialog">
+            <p>
+              {recording
+                ? "The recording will be saved to the meeting's details for people who can open this meeting."
+                : "Everyone in the meeting, including guests, will see that it's being recorded and who started it. The recording is kept privately for people who can open this meeting."}
+            </p>
+            <DialogActions
+              onCancel={() => setConfirm(null)}
+              primary={{
+                label: recording ? "Stop recording" : "Start recording",
+                pendingLabel: recording ? "Stopping…" : "Starting…",
+                pending: busy,
+                onClick: () => void hostCall(() => recordingAction(session.meetingId, recording ? "stop" : "start"), "The recording couldn't be changed."),
+              }}
+            />
+          </Dialog>
+        )}
+      </DialogPresence>
     </div>
   );
 }
@@ -423,6 +553,7 @@ function Tile({ trackRef, meId, featured = false }: { trackRef: TrackReferenceOr
   const screen = trackRef.source === Track.Source.ScreenShare;
   const showVideo = isTrackReference(trackRef) && !camMuted;
   const name = p.identity === meId ? "You" : p.name || "Guest";
+  const meta = metaOf(p);
   return (
     <figure className={`meet-tile${speaking && !screen ? " is-speaking" : ""}${featured ? " is-featured" : ""}${screen ? " is-screen" : ""}`}>
       {showVideo ? (
@@ -434,7 +565,7 @@ function Tile({ trackRef, meId, featured = false }: { trackRef: TrackReferenceOr
       )}
       <figcaption>
         {!screen && micMuted && <MicOff size={13} aria-label="Muted" />}
-        {isHost(p) && !screen && <Crown size={12} aria-label="Organiser" />}
+        {meta.host && !screen && <Crown size={12} aria-label="Organiser" />}
         <span>{screen ? `${name === "You" ? "Your" : `${name}'s`} screen` : name}</span>
       </figcaption>
     </figure>
@@ -447,6 +578,7 @@ function PersonRow({ p, meId, canModerate, meetingId, onError }: { p: Participan
   const micOn = !!mic && !mic.isMuted;
   const camOn = p.isCameraEnabled;
   const me = p.identity === meId;
+  const meta = metaOf(p);
   const act = (body: Parameters<typeof hostAction>[1]) =>
     void hostAction(meetingId, body).catch((e) => onError(e instanceof Error ? e.message : "That didn't work."));
   return (
@@ -454,7 +586,7 @@ function PersonRow({ p, meId, canModerate, meetingId, onError }: { p: Participan
       <Avatar name={p.name || "Guest"} size={32} />
       <span className="meet-person-name">
         <b>{me ? `${p.name} (you)` : p.name || "Guest"}</b>
-        {isHost(p) && <small>Organiser</small>}
+        {(meta.host || meta.guest) && <small>{meta.host ? "Organiser" : "Guest"}</small>}
       </span>
       <span className="meet-person-state">
         {micOn ? <Mic size={15} aria-label="Microphone on" /> : <MicOff size={15} aria-label="Microphone off" />}
