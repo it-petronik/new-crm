@@ -50,8 +50,8 @@ export default function Prejoin({ meetingId }: { meetingId: string }) {
     setJoinError("");
     try {
       const grant = await requestJoin(meetingId);
-      const choices = { audio: setup.audio, video: setup.video, audioDeviceId: setup.micId || undefined, videoDeviceId: setup.camId || undefined };
-      setup.release();
+      // The live preview tracks move into the meeting as they are.
+      const choices = { audio: setup.audio, video: setup.video, audioDeviceId: setup.micId || undefined, videoDeviceId: setup.camId || undefined, media: setup.handOff() };
       enterRoom(meetingId, grant, choices);
     } catch (e) {
       setJoining(false);
@@ -95,7 +95,7 @@ export default function Prejoin({ meetingId }: { meetingId: string }) {
         <div className="meet-prejoin-body">
           <DevicePreview setup={setup} voice={meeting?.media === "voice"} />
           <div className="meet-prejoin-side">
-            <DeviceChoices setup={setup} />
+            <DeviceChoices setup={setup} voice={meeting?.media === "voice"} />
             {!available && <p className="meet-notice" role="alert">Meetings aren&apos;t set up yet. Ask your administrator.</p>}
             {joinError && <p className="meet-notice" role="alert">{joinError}</p>}
             <Button className="primary meet-join" disabled={!meeting || !available || joining} onClick={() => void join()}>

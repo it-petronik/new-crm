@@ -224,7 +224,7 @@ test.describe("with cameras and microphones", () => {
     // A participant can only leave: no End, in the bar or under More.
     await expect(b.page.getByRole("button", { name: "End meeting", exact: true })).toHaveCount(0);
     await b.page.getByRole("button", { name: "More options" }).click();
-    await expect(b.page.getByRole("menuitem", { name: /End/ })).toHaveCount(0);
+    await expect(b.page.getByRole("dialog", { name: "More options" }).getByRole("button", { name: /End/ })).toHaveCount(0);
     await b.page.keyboard.press("Escape");
     // …and the server refuses them anyway.
     expect((await b.client.post(`/meetings/${(await a.client.get(`/conversations/${room.id}/meetings`)).body.meetings[0].id}/end`, {})).status).toBe(403);

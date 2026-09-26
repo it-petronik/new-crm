@@ -66,7 +66,7 @@ export default function GuestJoin({ token }: { token: string }) {
   const [busy, setBusy] = useState(false);
   const secret = useRef<string | null>(null);
   const choices = useRef<JoinChoices>({ audio: true, video: true });
-  const setup = useDeviceSetup({ audio: true, video: true }, phase.at === "setup" || phase.at === "not_started" || phase.at === "waiting");
+  const setup = useDeviceSetup({ audio: true, video: true }, phase.at === "setup" || phase.at === "not_started" || phase.at === "waiting", { guest: true });
 
   // The dark meeting surface, and dialogs above it.
   useEffect(() => {
@@ -84,8 +84,8 @@ export default function GuestJoin({ token }: { token: string }) {
 
   const enter = useCallback(
     (grant: GuestGrant) => {
-      setup.release();
-      setPhase({ at: "room", session: toSession(grant, infoRef.current), choices: choices.current });
+      // The same handoff as employees: the live preview tracks go into the meeting.
+      setPhase({ at: "room", session: toSession(grant, infoRef.current), choices: { ...choices.current, audio: setup.audio, video: setup.video, media: setup.handOff() } });
     },
     [setup],
   );

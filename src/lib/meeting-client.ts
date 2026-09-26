@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { collabFetch, useCollabEvents } from "./collab-client";
+import type { MediaHandoff } from "./meeting-media";
 import type {
   GuestExpiry,
   GuestLinkStatus,
@@ -30,6 +31,8 @@ export type JoinChoices = {
   video: boolean;
   audioDeviceId?: string;
   videoDeviceId?: string;
+  /** The pre-join screen's live tracks and settings, published as they are. */
+  media?: MediaHandoff;
 };
 
 export type MeetingFlow =

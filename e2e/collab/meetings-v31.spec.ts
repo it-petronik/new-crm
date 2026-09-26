@@ -363,10 +363,10 @@ test("guest in a private window: waiting room, admit, camera and mic, decline; t
   // Recording isn't configured here: plainly unavailable, never a live control.
   const more = host.page.getByRole("button", { name: "More options" });
   await more.click();
-  await expect(host.page.getByRole("menuitem", { name: "Recording isn't set up" })).toBeDisabled();
-  await expect(host.page.getByRole("menuitem", { name: "Record meeting" })).toHaveCount(0);
+  await expect(host.page.getByRole("dialog", { name: "More options" }).getByRole("button", { name: "Recording isn't set up" })).toBeDisabled();
+  await expect(host.page.getByRole("dialog", { name: "More options" }).getByRole("button", { name: "Record meeting" })).toHaveCount(0);
   // Ending is not hidden in More: it has its own control in the bar.
-  await expect(host.page.getByRole("menuitem", { name: /End/ })).toHaveCount(0);
+  await expect(host.page.getByRole("dialog", { name: "More options" }).getByRole("button", { name: /End/ })).toHaveCount(0);
   // The More menu closes on Escape and on a click outside it.
   await host.page.keyboard.press("Escape");
   await expect(host.page.locator(".meet-menu")).toHaveCount(0);

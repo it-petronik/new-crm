@@ -77,6 +77,8 @@ export const people: TestPerson[] = [
   // Sessions ("keep me signed in") and meeting links.
   ...range(12).map((i) => person(`sx${i}`, `Sam Session${i}`, ["Petronik"], [])),
   ...range(6).map((i) => person(`gl${i}`, `Gil Link${i}`, ["Petronik"], [])),
+  // Meeting media (camera, microphone, effects, recovery).
+  ...range(10).map((i) => person(`mm${i}`, `Mo Media${i}`, ["Petronik"], [])),
 ];
 
 export const byKey = (key: string) => {

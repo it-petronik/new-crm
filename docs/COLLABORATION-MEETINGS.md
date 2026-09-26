@@ -248,3 +248,76 @@ with before/after comparisons.
 
 The migration never modifies conversations, messages or CRM records, so
 nothing outside the meeting tables needs recovering.
+
+
+## Media: quality, reliability and background effects
+
+**One media path for everyone.** Employees and guests use the same code:
+`device-setup.tsx` (pre-join), `use-local-media.ts` (in the meeting) and
+`media-tile.tsx` (tiles).
+
+**Pre-join hands over its tracks.**
+- The preview creates LiveKit tracks: camera at the chosen quality, and
+  microphone with echo cancellation, noise suppression and gain control.
+- Any background effect runs on that camera track.
+- On Join the same tracks are published. The devices are never released and
+  re-opened, so there is no race for the camera, no black gap and no lost
+  effect. `LiveKitRoom` is told not to open devices itself.
+- After a rejoin the old tracks are gone, so fresh ones are created.
+
+**State comes from LiveKit.**
+- A control shows ON only for a live, unmuted publication.
+- Turning a device on shows "Starting…" until LiveKit publishes it. If that
+  fails, the control stays off and a plain message appears with an action:
+  How to allow, Try again, or Use default microphone.
+- A device that ends is restarted by LiveKit or marked off, and the person is
+  told.
+- Reconnects, waking up and returning to the tab re-check the actual tracks.
+- A chosen device that disappears falls back to the default, with a notice.
+- If a working microphone produces digital silence for 12 seconds, a warning
+  appears.
+- If the browser blocks playback: "Tap to enable meeting audio" (one tap).
+
+**Tiles are never blank.** Each tile shows one of: video (only once real
+frames arrive), off, starting, connecting, paused (network), recovering,
+unavailable, or reconnecting.
+- Remote video that stalls is resubscribed once.
+- Your own camera is never restarted from a tile.
+
+**Quality.**
+- Auto (default), Data saver or High quality, remembered per device. Guests
+  keep theirs for the visit only.
+- Adaptive stream, dynacast and simulcast (two layers) are always on.
+- Camera capture is 720p/30 in Auto; nobody is forced to 1080p.
+- Screens are encoded for readability and are never processed.
+
+**Background effects.** None, Blur, Strong blur, Remove (onto a neutral
+opaque backdrop), five bundled office backgrounds, seven solid colours, or an
+image from this device.
+- Segmentation uses MediaPipe through `@livekit/track-processors`, entirely in
+  the browser.
+- The model is `public/meetings/segmenter/selfie_segmenter.tflite`. The WASM
+  is copied from `node_modules` at build time by
+  `scripts/copy-meeting-assets.mjs`, so no CDN is involved.
+- One processor per camera track. Switching effects changes it in place, so
+  nothing is republished.
+- A device that can't keep up (average frame time over 60 ms for 5 seconds)
+  returns to no effect, with a notice.
+- A custom image is checked (JPEG/PNG/WebP, 8 MB or less, at least 320×180),
+  drawn to 1280×720, kept as a local object URL for the visit and revoked
+  afterwards. It is never uploaded or stored.
+- The bundled backgrounds are original illustrations from
+  `scripts/generate-meeting-backgrounds.mjs`: no people, no logos, no
+  licensed photos.
+- CSP is unchanged. Without `worker-src blob:` the processor uses a window
+  timer, so in Safari or Firefox a hidden tab updates the processed video
+  about once a second.
+
+**Diagnostics.**
+- **More → Troubleshooting → Copy diagnostics** copies: browser and platform,
+  connection state and quality, the quality mode, the background mode, each
+  participant's publication and subscription state, the reconnect count and
+  recent event names.
+- It never includes device ids, frames, audio or images.
+- The same snapshot is `window.__enercoreMeetingDiagnostics()`, which the
+  media E2E tests read.
