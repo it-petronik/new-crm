@@ -3,9 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "predev": "node scripts/copy-meeting-assets.mjs",
     "dev": "next dev --webpack",
-    "prebuild": "node scripts/copy-meeting-assets.mjs",
     "build": "next build --webpack",
     "start": "next start",
     "typecheck": "tsc --noEmit",
@@ -15,7 +13,6 @@
     "db:bootstrap": "tsx scripts/bootstrap.ts",
     "db:check": "tsx scripts/db-check.ts",
     "db:migrate:remote": "wrangler d1 migrations apply enercore-crm --remote",
-    "precf:build": "node scripts/copy-meeting-assets.mjs",
     "cf:build": "opennextjs-cloudflare build",
     "cf:preview": "opennextjs-cloudflare preview",
     "cf:deploy": "opennextjs-cloudflare deploy",
@@ -29,7 +26,6 @@
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
     "@livekit/components-react": "^2.9.24",
-    "@livekit/track-processors": "0.8.1",
     "@noble/hashes": "^2.4.0",
     "@radix-ui/react-dialog": "^1.1.23",
     "@radix-ui/react-popover": "^1.1.23",

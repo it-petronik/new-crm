@@ -17,5 +17,3 @@ backups/
 # Optional local backup configuration (may hold CLOUDFLARE_API_TOKEN).
 .backup.env
 
-# MediaPipe WASM, copied from node_modules at build time (scripts/copy-meeting-assets.mjs).
-public/meetings/segmenter/wasm/

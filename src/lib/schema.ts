@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { sqliteTable, text, integer, index, uniqueIndex, primaryKey } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index, uniqueIndex, primaryKey, check } from "drizzle-orm/sqlite-core";
 
 /**
  * D1 (SQLite) equivalent of the original MySQL schema.
@@ -462,7 +462,7 @@ export const meetings = sqliteTable(
   "Meeting",
   {
     id: text("id").primaryKey(),
-    // NULL for a standalone meeting (its own invitees, no chat room).
+    // NULL for a standalone meeting (its own invitees and its own meeting chat).
     conversationId: text("conversationId").references(() => conversations.id, { onDelete: "cascade" }),
     createdBy: text("createdBy").notNull(),
     title: text("title").notNull(),
@@ -585,6 +585,39 @@ export const meetingGuests = sqliteTable(
 );
 
 /**
+ * A meeting's own chat — for meetings without a Collaboration conversation
+ * (standalone), and the channel guests share with employees in any meeting.
+ * Room and DM meetings keep using their conversation for employees.
+ *
+ * Exactly one sender: an employee (`senderUserId`) or an admitted guest
+ * (`senderGuestId`). `senderName` is taken by the server at send time from
+ * the account or the guest's admission — never from the client. Plain text
+ * only. `clientKey` makes a retried send land once.
+ */
+export const meetingMessages = sqliteTable(
+  "MeetingMessage",
+  {
+    id: text("id").primaryKey(),
+    meetingId: text("meetingId")
+      .notNull()
+      .references(() => meetings.id, { onDelete: "cascade" }),
+    senderUserId: text("senderUserId").references(() => users.id),
+    senderGuestId: text("senderGuestId").references(() => meetingGuests.id, { onDelete: "cascade" }),
+    senderName: text("senderName").notNull(),
+    body: text("body").notNull(),
+    clientKey: text("clientKey").notNull(),
+    createdAt: integer("createdAt", { mode: "timestamp_ms" }).notNull(),
+    editedAt: integer("editedAt", { mode: "timestamp_ms" }),
+    deletedAt: integer("deletedAt", { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    index("MeetingMessage_meetingId_id_idx").on(table.meetingId, table.id),
+    uniqueIndex("MeetingMessage_meetingId_clientKey_key").on(table.meetingId, table.clientKey),
+    check("MeetingMessage_one_sender", sql`("senderUserId" IS NULL) <> ("senderGuestId" IS NULL)`),
+  ],
+);
+
+/**
  * Attendance, one row per connection. Reconnecting starts a new session,
  * so nothing is overwritten and totals are the sum of sessions. Written
  * from the provider's webhooks.
@@ -668,3 +701,5 @@ export type MessageRow = typeof messages.$inferSelect;
 export type AttachmentRow = typeof attachments.$inferSelect;
 
 export type RefreshTokenRow = typeof refreshTokens.$inferSelect;
+
+export type MeetingMessageRow = typeof meetingMessages.$inferSelect;

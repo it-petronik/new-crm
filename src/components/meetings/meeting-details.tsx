@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { ArrowLeft, Circle, Copy, Download, ExternalLink, FileText, Link2, NotebookPen, RefreshCw, Trash2 } from "lucide-react";
 import { Button, DatePicker, Dialog, DialogActions, DialogPresence, Field, Select, Textarea } from "../ui/controls";
 import { stages } from "@/lib/domain";
@@ -12,13 +12,16 @@ import {
   getMeeting,
   openPrejoin,
   internalMeetingUrl,
+  meetingMessagesOf,
   openRecord,
+  sendMeetingMessage,
   revokeGuestLink,
 } from "@/lib/meeting-client";
 import { RELATED_NOUN, durationLabel, joinable, scopeLabel, statusLabel, type GuestExpiry, type MeetingDetails, type RelatedRecord } from "@/lib/meetings";
 import { businessStamp } from "@/lib/gst";
 import MeetingForm from "./meeting-form";
 import { CopyMeetingLink } from "./meeting-link";
+import MeetingMessages, { type ChatTransport } from "./meeting-messages";
 
 /**
  * One meeting, in full: when and what it is, who was invited and who came,
@@ -61,6 +64,16 @@ export default function MeetingDetailsView({ meetingId, meId, onBack, onReport }
     if (rule === "open" || rule === "admit") setAdmission(rule);
   }, [rule]);
   useCollabEvents(true, (event) => event.type.startsWith("meeting.") && "meeting" in event && event.meeting.id === meetingId && load(), load);
+  // The meeting's own chat: announced live through Collaboration's events.
+  const [chatSignal, setChatSignal] = useState(0);
+  useCollabEvents(true, (event) => event.type === "meeting.message" && event.meetingId === meetingId && setChatSignal((n) => n + 1));
+  const chatTransport = useMemo<ChatTransport>(
+    () => ({
+      list: async (after) => (await meetingMessagesOf(meetingId, after)).messages,
+      send: async (body, key) => (await sendMeetingMessage(meetingId, body, key)).message,
+    }),
+    [meetingId],
+  );
 
   const act = async (fn: () => Promise<unknown>, done: string) => {
     setBusy(true);
@@ -270,6 +283,20 @@ export default function MeetingDetailsView({ meetingId, meId, onBack, onReport }
             </div>
           </section>
         )}
+
+        {/* The meeting's chat, to review afterwards. Standalone meetings always
+            have one; room and DM meetings chat in their conversation, so the
+            meeting chat only appears if guests took part in it. */}
+        <section className="meet-card meet-details-chat" aria-labelledby="meet-chat-title">
+          <MeetingMessages
+            transport={chatTransport}
+            signal={chatSignal}
+            canPost={m.status === "live"}
+            hideEmpty={m.scope !== "standalone"}
+            endedNote={m.status === "scheduled" ? "The chat opens when the meeting starts." : "The meeting has ended. The chat is read-only now."}
+            heading={<h3 id="meet-chat-title">Chat{m.scope !== "standalone" ? " with guests" : ""}</h3>}
+          />
+        </section>
 
         {data.invitees.length > 0 && (
           <section className="meet-card" aria-labelledby="meet-invitees">

@@ -2,22 +2,18 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   DEFAULT_PREFS,
-  OFFICE_BACKGROUNDS,
   QUALITY_LABELS,
   QUALITY_PRESETS,
-  SOLID_COLOURS,
   classifyMediaError,
   diagnosticsLog,
-  effectLabel,
   fallbackDevice,
   mediaMessage,
   noteMedia,
   parsePrefs,
-  sameEffect,
 } from "../src/lib/meeting-media";
 import { tileState } from "../src/components/meetings/media-tile";
 import { ConnectionQuality, Track } from "livekit-client";
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 /** Meeting media logic that doesn't need a browser. */
 
@@ -35,27 +31,19 @@ test("quality presets: 720p/30 by default, a real data saver, no 1080p camera fo
   for (const { label, hint } of Object.values(QUALITY_LABELS)) assert.doesNotMatch(`${label} ${hint}`, /\d|kbps|bitrate/i);
 });
 
-test("preferences: validated, defaulting safely; custom images are never kept", () => {
+test("preferences: the quality only, validated, defaulting safely; nothing else survives", () => {
   assert.deepEqual(parsePrefs(null), DEFAULT_PREFS);
   assert.deepEqual(parsePrefs("not json"), DEFAULT_PREFS);
-  assert.deepEqual(parsePrefs(JSON.stringify({ quality: "saver", effect: { kind: "blur", strength: "strong" } })), { quality: "saver", effect: { kind: "blur", strength: "strong" } });
-  assert.deepEqual(parsePrefs(JSON.stringify({ quality: "ultra", effect: { kind: "image", id: "../../etc" } })), DEFAULT_PREFS);
-  assert.deepEqual(parsePrefs(JSON.stringify({ quality: "high", effect: { kind: "custom" } })), { quality: "high", effect: { kind: "none" } });
-  assert.deepEqual(parsePrefs(JSON.stringify({ effect: { kind: "colour", id: "navy" } })).effect, { kind: "colour", id: "navy" });
-  assert.ok(sameEffect({ kind: "blur", strength: "normal" }, { kind: "blur", strength: "normal" }));
-  assert.ok(!sameEffect({ kind: "blur", strength: "normal" }, { kind: "blur", strength: "strong" }));
+  assert.deepEqual(parsePrefs(JSON.stringify({ quality: "saver" })), { quality: "saver" });
+  assert.deepEqual(parsePrefs(JSON.stringify({ quality: "ultra" })), DEFAULT_PREFS);
+  // A value an earlier version stored alongside is dropped.
+  assert.deepEqual(parsePrefs(JSON.stringify({ quality: "high", effect: { kind: "blur", strength: "normal" } })), { quality: "high" });
 });
 
-test("backgrounds: bundled, small, labelled; a tasteful handful of colours", () => {
-  for (const b of OFFICE_BACKGROUNDS) {
-    for (const file of [`public/meetings/backgrounds/${b.id}.jpg`, `public/meetings/backgrounds/${b.id}-thumb.jpg`]) {
-      assert.ok(existsSync(file), file);
-      assert.ok(statSync(file).size < 200_000, `${file} is compressed`);
-    }
-    assert.match(effectLabel({ kind: "image", id: b.id }), /background$/);
-  }
-  assert.ok(SOLID_COLOURS.length >= 5 && SOLID_COLOURS.length <= 8);
-  assert.ok(existsSync("public/meetings/segmenter/selfie_segmenter.tflite"), "segmentation model is served locally");
+test("no background-effect code or assets ship", () => {
+  for (const gone of ["src/components/meetings/media-effects.tsx", "public/meetings", "scripts/copy-meeting-assets.mjs"]) assert.ok(!existsSync(gone), gone);
+  const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+  assert.ok(!("@livekit/track-processors" in { ...pkg.dependencies, ...pkg.devDependencies }));
 });
 
 test("device errors: classified by name, explained in plain words, never raw", () => {

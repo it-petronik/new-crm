@@ -250,7 +250,7 @@ The migration never modifies conversations, messages or CRM records, so
 nothing outside the meeting tables needs recovering.
 
 
-## Media: quality, reliability and background effects
+## Media: quality and reliability
 
 **One media path for everyone.** Employees and guests use the same code:
 `device-setup.tsx` (pre-join), `use-local-media.ts` (in the meeting) and
@@ -259,10 +259,10 @@ nothing outside the meeting tables needs recovering.
 **Pre-join hands over its tracks.**
 - The preview creates LiveKit tracks: camera at the chosen quality, and
   microphone with echo cancellation, noise suppression and gain control.
-- Any background effect runs on that camera track.
-- On Join the same tracks are published. The devices are never released and
-  re-opened, so there is no race for the camera, no black gap and no lost
-  effect. `LiveKitRoom` is told not to open devices itself.
+- On Join those same tracks are published directly: the clean device track,
+  with no processor in between.
+- The devices are never released and re-opened, so there is no race for the
+  camera and no black gap. `LiveKitRoom` is told not to open devices itself.
 - After a rejoin the old tracks are gone, so fresh ones are created.
 
 **State comes from LiveKit.**
@@ -272,7 +272,8 @@ nothing outside the meeting tables needs recovering.
   How to allow, Try again, or Use default microphone.
 - A device that ends is restarted by LiveKit or marked off, and the person is
   told.
-- Reconnects, waking up and returning to the tab re-check the actual tracks.
+- Reconnects, waking up, returning to the tab and rotating a phone re-check
+  the actual tracks.
 - A chosen device that disappears falls back to the default, with a notice.
 - If a working microphone produces digital silence for 12 seconds, a warning
   appears.
@@ -289,35 +290,82 @@ unavailable, or reconnecting.
   keep theirs for the visit only.
 - Adaptive stream, dynacast and simulcast (two layers) are always on.
 - Camera capture is 720p/30 in Auto; nobody is forced to 1080p.
-- Screens are encoded for readability and are never processed.
+- Guests use exactly the same presets as employees.
+- Screens are encoded for readability.
 
-**Background effects.** None, Blur, Strong blur, Remove (onto a neutral
-opaque backdrop), five bundled office backgrounds, seven solid colours, or an
-image from this device.
-- Segmentation uses MediaPipe through `@livekit/track-processors`, entirely in
-  the browser.
-- The model is `public/meetings/segmenter/selfie_segmenter.tflite`. The WASM
-  is copied from `node_modules` at build time by
-  `scripts/copy-meeting-assets.mjs`, so no CDN is involved.
-- One processor per camera track. Switching effects changes it in place, so
-  nothing is republished.
-- A device that can't keep up (average frame time over 60 ms for 5 seconds)
-  returns to no effect, with a notice.
-- A custom image is checked (JPEG/PNG/WebP, 8 MB or less, at least 320×180),
-  drawn to 1280×720, kept as a local object URL for the visit and revoked
-  afterwards. It is never uploaded or stored.
-- The bundled backgrounds are original illustrations from
-  `scripts/generate-meeting-backgrounds.mjs`: no people, no logos, no
-  licensed photos.
-- CSP is unchanged. Without `worker-src blob:` the processor uses a window
-  timer, so in Safari or Firefox a hidden tab updates the processed video
-  about once a second.
+**Settings.**
+- More: Devices (microphone, camera), Video quality, Layout (Grid or Speaker),
+  Recording (hosts) and Troubleshooting.
+- Pre-join: preview, mic and camera toggles, Microphone, Camera, Video quality,
+  and Join.
+- There are no background effects. They were removed, together with their
+  processor dependency and assets.
 
 **Diagnostics.**
 - **More → Troubleshooting → Copy diagnostics** copies: browser and platform,
-  connection state and quality, the quality mode, the background mode, each
-  participant's publication and subscription state, the reconnect count and
-  recent event names.
-- It never includes device ids, frames, audio or images.
+  connection state and quality, the quality mode, whether the camera is
+  processed (always false), each participant's publication and subscription
+  state, the reconnect count and recent event names.
+- It never includes device ids, frames or audio.
 - The same snapshot is `window.__enercoreMeetingDiagnostics()`, which the
   media E2E tests read.
+
+
+## Meeting chat (migration 0009)
+
+Every meeting has usable chat, and the Chat button always opens it.
+
+**Which chat is used**
+- **Room and DM meetings.** Employees chat in the conversation, as before.
+  Messages stay there, and nothing is copied anywhere else.
+- **Standalone meetings, and every guest.** They use the meeting's own chat:
+  the `MeetingMessage` table, tied to `meetingId`. No Collaboration room is
+  created.
+- **Room meetings with guests.** Once guests have been in the call, employees
+  see two tabs: *Meeting chat* (includes guests) and *Room chat* (Enercore
+  only).
+
+**Who may use it**
+- **Employees** need their current meeting access (`requireMeeting`), so a
+  removed or deactivated person loses it at once.
+  - `GET/POST /api/collab/meetings/:id/messages` checks the session, origin
+    and message rate limit.
+  - Reading works during and after the meeting; posting only while it is live.
+- **Guests** use `POST /api/meet/chat` and `POST /api/meet/chat/send`, with
+  the admission secret.
+  - They get access only while admitted and while the meeting is live, and
+    see only messages from their admission onwards.
+  - A declined, removed or departed guest, or any guest once the meeting has
+    ended, gets 404.
+  - Limits: the per-IP guest limit plus 20 messages a minute per guest.
+  - Guests never receive a CRM session.
+
+**Messages**
+- Plain text, cleaned like Collaboration messages, up to 4,000 characters,
+  never rendered as HTML.
+- The sender's name comes from the account or the admission, never from the
+  client.
+- `clientKey` makes a retried send land once.
+- The database enforces exactly one sender (`MeetingMessage_one_sender`).
+- The read cursor is commit order (`rowid`), so messages sent in the same
+  millisecond are never skipped or reordered.
+
+**Real time, without polling**
+- After storing a message, the server sends a content-free signal (the
+  message id only) into the call through LiveKit's server `SendData`, on topic
+  `enercore-meeting-chat`. This reaches guests too.
+- Employees elsewhere, such as on Meeting Details, get a `meeting.message`
+  event on Collaboration's live channel.
+- Each reader then fetches the new messages with their own access.
+
+**Afterwards**
+- **Meeting Details → Chat** (read-only once ended) is for employees who may
+  open the meeting.
+- Room and DM meetings show this section only when guests chatted.
+- Guests have no access after the meeting.
+- Nothing is copied into lead notes. Messages are plain rows, so a future
+  summary can read them with the same access rules.
+
+**Migration 0009** (additive) creates `MeetingMessage` with one CHECK
+constraint, an index on `(meetingId, id)`, and a unique index on
+`(meetingId, clientKey)`. Existing tables are untouched.

@@ -181,8 +181,8 @@ export function ReliableVideo({
  * recover someone else's video (resubscribe); if frames still don't come
  * within 10 s more, say the video is unavailable. Frames returning clears
  * everything. Your own camera is never restarted from here — a device that
- * really fails is handled by LiveKit's "ended" path — so a slow moment (an
- * effect loading) can't knock it over.
+ * really fails is handled by LiveKit's "ended" path — so a slow moment can't
+ * knock it over.
  */
 function useVideoRecovery(pub: TrackPublication | undefined, local: boolean, enabled: boolean) {
   const [phase, setPhase] = useState<"ok" | "recovering" | "unavailable">("ok");
@@ -231,7 +231,6 @@ export function MediaTile({
   meId,
   featured = false,
   starting = false,
-  applying = false,
   onBlocked,
 }: {
   trackRef: TrackReferenceOrPlaceholder;
@@ -239,8 +238,6 @@ export function MediaTile({
   featured?: boolean;
   /** Your camera is being switched on. */
   starting?: boolean;
-  /** Your background effect is being applied. */
-  applying?: boolean;
   onBlocked?: () => void;
 }) {
   const p = trackRef.participant;
@@ -251,8 +248,7 @@ export function MediaTile({
   const base = tileState(p, pub, { starting, screen });
   const video = base === "video" || base === "paused" ? (pub?.track as VideoTrack | undefined) : undefined;
   // Screens can legitimately go still (a static slide): no stall watch there.
-  // …nor while your background effect is being applied (frames pause briefly).
-  const recovery = useVideoRecovery(pub, p.isLocal, base === "video" && !screen && !(p.isLocal && applying));
+  const recovery = useVideoRecovery(pub, p.isLocal, base === "video" && !screen);
   // "video" only once real frames have arrived for this track; until then the
   // video is attached underneath a "starting"/"connecting" state.
   const [framesFor, setFramesFor] = useState<string | null>(null);
@@ -297,11 +293,6 @@ export function MediaTile({
             </span>
           )}
         </div>
-      )}
-      {state === "video" && applying && (
-        <span className="meet-tile-badge" role="status">
-          Applying background…
-        </span>
       )}
       <figcaption>
         {!screen && micMuted && <MicOff size={13} aria-label="Microphone off" />}

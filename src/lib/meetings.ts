@@ -72,7 +72,24 @@ export type MeetingEvent =
   | { type: "meeting.invited"; conversationId: string; meeting: MeetingView; from: { id: string; name: string } }
   // Hosts only: a guest is waiting, or a guest was admitted/declined.
   | { type: "meeting.guest_waiting"; conversationId: string; meetingId: string; guest: { id: string; name: string } }
-  | { type: "meeting.guest_decided"; conversationId: string; meetingId: string; guestId: string; decision: "admitted" | "declined" };
+  | { type: "meeting.guest_decided"; conversationId: string; meetingId: string; guestId: string; decision: "admitted" | "declined" }
+  // A meeting-chat message was posted (the content is fetched with the reader's own access).
+  | { type: "meeting.message"; conversationId: string; meetingId: string; messageId: string };
+
+/** One meeting-chat message as a participant sees it. `mine` is worked out by the server. */
+export type MeetingMessageView = {
+  id: string;
+  /** Commit order (the storage row number): the "after" cursor. */
+  seq: number;
+  sender: { name: string; guest: boolean };
+  mine: boolean;
+  body: string;
+  createdAt: string;
+  deleted: boolean;
+};
+
+/** LiveKit data topic for "a meeting-chat message was posted" — the id only, never content. */
+export const MEETING_CHAT_TOPIC = "enercore-meeting-chat";
 
 export type GuestLinkStatus = {
   active: boolean;
@@ -209,6 +226,8 @@ export type RoomSession = {
   guest: boolean;
   /** Cloud recording is configured and this person may start it. */
   canRecord: boolean;
+  /** Guests only: their own admission secret, for the meeting chat (in memory, never stored). */
+  chatSecret?: string;
   /** For the in-meeting info card (guests: what their guest page showed). */
   organiser?: string | null;
   scheduledAt?: string | null;

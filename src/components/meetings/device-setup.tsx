@@ -2,33 +2,30 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createLocalAudioTrack, createLocalVideoTrack, type LocalAudioTrack, type LocalVideoTrack } from "livekit-client";
-import { ChevronDown, Loader2, Mic, MicOff, Phone, Sparkles, Video, VideoOff } from "lucide-react";
+import { ChevronDown, Loader2, Mic, MicOff, Phone, Video, VideoOff } from "lucide-react";
 import { Button } from "../ui/controls";
 import {
   QUALITY_LABELS,
   QUALITY_PRESETS,
   classifyMediaError,
-  effectLabel,
   fallbackDevice,
   loadPrefs,
   mediaMessage,
   noteMedia,
   savePrefs,
-  type BackgroundEffect,
   type MediaHandoff,
   type MediaProblem,
   type QualityMode,
 } from "@/lib/meeting-media";
-import { BackgroundPicker, useBackgroundEffect, useCustomBackground } from "./media-effects";
 
 /**
  * Camera and microphone before joining — shared by the employee pre-join
  * screen and the guest page, so both get exactly the same media.
  *
- * The preview uses real LiveKit tracks. On Join those SAME tracks (with any
- * background effect already running on the camera) are handed to the
- * meeting and published: the devices are never released and re-opened, so
- * there is no race for the camera, no black gap and no lost effect.
+ * The preview uses real LiveKit tracks. On Join those SAME tracks are handed
+ * to the meeting and published directly — the clean camera and microphone,
+ * nothing in between. The devices are never released and re-opened, so
+ * there is no race for the camera and no black gap.
  *
  * Only friendly device names are shown; ids are values, never text.
  */
@@ -128,7 +125,6 @@ export function useDeviceSetup(initial: { audio: boolean; video: boolean }, enab
   const [audioTrack, setAudioTrack] = useState<LocalAudioTrack>();
   const [starting, setStarting] = useState(false);
   const [prefs, setPrefs] = useState(() => loadPrefs(guest));
-  const custom = useCustomBackground();
   const videoEl = useRef<HTMLVideoElement>(null);
   const handedOff = useRef(false);
 
@@ -138,11 +134,6 @@ export function useDeviceSetup(initial: { audio: boolean; video: boolean }, enab
   }, [initial.audio, initial.video]);
 
   const setQuality = (quality: QualityMode) => setPrefs((p) => (savePrefs(guest, { ...p, quality }), { ...p, quality }));
-  const setEffect = useCallback(
-    (effect: BackgroundEffect) => setPrefs((p) => (savePrefs(guest, { ...p, effect }), { ...p, effect })),
-    [guest],
-  );
-  const { applying } = useBackgroundEffect(videoTrack, prefs.effect, custom.url, setNotice, () => setEffect({ kind: "none" }));
 
   const refresh = async () => {
     try {
@@ -278,15 +269,15 @@ export function useDeviceSetup(initial: { audio: boolean; video: boolean }, enab
   const handOff = (): MediaHandoff => {
     handedOff.current = true;
     if (videoEl.current && videoTrack) videoTrack.detach(videoEl.current);
-    return { video: video ? videoTrack : undefined, audio: audio ? audioTrack : undefined, quality: prefs.quality, effect: prefs.effect, customUrl: custom.handOver() };
+    return { video: video ? videoTrack : undefined, audio: audio ? audioTrack : undefined, quality: prefs.quality };
   };
 
   return {
     audio, video, micId, camId, devices, micError, camError, notice, level, videoEl, videoTrack, audioTrack, starting,
-    quality: prefs.quality, effect: prefs.effect, applying, custom,
+    quality: prefs.quality,
     setAudio: (on: boolean) => (setMicError(null), setAudio(on)),
     setVideo: (on: boolean) => (setCamError(null), setVideo(on)),
-    setMicId, setCamId, setNotice, setQuality, setEffect, release, handOff,
+    setMicId, setCamId, setNotice, setQuality, release, handOff,
   };
 }
 
@@ -318,11 +309,6 @@ export function DevicePreview({ setup, voice }: { setup: DeviceSetup; voice: boo
           )}
         </div>
       )}
-      {showVideo && setup.applying && (
-        <span className="meet-preview-badge" role="status">
-          Applying background…
-        </span>
-      )}
       <div className="meet-preview-controls">
         <Button
           className={`meet-round${setup.audio ? "" : " is-off"}`}
@@ -351,9 +337,8 @@ export function DevicePreview({ setup, voice }: { setup: DeviceSetup; voice: boo
   );
 }
 
-/** The pickers, background and quality, and any device messages. */
+/** The device pickers, video quality, and any device messages. */
 export function DeviceChoices({ setup, voice = false }: { setup: DeviceSetup; voice?: boolean }) {
-  const [effects, setEffects] = useState(false);
   const hasMics = setup.devices.some((d) => d.kind === "audioinput" && d.label);
   const hasCams = setup.devices.some((d) => d.kind === "videoinput" && d.label);
   return (
@@ -361,41 +346,21 @@ export function DeviceChoices({ setup, voice = false }: { setup: DeviceSetup; vo
       <DeviceSelect kind="audioinput" devices={hasMics ? setup.devices : []} value={setup.micId} onChange={setup.setMicId} blocked={setup.micError === "blocked"} />
       <DeviceSelect kind="videoinput" devices={hasCams ? setup.devices : []} value={setup.camId} onChange={setup.setCamId} blocked={setup.camError === "blocked"} />
       {!voice && (
-        <>
-          <label className="device-select">
-            <span className="device-select-label">Video quality</span>
-            <span className="device-select-control">
-              <Video size={16} aria-hidden="true" />
-              <select value={setup.quality} onChange={(e) => setup.setQuality(e.target.value as QualityMode)} aria-label="Video quality">
-                {(Object.keys(QUALITY_LABELS) as QualityMode[]).map((q) => (
-                  <option key={q} value={q}>
-                    {QUALITY_LABELS[q].label}
-                    {q === "auto" ? " (recommended)" : ""}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={15} aria-hidden="true" className="device-select-chevron" />
-            </span>
-          </label>
-          <button type="button" className="meet-effects-toggle" aria-expanded={effects} onClick={() => setEffects(!effects)}>
-            <Sparkles size={16} aria-hidden="true" />
-            <span>
-              Background effects
-              <small>{effectLabel(setup.effect)}</small>
-            </span>
-            <ChevronDown size={15} aria-hidden="true" />
-          </button>
-          {effects && (
-            <BackgroundPicker
-              value={setup.effect}
-              onChange={setup.setEffect}
-              customUrl={setup.custom.url}
-              onCustomFile={setup.custom.choose}
-              customError={setup.custom.error}
-              applying={setup.applying}
-            />
-          )}
-        </>
+        <label className="device-select">
+          <span className="device-select-label">Video quality</span>
+          <span className="device-select-control">
+            <Video size={16} aria-hidden="true" />
+            <select value={setup.quality} onChange={(e) => setup.setQuality(e.target.value as QualityMode)} aria-label="Video quality">
+              {(Object.keys(QUALITY_LABELS) as QualityMode[]).map((q) => (
+                <option key={q} value={q}>
+                  {QUALITY_LABELS[q].label}
+                  {q === "auto" ? " (recommended)" : ""}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={15} aria-hidden="true" className="device-select-chevron" />
+          </span>
+        </label>
       )}
       {setup.micError && <p className="meet-notice" role="alert">{mediaMessage("microphone", setup.micError)}</p>}
       {setup.camError && <p className="meet-notice" role="alert">{mediaMessage("camera", setup.camError)}</p>}

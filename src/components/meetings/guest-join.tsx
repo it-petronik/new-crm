@@ -41,7 +41,7 @@ async function post<T>(path: string, body: unknown): Promise<{ ok: boolean; stat
   return { ok: response.ok, status: response.status, data };
 }
 
-const toSession = (grant: GuestGrant, info: GuestMeetingInfo | null): RoomSession => ({
+const toSession = (grant: GuestGrant, info: GuestMeetingInfo | null, secret: string | null): RoomSession => ({
   meetingId: "",
   conversationId: null,
   title: grant.title,
@@ -52,6 +52,7 @@ const toSession = (grant: GuestGrant, info: GuestMeetingInfo | null): RoomSessio
   host: false,
   guest: true,
   canRecord: false,
+  chatSecret: secret ?? undefined,
   organiser: info?.organiser ?? null,
   scheduledAt: info?.scheduledAt ?? null,
 });
@@ -85,7 +86,7 @@ export default function GuestJoin({ token }: { token: string }) {
   const enter = useCallback(
     (grant: GuestGrant) => {
       // The same handoff as employees: the live preview tracks go into the meeting.
-      setPhase({ at: "room", session: toSession(grant, infoRef.current), choices: { ...choices.current, audio: setup.audio, video: setup.video, media: setup.handOff() } });
+      setPhase({ at: "room", session: toSession(grant, infoRef.current, secret.current), choices: { ...choices.current, audio: setup.audio, video: setup.video, media: setup.handOff() } });
     },
     [setup],
   );
@@ -149,7 +150,7 @@ export default function GuestJoin({ token }: { token: string }) {
         onRejoin={async () => {
           if (!secret.current) return { error: "Open the meeting link again to rejoin.", final: true };
           const { ok, data } = await post<{ state: string; grant?: GuestGrant }>("status", { secret: secret.current });
-          if (ok && data.state === "admitted" && data.grant) return toSession(data.grant, infoRef.current);
+          if (ok && data.state === "admitted" && data.grant) return toSession(data.grant, infoRef.current, secret.current);
           return { error: data.state === "ended" ? "The meeting has ended." : (data.error ?? "You can't rejoin this meeting."), final: true };
         }}
       />

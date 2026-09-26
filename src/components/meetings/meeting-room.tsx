@@ -15,11 +15,10 @@ import {
   useSpeakingParticipants,
   useTracks,
 } from "@livekit/components-react";
-import { ConnectionState, DisconnectReason, ScreenSharePresets, Track, VideoPreset, type Participant, type RoomOptions } from "livekit-client";
+import { ConnectionState, DisconnectReason, RoomEvent, ScreenSharePresets, Track, VideoPreset, type Participant, type RoomOptions } from "livekit-client";
 import {
   Circle,
   ClipboardCopy,
-  LayoutGrid,
   Loader2,
   MessageSquare,
   Mic,
@@ -30,7 +29,6 @@ import {
   PhoneOff,
   RefreshCw,
   SignalLow,
-  Sparkles,
   Square,
   SwitchCamera,
   UserMinus,
@@ -43,14 +41,14 @@ import {
 import { Button, Dialog, DialogActions, DialogPresence } from "../ui/controls";
 import { Avatar } from "../avatar";
 import { useCollabEvents } from "@/lib/collab-client";
-import { decideGuest, endMeetingForAll, hostAction, recordingAction, waitingGuestsOf, type JoinChoices } from "@/lib/meeting-client";
-import { durationLabel, type RoomSession } from "@/lib/meetings";
-import { QUALITY_LABELS, QUALITY_PRESETS, effectLabel, loadPrefs, type QualityMode } from "@/lib/meeting-media";
+import { decideGuest, endMeetingForAll, hostAction, meetingMessagesOf, recordingAction, sendMeetingMessage, waitingGuestsOf, type JoinChoices } from "@/lib/meeting-client";
+import { MEETING_CHAT_TOPIC, durationLabel, type MeetingMessageView, type RoomSession } from "@/lib/meetings";
+import { QUALITY_LABELS, QUALITY_PRESETS, loadPrefs, type QualityMode } from "@/lib/meeting-media";
 import MeetingChat from "./meeting-chat";
+import MeetingMessages, { type ChatTransport } from "./meeting-messages";
 import { DeviceSelect } from "./device-setup";
 import { MeetingShare, useDismiss } from "./meeting-info";
 import { MediaTile, metaOf, useParticipantTick } from "./media-tile";
-import { BackgroundPicker } from "./media-effects";
 import { useLocalMedia } from "./use-local-media";
 
 /**
@@ -202,7 +200,7 @@ function Stage({ session, choices, notice, setNotice }: { session: RoomSession; 
   );
   const participants = useParticipants();
   const speaking = useSpeakingParticipants();
-  const [panel, setPanel] = useState<"people" | "chat" | "effects" | null>(null);
+  const [panel, setPanel] = useState<"people" | "chat" | null>(null);
   const [more, setMore] = useState(false);
   // The More menu closes on Escape or a click anywhere outside it.
   const moreRef = useRef<HTMLDivElement>(null);
@@ -217,6 +215,61 @@ function Stage({ session, choices, notice, setNotice }: { session: RoomSession; 
   const cameras = useMediaDeviceSelect({ kind: "videoinput", room });
   const mics = useMediaDeviceSelect({ kind: "audioinput", room });
   const moderator = session.host && !session.guest;
+
+  /* --------------------------------------------------------------- chat */
+  // Room/DM meetings: employees chat in the conversation (it stays there).
+  // Otherwise — standalone meetings, and anyone who is a guest — the
+  // meeting's own chat. Once guests have been in a room meeting, employees
+  // also get the meeting chat (the one guests can see) as a second tab.
+  const roomChat = !!session.conversationId && !session.guest;
+  const [guestsSeen, setGuestsSeen] = useState(false);
+  const guestsHere = participants.some((p) => metaOf(p).guest);
+  useEffect(() => {
+    if (guestsHere) setGuestsSeen(true);
+  }, [guestsHere]);
+  const [chatTab, setChatTab] = useState<"meeting" | "room">(roomChat ? "room" : "meeting");
+  const [chatSignal, setChatSignal] = useState(0);
+  const [chatUnread, setChatUnread] = useState(false);
+  const panelRef = useRef(panel);
+  panelRef.current = panel;
+  useEffect(() => {
+    const onData = (_payload: Uint8Array, _from?: unknown, _kind?: unknown, topic?: string) => {
+      if (topic !== MEETING_CHAT_TOPIC) return;
+      setChatSignal((n) => n + 1);
+      if (panelRef.current !== "chat") setChatUnread(true);
+    };
+    const onBack = () => setChatSignal((n) => n + 1);
+    room.on(RoomEvent.DataReceived, onData);
+    room.on(RoomEvent.Reconnected, onBack);
+    return () => {
+      room.off(RoomEvent.DataReceived, onData);
+      room.off(RoomEvent.Reconnected, onBack);
+    };
+  }, [room]);
+  useEffect(() => {
+    if (panel === "chat") setChatUnread(false);
+  }, [panel]);
+  const chatTransport = useMemo<ChatTransport>(() => {
+    if (session.guest) {
+      // Guests: their admission secret, to the guest-only chat endpoints.
+      const post = async <T,>(path: string, body: Record<string, unknown>) => {
+        const r = await fetch(`/api/meet/${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "omit", cache: "no-store", body: JSON.stringify({ secret: session.chatSecret, ...body }) });
+        const data = (await r.json().catch(() => ({}))) as T & { error?: string };
+        if (!r.ok) throw new Error(data.error ?? "Message not sent. Try again.");
+        return data;
+      };
+      return {
+        list: async (after) => (await post<{ messages: MeetingMessageView[] }>("chat", { after })).messages,
+        send: async (body, key) => (await post<{ message: MeetingMessageView }>("chat/send", { body, clientKey: key })).message,
+      };
+    }
+    return {
+      list: async (after) => (await meetingMessagesOf(session.meetingId, after)).messages,
+      send: async (body, key) => (await sendMeetingMessage(session.meetingId, body, key)).message,
+    };
+  }, [session.guest, session.chatSecret, session.meetingId]);
+  const showMeetingChat = !roomChat || chatTab === "meeting";
+
   // Notices from either source, one toast.
   const toast = media.notice || notice;
   const clearToast = () => (media.setNotice(""), setNotice(""));
@@ -319,7 +372,7 @@ function Stage({ session, choices, notice, setNotice }: { session: RoomSession; 
 
   const micBusy = !!media.pending.microphone;
   const camBusy = !!media.pending.camera;
-  const tileProps = { meId: session.identity, starting: media.pending.camera === "on", applying: media.effectApplying, onBlocked: () => void 0 };
+  const tileProps = { meId: session.identity, starting: media.pending.camera === "on" };
 
   return (
     <div className={`meet-shell${panel ? " has-panel" : ""}`}>
@@ -443,9 +496,9 @@ function Stage({ session, choices, notice, setNotice }: { session: RoomSession; 
       </main>
 
       {panel && (
-        <aside className="meet-panel" aria-label={panel === "people" ? "Participants" : panel === "effects" ? "Background effects" : "Chat"}>
+        <aside className="meet-panel" aria-label={panel === "people" ? "Participants" : "Chat"}>
           <div className="meet-panel-head">
-            <h2>{panel === "people" ? `People (${participants.length})` : panel === "effects" ? "Background effects" : "Chat"}</h2>
+            <h2>{panel === "people" ? `People (${participants.length})` : "Chat"}</h2>
             <Button className="icon-button" aria-label="Close panel" onClick={() => setPanel(null)}>
               <X size={16} />
             </Button>
@@ -470,22 +523,24 @@ function Stage({ session, choices, notice, setNotice }: { session: RoomSession; 
                 <PersonRow key={p.identity} p={p} meId={session.identity} canModerate={moderator} meetingId={session.meetingId} onError={setNotice} />
               ))}
             </ul>
-          ) : panel === "effects" ? (
-            <div className="meet-panel-body">
-              {!media.cameraOn && <p className="meet-panel-note">Turn your camera on to see the effect. Your choice is kept.</p>}
-              <BackgroundPicker
-                value={media.effect}
-                onChange={media.setEffect}
-                customUrl={media.customUrl}
-                onCustomFile={media.custom.choose}
-                customError={media.custom.error}
-                applying={media.effectApplying}
-              />
-            </div>
-          ) : session.conversationId ? (
-            <MeetingChat conversationId={session.conversationId} meId={session.identity} />
           ) : (
-            <p className="meet-chat-empty meet-panel-note">This meeting has no chat room. Share notes in Collaboration after the meeting.</p>
+            <>
+              {roomChat && (guestsSeen || chatTab === "meeting") && (
+                <div className="meet-chat-tabs" role="tablist" aria-label="Chats">
+                  <button type="button" role="tab" aria-selected={chatTab === "meeting"} onClick={() => setChatTab("meeting")}>
+                    Meeting chat <small>incl. guests</small>
+                  </button>
+                  <button type="button" role="tab" aria-selected={chatTab === "room"} onClick={() => setChatTab("room")}>
+                    Room chat <small>Enercore only</small>
+                  </button>
+                </div>
+              )}
+              {showMeetingChat ? (
+                <MeetingMessages transport={chatTransport} signal={chatSignal} canPost />
+              ) : (
+                <MeetingChat conversationId={session.conversationId!} meId={session.identity} />
+              )}
+            </>
           )}
         </aside>
       )}
@@ -541,17 +596,15 @@ function Stage({ session, choices, notice, setNotice }: { session: RoomSession; 
           <Users size={20} />
           <span>People{moderator && waiting.length ? ` (${waiting.length})` : ""}</span>
         </Button>
-        {!session.guest && (
-          <Button
-            className={`meet-control${panel === "chat" ? " is-active" : ""}`}
-            aria-pressed={panel === "chat"}
-            aria-label="Chat"
-            onClick={() => setPanel(panel === "chat" ? null : "chat")}
-          >
-            <MessageSquare size={20} />
-            <span>Chat</span>
-          </Button>
-        )}
+        <Button
+          className={`meet-control${panel === "chat" ? " is-active" : ""}${chatUnread ? " has-unread" : ""}`}
+          aria-pressed={panel === "chat"}
+          aria-label={chatUnread ? "Chat, new messages" : "Chat"}
+          onClick={() => setPanel(panel === "chat" ? null : "chat")}
+        >
+          <MessageSquare size={20} />
+          <span>Chat</span>
+        </Button>
         <div className="meet-more" ref={moreRef}>
           <Button className={`meet-control${more ? " is-active" : ""}`} aria-expanded={more} aria-haspopup="dialog" aria-label="More options" onClick={() => setMore(!more)}>
             <MoreHorizontal size={20} />
@@ -566,12 +619,6 @@ function Stage({ session, choices, notice, setNotice }: { session: RoomSession; 
                   <DeviceSelect kind="videoinput" devices={cameras.devices} value={cameras.activeDeviceId} onChange={(id) => void media.setDevice("videoinput", id)} />
                 </div>
               </section>
-              <section aria-labelledby="more-effects">
-                <h3 id="more-effects">Background effects</h3>
-                <button type="button" className="meet-menu-item" onClick={() => (setMore(false), setPanel("effects"))}>
-                  <Sparkles size={16} aria-hidden="true" /> <span>{effectLabel(media.effect)}</span> <small>Change</small>
-                </button>
-              </section>
               <section aria-labelledby="more-quality">
                 <h3 id="more-quality">Video quality</h3>
                 <div className="meet-quality" role="radiogroup" aria-labelledby="more-quality">
@@ -585,9 +632,19 @@ function Stage({ session, choices, notice, setNotice }: { session: RoomSession; 
               </section>
               <section aria-labelledby="more-layout">
                 <h3 id="more-layout">Layout</h3>
-                <button type="button" className="meet-menu-item" onClick={() => (setLayout(layout === "gallery" ? "speaker" : "gallery"), setMore(false))}>
-                  <LayoutGrid size={16} aria-hidden="true" /> <span>{layout === "gallery" ? "Speaker view" : "Gallery view"}</span>
-                </button>
+                <div className="meet-quality" role="radiogroup" aria-labelledby="more-layout">
+                  {(
+                    [
+                      ["gallery", "Grid", "Everyone the same size"],
+                      ["speaker", "Speaker", "Whoever is talking, large"],
+                    ] as const
+                  ).map(([value, label, hint]) => (
+                    <button key={value} type="button" role="radio" aria-checked={layout === value} className={layout === value ? "is-selected" : ""} onClick={() => setLayout(value)}>
+                      <b>{label}</b>
+                      <small>{hint}</small>
+                    </button>
+                  ))}
+                </div>
               </section>
               {moderator && (
                 <section aria-labelledby="more-recording">

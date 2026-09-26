@@ -53,7 +53,7 @@ const input = z
   .strict();
 
 /**
- * POST: a standalone meeting — no chat room needed. The organiser picks
+ * POST: a standalone meeting — no Collaboration room needed (it has its own meeting chat). The organiser picks
  * colleagues directly; they are invited through notifications and may
  * join; nobody else can. Guests only ever arrive through a guest link.
  */

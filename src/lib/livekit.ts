@@ -218,6 +218,19 @@ export const closeRoom = (config: ProviderConfig, room: string) => roomService(c
 export const removeFromRoom = (config: ProviderConfig, room: string, identity: string) =>
   roomService(config, room, "RemoveParticipant", { room, identity });
 
+/**
+ * Tells everyone in the room something happened, through the provider's own
+ * data channel (server-sent, so it can't be forged by a participant). Used
+ * for "a chat message was posted": the payload is an id, never content.
+ */
+export const sendRoomData = (config: ProviderConfig, room: string, topic: string, payload: unknown) =>
+  roomService(config, room, "SendData", {
+    room,
+    data: btoa(JSON.stringify(payload)),
+    kind: "RELIABLE",
+    topic,
+  });
+
 /** Host control: mutes one published track (the person can unmute themselves). */
 export const muteTrack = (config: ProviderConfig, room: string, identity: string, trackSid: string) =>
   roomService(config, room, "MutePublishedTrack", { room, identity, track_sid: trackSid, muted: true });

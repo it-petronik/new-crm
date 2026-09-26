@@ -9,6 +9,7 @@ import type {
   JoinGrant,
   MeetingDetails,
   MeetingMedia,
+  MeetingMessageView,
   MeetingReport,
   MeetingView,
   RecordingView,
@@ -139,6 +140,10 @@ export const reportLeft = (id: string) => collabFetch(`/meetings/${id}/leave`, {
 export const cancelMeeting = (id: string) => updateMeetingApi(id, { cancel: true });
 export const hostAction = (id: string, body: { action: "mute"; identity: string; trackSid: string } | { action: "remove"; identity: string }) =>
   collabFetch(`/meetings/${id}/participants`, { method: "POST", body });
+export const meetingMessagesOf = (id: string, after?: number | null) =>
+  collabFetch<{ messages: MeetingMessageView[]; live: boolean }>(`/meetings/${id}/messages${after ? `?after=${encodeURIComponent(after)}` : ""}`);
+export const sendMeetingMessage = (id: string, body: string, clientKey: string) =>
+  collabFetch<{ message: MeetingMessageView }>(`/meetings/${id}/messages`, { method: "POST", body: { body, clientKey } });
 export const meetingReport = (id: string) => collabFetch<MeetingReport>(`/meetings/${id}/report`);
 /** Creates (or regenerates) the guest link. Omitted admission keeps the meeting's rule — "host must admit" by default. */
 export const createGuestLink = (id: string, expiry?: GuestExpiry, admission?: "open" | "admit") =>

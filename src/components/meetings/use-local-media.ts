@@ -26,13 +26,11 @@ import {
   mediaMessage,
   noteMedia,
   savePrefs,
-  type BackgroundEffect,
   type MediaHandoff,
   type MediaKind,
   type MediaProblem,
   type QualityMode,
 } from "@/lib/meeting-media";
-import { hasProcessor, useBackgroundEffect, useCustomBackground } from "./media-effects";
 
 /**
  * Your camera, microphone and screen in the meeting — one state machine for
@@ -62,15 +60,8 @@ export function useLocalMedia({ guest, media, wantAudio, wantVideo }: { guest: b
   const [notice, setNotice] = useState("");
   const [tick, setTick] = useState(0);
   const [quality, setQualityState] = useState<QualityMode>(media?.quality ?? loadPrefs(guest).quality);
-  const [effect, setEffectState] = useState<BackgroundEffect>(media?.effect ?? loadPrefs(guest).effect);
-  const custom = useCustomBackground();
-  const [handedUrl] = useState(media?.customUrl ?? null);
-  const customUrl = custom.url ?? handedUrl;
   const [canPlayAudio, setCanPlayAudio] = useState(true);
   const [facing, setFacing] = useState<"user" | "environment">("user");
-
-  // The image handed over from pre-join belongs to the meeting now.
-  useEffect(() => () => void (handedUrl && URL.revokeObjectURL(handedUrl)), [handedUrl]);
 
   const camPub = localParticipant.getTrackPublication(Track.Source.Camera);
   const micPub = localParticipant.getTrackPublication(Track.Source.Microphone);
@@ -102,7 +93,7 @@ export function useLocalMedia({ guest, media, wantAudio, wantVideo }: { guest: b
           fail("microphone", e, "publish");
         }
       } else if (wantAudio) await setMicrophone(true);
-      // Camera — with its background effect already running.
+      // Camera — the clean device track, published directly.
       if (handed?.video && liveTrack(handed.video)) {
         try {
           await localParticipant.publishTrack(handed.video, { source: Track.Source.Camera });
@@ -360,10 +351,10 @@ export function useLocalMedia({ guest, media, wantAudio, wantVideo }: { guest: b
     };
   }, [microphoneOn, micTrack]);
 
-  /* ------------------------------------------------- quality and effects */
+  /* ------------------------------------------------------------ quality */
   async function setQuality(next: QualityMode) {
     setQualityState(next);
-    savePrefs(guest, { quality: next, effect });
+    savePrefs(guest, { quality: next });
     if (!camTrack) return;
     try {
       const deviceId = await camTrack.getDeviceId(false);
@@ -373,14 +364,6 @@ export function useLocalMedia({ guest, media, wantAudio, wantVideo }: { guest: b
       fail("camera", e, "start");
     }
   }
-  const setEffect = useCallback(
-    (next: BackgroundEffect) => {
-      setEffectState(next);
-      savePrefs(guest, { quality, effect: next });
-    },
-    [guest, quality],
-  );
-  const effectState = useBackgroundEffect(cameraOn ? camTrack : undefined, effect, customUrl, setNotice, () => setEffect({ kind: "none" }));
 
   /* ------------------------------------------------------ connection */
   const [myQuality, setMyQuality] = useState<ConnectionQuality>(ConnectionQuality.Unknown);
@@ -411,8 +394,9 @@ export function useLocalMedia({ guest, media, wantAudio, wantVideo }: { guest: b
       connection: room.state,
       connectionQuality: localParticipant.connectionQuality,
       quality,
-      background: effect.kind,
-      backgroundProcessor: hasProcessor(camTrack),
+      // The camera is published as captured: no processor in between.
+      cameraProcessed: !!camTrack?.getProcessor(),
+      cameraTrackId: camTrack?.mediaStreamTrack?.id ?? null,
       canPlaybackAudio: room.canPlaybackAudio,
       local: {
         camera: { ...pubState(localParticipant, Track.Source.Camera), on: cameraOn },
@@ -450,11 +434,6 @@ export function useLocalMedia({ guest, media, wantAudio, wantVideo }: { guest: b
     flipCamera,
     quality,
     setQuality,
-    effect,
-    setEffect,
-    effectApplying: effectState.applying,
-    custom,
-    customUrl,
     canPlayAudio,
     unlockPlayback,
     silent,

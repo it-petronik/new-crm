@@ -21,9 +21,6 @@ test.use({
       "--use-fake-device-for-media-stream",
       "--auto-accept-this-tab-capture",
       "--auto-select-desktop-capture-source=Entire screen",
-      // WebGL2 for on-device background segmentation in headless Chromium.
-      "--use-angle=swiftshader",
-      "--enable-unsafe-swiftshader",
     ],
   },
 });
@@ -49,8 +46,8 @@ const GUM_PROBE = () => {
 type Diag = {
   connection: string;
   quality: string;
-  background: string;
-  backgroundProcessor: boolean;
+  cameraProcessed: boolean;
+  cameraTrackId: string | null;
   canPlaybackAudio: boolean;
   local: { camera: { published: boolean; muted?: boolean; live?: boolean; on: boolean; sid?: string }; microphone: { published: boolean; muted?: boolean; live?: boolean; on: boolean }; screen: { published: boolean } };
   remote: { name: string; guest: boolean; camera: { published: boolean; muted?: boolean; subscribed?: boolean; streamState?: string; sid?: string }; microphone: { published: boolean; muted?: boolean }; screen: { published: boolean } }[];
@@ -59,24 +56,22 @@ type Diag = {
 const diag = (page: Page) => page.evaluate(() => (window as unknown as { __enercoreMeetingDiagnostics?: () => unknown }).__enercoreMeetingDiagnostics?.() as Diag | undefined);
 const gum = (page: Page) => page.evaluate(() => (window as unknown as { __gum: { video: number; audio: number } }).__gum);
 
-async function mediaContext(browser: Browser, viewport = { width: 1280, height: 800 }, effectsBudgetMs?: number) {
+async function mediaContext(browser: Browser, viewport = { width: 1280, height: 800 }) {
   const context = await browser.newContext({ viewport, permissions: ["camera", "microphone", "clipboard-read", "clipboard-write"], bypassCSP: true });
   await context.addInitScript(GUM_PROBE);
-  if (effectsBudgetMs !== undefined)
-    await context.addInitScript((ms) => ((window as unknown as { __enercoreEffectsBudgetMs: number }).__enercoreEffectsBudgetMs = ms), effectsBudgetMs);
   return context;
 }
 
 type Party = { page: Page; context: BrowserContext; client?: Client };
 
 /** A signed-in host in a new open-guest meeting, joined; returns the guest link. */
-async function hostMeeting(browser: Browser, key: string, prepare?: (page: Page) => Promise<void>, effectsBudgetMs?: number) {
+async function hostMeeting(browser: Browser, key: string, prepare?: (page: Page) => Promise<void>) {
   const client = await Client.login(key);
-  const context = await mediaContext(browser, undefined, effectsBudgetMs);
+  const context = await mediaContext(browser);
   await client.signInBrowser(context);
   const page = await context.newPage();
   if (process.env.MEDIA_DEBUG) {
-    page.on("console", (m) => (m.type() === "error" || /meeting|processor|Background/i.test(m.text())) && console.log(`[${key}] ${m.type()}: ${m.text().slice(0, 400)}`));
+    page.on("console", (m) => (m.type() === "error" || /\[meeting\]/.test(m.text())) && console.log(`[${key}] ${m.type()}: ${m.text().slice(0, 400)}`));
     page.on("pageerror", (e) => console.log(`[${key}] pageerror: ${String(e.stack ?? e).slice(0, 800)}`));
   }
   const meeting = (await client.post("/meetings", { mode: "now", media: "video", title: `Media ${key}`, inviteeIds: [], guestAccess: "open" })).body.meeting;
@@ -92,8 +87,8 @@ async function hostMeeting(browser: Browser, key: string, prepare?: (page: Page)
   return { host: { page, context, client } as Party, meetingId: meeting.id as string, link };
 }
 
-async function guestJoins(browser: Browser, link: string, name: string, viewport?: { width: number; height: number }, effectsBudgetMs?: number) {
-  const context = await mediaContext(browser, viewport, effectsBudgetMs);
+async function guestJoins(browser: Browser, link: string, name: string, viewport?: { width: number; height: number }) {
+  const context = await mediaContext(browser, viewport);
   const page = await context.newPage();
   await page.goto(link);
   await page.getByLabel("Your name").fill(name);
@@ -153,6 +148,10 @@ test("pre-join tracks are handed to the meeting as they are — no second camera
   await expect(tile(host.page, "Mo Media1")).toHaveAttribute("data-state", "video");
   // Still only those two device requests after connecting and publishing.
   expect(await gum(host.page)).toMatchObject({ video: 1, audio: 1 });
+  // The published camera IS the device's own track: nothing in between.
+  expect(d.cameraProcessed).toBe(false);
+  const deviceTrackIds = await host.page.evaluate(() => (window as unknown as { __gum: { tracks: MediaStreamTrack[] } }).__gum.tracks.filter((t) => t.kind === "video").map((t) => t.id));
+  expect(deviceTrackIds).toContain(d.cameraTrackId);
   await host.client!.post(`/meetings/${(await host.page.evaluate(() => location.search)).split("meeting=")[1]}/end`, {}).catch(() => {});
   await host.context.close();
 });
@@ -281,86 +280,29 @@ test("a device that stops mid-call is recovered or shown as off — never shown 
   await Promise.all([host.context.close(), guest.context.close()]);
 });
 
-test("background effects: chosen before joining, switched live without republishing, never black", async ({ browser }) => {
-  test.setTimeout(240_000);
-  // This machine renders WebGL in software (headless): the switching is under
-  // test here, not its speed — the "can't keep up" fallback has its own test.
-  const LENIENT = 100_000;
-  // Blur chosen in pre-join: the same processed track goes into the meeting.
-  const { host, meetingId, link } = await hostMeeting(browser, "mm5", async (page) => {
-    await page.getByRole("button", { name: /Background effects/ }).click();
-    await page.getByRole("button", { name: "Blur background" }).click();
-    await expect(page.getByRole("button", { name: "Blur background" })).toHaveAttribute("aria-pressed", "true");
-    await expect(page.locator(".meet-preview-badge")).toHaveCount(0, { timeout: 30_000 });
-  }, LENIENT);
-  expect(await gum(host.page)).toMatchObject({ video: 1 }); // no second camera request on join
-  await expect.poll(async () => (await diag(host.page))!.background, { timeout: 20_000, message: `effects: ${JSON.stringify((await diag(host.page))?.log.counts)}` }).toBe("blur");
-  expect((await diag(host.page))!.backgroundProcessor).toBe(true);
-  const guest = await guestJoins(browser, link, "Fx Guest", undefined, LENIENT);
+test("screen sharing alongside a clean camera: the guest sees both; stopping ends it cleanly", async ({ browser }) => {
+  test.setTimeout(120_000);
+  const { host, meetingId, link } = await hostMeeting(browser, "mm5");
+  const guest = await guestJoins(browser, link, "Share Guest");
   await expect.poll(() => hasPicture(guest.page, "Mo Media5"), { timeout: 20_000 }).toBe(true);
   const sid = (await remoteOf(guest.page, "Mo Media5"))!.camera.sid;
-
-  // None → Blur → Office → Solid → None, five times, from the meeting's panel.
-  await host.page.getByRole("button", { name: "More options" }).click();
-  await host.page.getByRole("dialog", { name: "More options" }).getByRole("button", { name: /Change/ }).click();
-  const panel = host.page.getByRole("complementary", { name: "Background effects" });
-  for (let i = 0; i < 5; i++) {
-    for (const [label, kind] of [
-      ["No background effect", "none"],
-      ["Blur background", "blur"],
-      ["Modern office background", "image"],
-      ["Solid navy background", "colour"],
-      ["No background effect", "none"],
-    ] as const) {
-      await panel.getByRole("button", { name: label }).click();
-      await expect(panel.getByRole("button", { name: label })).toHaveAttribute("aria-pressed", "true");
-      await expect.poll(async () => (await diag(host.page))!.background).toBe(kind);
-      await expect(panel.locator(".meet-effects-status")).toHaveCount(0, { timeout: 20_000 });
-      // The guest keeps receiving the SAME track, with real pictures.
-      expect((await remoteOf(guest.page, "Mo Media5"))!.camera.sid).toBe(sid);
-      await expect.poll(() => hasPicture(guest.page, "Mo Media5"), { timeout: 15_000 }).toBe(true);
-      await noBlackTiles(guest.page);
-    }
-  }
-  expect((await diag(host.page))!.log.counts.background_processor_failed ?? 0).toBe(0);
-
-  // Screen sharing is never processed: shared as is, alongside the processed camera.
-  await panel.getByRole("button", { name: "Blur background" }).click();
+  // Guests keep their quality choice for this visit only (never localStorage).
+  await guest.page.getByRole("button", { name: "More options" }).click();
+  await guest.page.getByRole("dialog", { name: "More options" }).getByRole("radio", { name: /High quality/ }).click();
+  await expect.poll(async () => (await diag(guest.page))!.quality).toBe("high");
+  expect(await guest.page.evaluate(() => [localStorage.getItem("enercore-meeting-media"), sessionStorage.getItem("enercore-meeting-media")])).toEqual([null, JSON.stringify({ quality: "high" })]);
+  await guest.page.keyboard.press("Escape");
   await host.page.getByRole("button", { name: "Share screen" }).click();
   await expect.poll(async () => (await remoteOf(guest.page, "Mo Media5"))?.screen.published, { timeout: 20_000 }).toBe(true);
   await expect(guest.page.locator('.meet-tile[data-source="screen"]')).toHaveAttribute("data-state", "video", { timeout: 20_000 });
-  expect((await diag(host.page))!.background).toBe("blur");
+  // The camera carries on, untouched and still the same track.
+  expect((await remoteOf(guest.page, "Mo Media5"))!.camera.sid).toBe(sid);
+  expect((await diag(host.page))!.cameraProcessed).toBe(false);
   await host.page.getByRole("button", { name: "Stop sharing" }).click();
   await expect.poll(async () => (await remoteOf(guest.page, "Mo Media5"))?.screen.published, { timeout: 20_000 }).toBe(false);
-
-  // The choice is kept on this device (never an image).
-  const stored = await host.page.evaluate(() => localStorage.getItem("enercore-meeting-media"));
-  expect(JSON.parse(stored!)).toEqual({ quality: "auto", effect: { kind: "blur", strength: "normal" } });
-  // Guests keep theirs for this visit only.
-  await guest.page.getByRole("button", { name: "More options" }).click();
-  await guest.page.getByRole("dialog", { name: "More options" }).getByRole("button", { name: /Change/ }).click();
-  await guest.page.getByRole("complementary", { name: "Background effects" }).getByRole("button", { name: "Solid charcoal background" }).click();
-  await expect.poll(async () => (await diag(guest.page))!.background).toBe("colour");
-  expect(await guest.page.evaluate(() => [localStorage.getItem("enercore-meeting-media"), !!sessionStorage.getItem("enercore-meeting-media")])).toEqual([null, true]);
-  await host.client!.post(`/meetings/${meetingId}/end`, {});
-  await Promise.all([host.context.close(), guest.context.close()]);
-});
-
-test("a device that can't keep up with an effect returns to no effect, says so, and the call carries on", async ({ browser }) => {
-  // A budget no device meets: the fallback must engage.
-  const { host, meetingId, link } = await hostMeeting(browser, "mm9", undefined, 0);
-  const guest = await guestJoins(browser, link, "Slow Guest");
-  await host.page.getByRole("button", { name: "More options" }).click();
-  await host.page.getByRole("dialog", { name: "More options" }).getByRole("button", { name: /Change/ }).click();
-  const panel = host.page.getByRole("complementary", { name: "Background effects" });
-  await panel.getByRole("button", { name: "Blur background" }).click();
-  await expect(host.page.locator(".meet-notices")).toContainText("Background effects aren't supported well on this device, so they've been turned off.", { timeout: 30_000 });
-  await expect(panel.getByRole("button", { name: "No background effect" })).toHaveAttribute("aria-pressed", "true");
-  await expect.poll(async () => (await diag(host.page))!.background).toBe("none");
-  expect((await diag(host.page))!.log.counts.background_processor_slow).toBeGreaterThanOrEqual(1);
-  // The camera itself carried on.
-  expect((await diag(host.page))!.local.camera).toMatchObject({ on: true, live: true });
-  await expect.poll(() => hasPicture(guest.page, "Mo Media9"), { timeout: 15_000 }).toBe(true);
+  await expect(guest.page.locator('.meet-tile[data-source="screen"]')).toHaveCount(0);
+  await expect.poll(() => hasPicture(guest.page, "Mo Media5"), { timeout: 15_000 }).toBe(true);
+  await noBlackTiles(guest.page);
   await host.client!.post(`/meetings/${meetingId}/end`, {});
   await Promise.all([host.context.close(), guest.context.close()]);
 });
@@ -375,8 +317,12 @@ test("quality preference: applied live and kept on this device; microphone fallb
   expect(JSON.parse((await host.page.evaluate(() => localStorage.getItem("enercore-meeting-media")))!).quality).toBe("saver");
   // Still publishing a live camera after the quality change.
   await expect.poll(async () => (await diag(host.page))!.local.camera).toMatchObject({ on: true, live: true });
-  // No bitrate numbers for people.
+  // No bitrate numbers for people; and only Devices, Video quality, Layout (+ host tools).
   await expect(more).not.toContainText(/kbps|Mbps|bitrate/i);
+  await expect(more.getByRole("heading")).toHaveText(["Devices", "Video quality", "Layout", "Recording", "Troubleshooting"]);
+  await expect(more.getByRole("radio", { name: /Grid/ })).toHaveAttribute("aria-checked", "true");
+  await more.getByRole("radio", { name: /Speaker/ }).click();
+  await expect(more.getByRole("radio", { name: /Speaker/ })).toHaveAttribute("aria-checked", "true");
 
   // Pick a specific microphone, then it disappears: back to the default, and a notice.
   const mic = more.getByRole("combobox", { name: "Microphone" });
@@ -421,7 +367,7 @@ test("network drop and return: both sides reconcile to the same state with live 
   await Promise.all([host.context.close(), guest.context.close()]);
 });
 
-test("responsive: pre-join with effects, the More sheet and the effects panel fit 390, 768, 1024 and 1440", async ({ browser }) => {
+test("responsive: pre-join and the More sheet fit 390, 768, 1024 and 1440 — with no background controls anywhere", async ({ browser }) => {
   test.setTimeout(180_000);
   const client = await Client.login("mm8");
   const meeting = (await client.post("/meetings", { mode: "now", media: "video", title: "Media responsive", inviteeIds: [] })).body.meeting;
@@ -432,8 +378,9 @@ test("responsive: pre-join with effects, the More sheet and the effects panel fi
     const page = await context.newPage();
     await page.goto(`${HUB}?tab=meetings&meeting=${meeting.id}`);
     await page.getByRole("button", { name: "Join", exact: true }).click();
-    await page.getByRole("button", { name: /Background effects/ }).click();
-    await expect(page.getByRole("button", { name: "Modern office background" })).toBeVisible();
+    // Pre-join: preview, mic/camera, Microphone, Camera, Video quality — nothing else.
+    await expect(page.getByRole("combobox", { name: "Video quality" })).toBeVisible();
+    await expect(page.locator(".meet-prejoin")).not.toContainText(/background/i);
     expect(await fits(page), `pre-join @${width}`).toBe(true);
     await page.locator(".meet-prejoin .meet-join").click();
     await expect(page.locator(".meet-controls")).toBeVisible();
@@ -446,10 +393,8 @@ test("responsive: pre-join with effects, the More sheet and the effects panel fi
       expect(Math.round(box.x)).toBe(0);
       expect(Math.round(box.width)).toBe(390);
     }
-    await more.getByRole("button", { name: /Change/ }).click();
-    await expect(page.getByRole("complementary", { name: "Background effects" })).toBeVisible();
-    expect(await fits(page), `effects @${width}`).toBe(true);
-    await page.getByRole("button", { name: "Close panel" }).click();
+    await expect(more).not.toContainText(/background/i);
+    await page.keyboard.press("Escape");
     await page.getByRole("button", { name: "Leave meeting" }).click();
     await context.close();
   }

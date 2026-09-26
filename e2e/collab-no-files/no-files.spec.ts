@@ -31,7 +31,8 @@ test("no file storage: file features are hidden and refused; chat still works", 
   await message.fill("Text still works");
   await page.getByRole("button", { name: "Send message" }).click();
   await expect(page.locator(".collab-msg", { hasText: "Text still works" })).toBeVisible();
-  expect((await member.page(room.id)).body.messages.at(-1).body).toBe("Text still works");
+  // The composer shows a sent message at once; the server stores it a moment later.
+  await expect.poll(async () => (await member.page(room.id)).body.messages.at(-1)?.body).toBe("Text still works");
 
   // Room settings open as usual, with no image control.
   await page.getByRole("button", { name: "Show details" }).click();
