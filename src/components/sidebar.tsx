@@ -27,6 +27,7 @@ import {
   Sun,
   Keyboard,
   MessagesSquare,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -165,6 +166,19 @@ export default function Sidebar({
               ) : null}
             </Button>
           </Tooltip>
+          {!preview && (
+            <Tooltip label="Enercore AI" enabled={compact}>
+              <Button
+                className={`nav-item ${module === "ai" ? "active" : ""}`}
+                onClick={() => onView("ai")}
+                aria-label="Enercore AI"
+                aria-current={module === "ai" ? "page" : undefined}
+              >
+                <Sparkles size={19} />
+                <span className="nav-label">Enercore AI</span>
+              </Button>
+            </Tooltip>
+          )}
           {groups.map(([title, items]) => {
             const visible = items.filter((m) => permitted.includes(m));
             if (!visible.length) return null;

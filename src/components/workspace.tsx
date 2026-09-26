@@ -135,9 +135,12 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useCollabSummary } from "@/lib/collab-client";
 import { HubSkeleton } from "./collaboration/skeletons";
+import { AiPanel } from "./ai/ai-answer";
+import { applySuggestion, type Suggestion } from "@/lib/ai/client";
 
 // Loaded only when someone opens Collaboration, so the rest of the CRM does
 // not carry it. The skeleton keeps the three-pane shape while it arrives.
+const AiWorkspace = dynamic(() => import("./ai/ai-workspace"), { ssr: false });
 const CollaborationHub = dynamic(() => import("./collaboration/collaboration-hub"), {
   ssr: false,
   loading: () => <HubSkeleton />,
@@ -613,7 +616,9 @@ export default function Workspace({
       return;
     }
     const module = moduleForKind(kind);
-    if (permitted.includes(module)) go(module, "All companies");
+    // From Enercore AI the record opens over the answers (their history is
+    // kept only on that page); elsewhere its module opens behind it.
+    if (permitted.includes(module) && view !== "ai") go(module, "All companies");
     if (kind === "leave") setHrTab("leave");
     setSelected(record);
   }
@@ -637,11 +642,20 @@ export default function Workspace({
       if (viewRef.current === "collaboration") window.dispatchEvent(new CustomEvent("enercore:meeting-details", { detail: { meetingId, view: page } }));
       else openViewRef.current("collaboration", `?tab=meetings&meeting=${encodeURIComponent(meetingId)}${page === "report" ? "&mview=report" : ""}`);
     };
+    // A conversation (or one message in it), e.g. from an Enercore AI source.
+    const onConversation = (e: Event) => {
+      const { conversationId, messageId } = (e as CustomEvent<{ conversationId: string; messageId: string | null }>).detail;
+      setSelected(null);
+      if (viewRef.current === "collaboration") window.dispatchEvent(new CustomEvent("enercore:open-conversation", { detail: { conversationId, messageId } }));
+      else openViewRef.current("collaboration", `?c=${encodeURIComponent(conversationId)}${messageId ? `&m=${encodeURIComponent(messageId)}` : ""}`);
+    };
     window.addEventListener("enercore:open-record", onRecord);
     window.addEventListener("enercore:open-meeting-page", onMeeting);
+    window.addEventListener("enercore:open-conversation-link", onConversation);
     return () => {
       window.removeEventListener("enercore:open-record", onRecord);
       window.removeEventListener("enercore:open-meeting-page", onMeeting);
+      window.removeEventListener("enercore:open-conversation-link", onConversation);
     };
   }, []);
   const selectedRef = useRef<RecordItem | null>(null);
@@ -800,6 +814,15 @@ export default function Workspace({
    * Records a contact and, when one was chosen, the next follow-up — in one
    * write through the same audited action a typed note uses.
    */
+  /**
+   * One Enercore AI suggestion the person reviewed and chose to apply: sent
+   * through the ordinary records API (their rights, their audit entry).
+   */
+  async function applyAiSuggestion(s: Suggestion) {
+    await applySuggestion(s);
+    await reload();
+    setToast("Change applied.");
+  }
   async function logActivity(r: RecordItem, text: string, due?: string) {
     await extraAction(r, { action: "note", text, ...(due ? { due } : {}) });
     setToast(due ? `Activity logged · follow-up ${due}.` : "Activity logged.");
@@ -1131,6 +1154,7 @@ export default function Workspace({
                   onManageAccess={canManageUsers(actor) ? () => openView("access") : undefined}
                 />
               )}
+              {view === "ai" && <AiWorkspace actor={actor} preview={preview} />}
               {view === "appearance" && <AppearancePage />}
               {view === "notifications" && (
                 <NotificationsPage
@@ -1754,6 +1778,7 @@ export default function Workspace({
             onAction={(action) => extraAction(selectedCurrent, action)}
             onAssign={!preview && canAssign(actor, selectedCurrent) ? () => setAssigning(selectedCurrent) : undefined}
             showMeetings={!preview}
+            onAiApply={applyAiSuggestion}
             onQuote={() => {
               setQuoteSource(selectedCurrent);
               setSelected(null);
@@ -2734,8 +2759,11 @@ function Detail({
   onPin,
   onLog,
   onAssign,
+  onAiApply,
   showMeetings = false,
 }: {
+  /** Applies one reviewed Enercore AI suggestion (records API), then refreshes. */
+  onAiApply: (s: Suggestion) => Promise<void>;
   record: RecordItem;
   actor: Actor;
   busy: boolean;
@@ -2862,6 +2890,15 @@ function Detail({
             <p className="muted small">Connected record: {r.parentId}</p>
           )}
         </>
+      )}
+      {showMeetings && (r.kind === "leads" || r.kind === "customers") && (
+        <AiPanel
+          key={r.id}
+          feature={r.kind === "leads" ? "lead" : "customer"}
+          id={r.id}
+          label={r.kind === "leads" ? "Brief me on this lead" : "Customer 360 summary"}
+          onApply={onAiApply}
+        />
       )}
       {showMeetings && MEETING_KINDS.includes(r.kind) && !isCashEntry(r) && (
         <RecordMeetings record={{ id: r.id, title: r.title, ownerId: r.ownerId, owner: r.owner }} meId={actor.id} canCreate={canRead(actor, r)} />

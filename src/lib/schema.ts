@@ -703,3 +703,30 @@ export type AttachmentRow = typeof attachments.$inferSelect;
 export type RefreshTokenRow = typeof refreshTokens.$inferSelect;
 
 export type MeetingMessageRow = typeof meetingMessages.$inferSelect;
+
+/**
+ * One Enercore AI request — for capacity planning and abuse review. Never
+ * the prompt, the answer or any CRM content: who, which feature and model,
+ * the outcome, timing, and sizes only.
+ */
+export const aiUsage = sqliteTable(
+  "AiUsage",
+  {
+    id: text("id").primaryKey(),
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    feature: text("feature").notNull(),
+    model: text("model").notNull(),
+    status: text("status").$type<"ok" | "invalid" | "error" | "timeout" | "limited">().notNull(),
+    durationMs: integer("durationMs").notNull(),
+    promptChars: integer("promptChars").notNull(),
+    outputChars: integer("outputChars").notNull(),
+    /** Token counts when Workers AI reports them. */
+    promptTokens: integer("promptTokens"),
+    completionTokens: integer("completionTokens"),
+    flaggedBlocks: integer("flaggedBlocks").notNull(),
+    createdAt: integer("createdAt", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [index("AiUsage_userId_createdAt_idx").on(table.userId, table.createdAt), index("AiUsage_createdAt_idx").on(table.createdAt)],
+);

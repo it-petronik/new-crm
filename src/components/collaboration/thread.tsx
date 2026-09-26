@@ -27,6 +27,7 @@ import { businessDateTimeLong } from "@/lib/gst";
 import type { Actor } from "@/lib/domain";
 import { clientKey, collabFetch, presenceLabel, useCollabEvents, usePresence, type LiveState } from "@/lib/collab-client";
 import { Button, Dialog, DialogActions, DialogPresence } from "../ui/controls";
+import { AiDialogButton } from "../ai/ai-answer";
 import { Skeleton } from "../ui/skeleton";
 import { Avatar } from "../avatar";
 import Composer, { type ComposerHandle } from "./composer";
@@ -554,6 +555,7 @@ export default function Thread({
             and details. */}
         <div className="collab-thread-actions">
           <MeetingActions conversation={conversation} meetings={meetings} />
+          <AiDialogButton feature="conversation" id={conversation.id} title={`Summary · ${conversation.title}`} label="Summarise with Enercore AI" />
           <span className={`collab-live is-${live}`} role="img" title={liveLabel(live)} aria-label={liveLabel(live)} />
           <Button
             className="icon-button collab-focus-toggle"

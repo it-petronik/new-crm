@@ -71,6 +71,13 @@
       "when": 1790448374060,
       "tag": "0009_meeting_chat",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1790453287331,
+      "tag": "0010_ai_usage",
+      "breakpoints": true
     }
   ]
 }

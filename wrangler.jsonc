@@ -63,6 +63,10 @@
 				{ "pattern": "crm.enercore.ae", "custom_domain": true }
 			],
 			"observability": { "enabled": true },
+			// Enercore AI: Cloudflare Workers AI only (no external providers).
+			// Live only — preview has no AI. Models are chosen in
+			// src/lib/ai/config.ts. Usage is billed to this account.
+			"ai": { "binding": "AI" },
 			// Collaboration Hub realtime: one SQLite-backed Durable Object per
 			// person, relaying live events to their open sockets. Live only —
 			// preview serves fictional data and has no collaboration backend.

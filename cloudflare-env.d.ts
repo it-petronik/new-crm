@@ -1,4 +1,4 @@
-import type { D1Database, DurableObjectNamespace, R2Bucket } from "@cloudflare/workers-types";
+import type { Ai, D1Database, DurableObjectNamespace, R2Bucket } from "@cloudflare/workers-types";
 
 /**
  * Bindings and variables available to the Worker at runtime. The Cloudflare
@@ -12,6 +12,8 @@ declare global {
     COLLAB_HUB?: DurableObjectNamespace;
     /** Collaboration files (R2); live environment only. */
     COLLAB_FILES?: R2Bucket;
+    /** Workers AI (Enercore AI); live environment only. Absent → AI is off. */
+    AI?: Ai;
     APP_MODE?: string;
     APP_URL?: string;
     NODE_ENV?: string;

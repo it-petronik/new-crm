@@ -47,4 +47,25 @@ const test = {
   },
 };
 if (test.vars.APP_MODE !== "production") throw new Error("env.live must be production mode");
+// Live binds Workers AI as `AI`. Tests bind the same name to a local fake
+// (scripts/fake-ai-worker.ts) — no inference, no quota, and every prompt is
+// kept in the test D1 so the suite can check what reached the model.
+if (!live.ai || live.ai.binding !== "AI") throw new Error("env.live must bind Workers AI as AI");
+if (config.ai) throw new Error("preview (top level) must not bind Workers AI");
+test.services = [{ binding: "AI", service: "enercore-fake-ai", entrypoint: "FakeAi" }];
 writeFileSync(out, JSON.stringify(test, null, 2));
+writeFileSync(
+  out.replace(/\.json$/, ".fake-ai.json"),
+  JSON.stringify(
+    {
+      name: "enercore-fake-ai",
+      main: resolve(root, "scripts/fake-ai-worker.ts"),
+      compatibility_date: config.compatibility_date,
+      compatibility_flags: config.compatibility_flags,
+      alias: { "@opennextjs/cloudflare": resolve(root, "scripts/fake-ai-opennext-stub.mjs") },
+      d1_databases: test.d1_databases,
+    },
+    null,
+    2,
+  ),
+);

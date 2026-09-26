@@ -81,6 +81,23 @@ export const people: TestPerson[] = [
   ...range(10).map((i) => person(`mm${i}`, `Mo Media${i}`, ["Petronik"], [])),
   // Meeting chat.
   ...range(8).map((i) => person(`mc${i}`, `Cam Chat${i}`, ["Petronik"], [])),
+  // Enercore AI: its own company (Istanegry), so no other suite's records
+  // change the figures; Afrilube is the "other company".
+  person("aimd", "Aida Director", ["Istanegry", "Afrilube"], [], "MD"),
+  person("aism", "Ivo Salesmanager", ["Istanegry"], [], "Sales Manager"),
+  person("aise1", "Esme Seller", ["Istanegry"], [], "Sales Executive"),
+  person("aise2", "Eli Seller", ["Istanegry"], [], "Sales Executive"),
+  // One per suggestion/failure flow (each makes several AI requests).
+  ...range(5).map((i) => person(`aisf${i}`, `Sid Flow${i}`, ["Istanegry"], [], "Sales Executive")),
+  person("aibr", "Bea Dubaibranch", ["Istanegry"], ["Dubai"], "Sales Manager"),
+  person("aiacc", "Cora Accountant", ["Istanegry"], [], "Accountant"),
+  person("aihr", "Hana People", ["Istanegry"], [], "HR Manager"),
+  person("aiit", "Theo Support", ["Istanegry"], [], "IT Administrator"),
+  person("aiasst", "Mia Assistant", ["Istanegry"], [], "MD Assistant"),
+  person("aiaf", "Femi Otherco", ["Afrilube"], [], "Sales Manager"),
+  person("ai10", "Rex Ratelimit", ["Istanegry"], [], "Sales Manager"),
+  person("aiday", "Dee Dailylimit", ["Istanegry"], [], "Sales Manager"),
+  ...range(4).map((i) => person(`aiui${i}`, `Uma Aiscreen${i}`, ["Istanegry"], [], "Sales Manager")),
 ];
 
 export const byKey = (key: string) => {

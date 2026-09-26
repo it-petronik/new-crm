@@ -23,9 +23,10 @@ import {
   type RecordItem,
 } from "@/lib/domain";
 export type WorkspaceView =
-  "collaboration" | "notifications" | "profile" | "appearance" | "access" | "shortcuts";
+  "collaboration" | "ai" | "notifications" | "profile" | "appearance" | "access" | "shortcuts";
 export const viewLabels: Record<WorkspaceView, string> = {
   collaboration: "Collaboration",
+  ai: "Enercore AI",
   notifications: "Notifications",
   profile: "My profile",
   appearance: "Appearance",

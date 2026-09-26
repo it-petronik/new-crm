@@ -7,6 +7,7 @@ import { meetingReport } from "@/lib/meeting-client";
 import { RELATED_NOUN, durationLabel, scopeLabel, statusLabel, type MeetingReport } from "@/lib/meetings";
 import { businessStamp, businessStampShort } from "@/lib/gst";
 import { downloadCsv, toCsv } from "@/lib/export";
+import { AiPanel } from "../ai/ai-answer";
 
 /**
  * The meeting report: built only from what Enercore recorded — attendance
@@ -133,6 +134,10 @@ function ReportBody({ report }: { report: MeetingReport }) {
           </div>
         ))}
       </dl>
+
+      <div className="meet-no-print">
+        <AiPanel key={m.id} feature="meeting" id={m.id} label="Summarise this meeting" loadingLabel="Reading attendance and the meeting chat…" />
+      </div>
 
       <section className="meet-card" aria-labelledby="report-participants">
         <h3 id="report-participants">Participants ({report.participants.length})</h3>

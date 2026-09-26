@@ -7,6 +7,7 @@
 import { hashPassword } from "../src/lib/password";
 import { messageId } from "../src/lib/collab";
 import { people, PASSWORD, PAGING_ROOM, byKey } from "../e2e/collab/people";
+import { aiRecords } from "../e2e/collab/ai-data";
 
 const q = (v: string) => `'${v.replace(/'/g, "''")}'`;
 
@@ -47,6 +48,17 @@ async function main() {
         [q(PAGING_ROOM.id), q(byKey(key).id), q(i === 0 ? "owner" : "member"), start, q(ids[ids.length - 1])].join(",") +
         `);`,
     );
+  // Enercore AI: fictional CRM records (company Istanegry / Afrilube).
+  for (const r of aiRecords(now))
+    lines.push(
+      `INSERT INTO "BusinessRecord" ("id","kind","company","branch","ownerId","status","payload","version","createdAt","updatedAt") VALUES (` +
+        [q(r.id), q(r.kind), q(r.company), q(r.branch), q(r.ownerId), q(r.status), q(JSON.stringify(r)), 1, Date.parse(r.createdAt), Date.parse(r.updatedAt)].join(",") +
+        `);`,
+    );
+  // Where the fake Workers AI (scripts/fake-ai-worker.ts) records prompts.
+  lines.push(`CREATE TABLE IF NOT EXISTS "FakeAiCall" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, "model" TEXT, "route" INTEGER, "system" TEXT, "prompt" TEXT, "at" INTEGER);`);
+  // The daily-limit person has already used today's 200 requests.
+  lines.push(`INSERT INTO "LoginAttempt" ("key","count","resetAt") VALUES (${q(`ai-day:${byKey("aiday").id}`)}, 200, ${now + 23 * 3600_000});`);
   process.stdout.write(lines.join("\n") + "\n");
 }
 
