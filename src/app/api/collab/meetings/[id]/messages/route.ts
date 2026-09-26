@@ -31,7 +31,7 @@ export function POST(request: Request, { params }: Params) {
     const { body, clientKey } = input.parse(await request.json());
     await rateLimit(db, actor, "message");
     const { row, created } = await postMeetingMessage(db, meeting, { userId: actor.id, name: actor.name }, body, clientKey);
-    if (created) await afterResponse("meeting-message", () => announceMeetingMessage(db, meeting, row.id));
+    if (created) await afterResponse("meeting-message", () => announceMeetingMessage(meeting, row.id));
     return json({ message: toView(row, { userId: actor.id }) }, created ? 201 : 200);
   });
 }

@@ -27,7 +27,7 @@ export async function POST(request: Request) {
   try {
     const { row, created } = await postMeetingMessage(context.db, found.meeting, { guestId: found.guest.id, name: found.guest.name }, body.data.body, body.data.clientKey);
     // Announced after the reply, like employees' messages: sending never waits on it.
-    if (created) await afterResponse("meeting-message", () => announceMeetingMessage(context.db, found.meeting, row.id));
+    if (created) await afterResponse("meeting-message", () => announceMeetingMessage(found.meeting, row.id));
     return guestJson({ message: toView(row, { guestId: found.guest.id }) }, created ? 201 : 200);
   } catch (e) {
     if (e instanceof CollabError) return guestJson({ error: e.message }, e.status);

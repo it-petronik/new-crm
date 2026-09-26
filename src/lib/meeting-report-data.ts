@@ -3,6 +3,10 @@ import type { Database } from "./d1";
 import { findPeople } from "./collab-data";
 import { activityOf, conversationAudience, listInvitees, meetingSessionsOf, recordingsOf } from "./meeting-data";
 import { recordingView } from "./meeting-recordings";
+import { listMeetingMessages } from "./meeting-chat";
+
+/** Enough for any real meeting; the report stays one page. */
+const REPORT_CHAT_LIMIT = 5000;
 import { meetingAttendance, type MeetingRow } from "./schema";
 import type { MeetingReport, MeetingView, ReportParticipant } from "./meetings";
 
@@ -10,15 +14,17 @@ import type { MeetingReport, MeetingView, ReportParticipant } from "./meetings";
  * A meeting's report, built only from what Enercore recorded: attendance
  * sessions summed per person (so a reconnect adds its time, never
  * double-counts or overwrites), who was invited and who came, the activity
- * log and recordings. No transcripts or summaries are invented. The caller
+ * log, recordings and the meeting's chat. No transcripts or summaries are
+ * invented. The caller
  * has already checked the reader may reach the meeting.
  */
 export async function buildReport(db: Database, meeting: MeetingRow, view: MeetingView): Promise<MeetingReport> {
-  const [sessions, legacy, activity, recordings] = await Promise.all([
+  const [sessions, legacy, activity, recordings, chat] = await Promise.all([
     meetingSessionsOf(db, meeting.id),
     db.select().from(meetingAttendance).where(eq(meetingAttendance.meetingId, meeting.id)).all(),
     activityOf(db, meeting.id),
     recordingsOf(db, meeting.id),
+    listMeetingMessages(db, meeting.id, { limit: REPORT_CHAT_LIMIT }),
   ]);
   const end = (meeting.endedAt ?? new Date()).getTime();
   const rows = [
@@ -70,5 +76,6 @@ export async function buildReport(db: Database, meeting: MeetingRow, view: Meeti
       }),
     ].sort((a, b) => a.at.localeCompare(b.at)),
     recordings: recordings.map(recordingView),
+    chat: chat.map((m) => ({ name: m.senderName, guest: !!m.senderGuestId, at: m.createdAt.toISOString(), body: m.deletedAt ? "" : m.body, deleted: !!m.deletedAt })),
   };
 }

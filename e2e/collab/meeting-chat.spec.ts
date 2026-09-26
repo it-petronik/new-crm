@@ -3,7 +3,7 @@ import { Client } from "./client";
 import { byKey, WORKER } from "./people";
 
 /**
- * Meeting chat through the real Worker, D1 and the local LiveKit server:
+ * Meeting chat (every meeting's own, fresh chat) through the real Worker, D1 and the local LiveKit server:
  * who may read and post (employees by their meeting access, guests only while
  * admitted and the meeting is live), live delivery host ↔ guest without
  * polling, review afterwards, room meetings with guests, and phones.
@@ -134,7 +134,7 @@ const sendIn = async (panel: ReturnType<Page["getByRole"]>, text: string) => {
   await panel.getByRole("button", { name: "Send message" }).click();
 };
 
-test("standalone meeting: host and guest chat live (no polling), emoji, text stays text, reviewable afterwards", async ({ browser }) => {
+test("standalone meeting: host and guest chat live (no polling), emoji, text stays text, kept in the report", async ({ browser }) => {
   test.setTimeout(150_000);
   const owner = await Client.login("mc4");
   const meeting = (await standalone(owner, { title: "Client chat" })).body.meeting;
@@ -182,22 +182,32 @@ test("standalone meeting: host and guest chat live (no polling), emoji, text sta
   await sendIn(hostChat, "Are you there?");
   await expect(guest.page.getByRole("button", { name: "Chat, new messages" })).toBeVisible({ timeout: 5_000 });
 
-  // The meeting ends; the host reviews the chat from Meeting Details.
+  // The meeting ends; the chat is in the meeting's report (not its details).
   await owner.post(`/meetings/${meeting.id}/end`, {});
   await expect(host.page.getByRole("heading", { name: "The meeting has ended" })).toBeVisible({ timeout: 20_000 });
   await host.page.getByRole("button", { name: "Back to Enercore" }).click();
   await host.page.goto(`${HUB}?tab=meetings&meeting=${meeting.id}`);
-  const review = host.page.locator(".meet-details-chat");
-  await expect(review.getByRole("heading", { name: "Chat" })).toBeVisible();
-  for (const text of ["Hello", "Hi 👍", "<b>not bold</b>", "Are you there?"]) await expect(review).toContainText(text);
-  await expect(review).toContainText("The meeting has ended. The chat is read-only now.");
-  await expect(review.getByLabel("Message everyone")).toHaveCount(0);
+  await expect(host.page.getByRole("button", { name: "View report" })).toBeVisible();
+  await expect(host.page.locator(".meet-details")).not.toContainText("Are you there?");
+  await host.page.getByRole("button", { name: "View report" }).click();
+  const chat = host.page.locator('section[aria-labelledby="report-chat"]');
+  await expect(chat.getByRole("heading")).toHaveText("Chat (4)");
+  await expect(chat).toBeVisible();
+  for (const text of ["Hello", "Hi 👍", "<b>not bold</b>", "Are you there?"]) await expect(chat).toContainText(text);
+  await expect(chat.locator("li", { hasText: "Hi 👍" })).toContainText("Guest");
+  expect(await chat.locator("b", { hasText: "not bold" }).count()).toBe(0);
+  await expect(chat.getByLabel("Message everyone")).toHaveCount(0);
+  const [download] = await Promise.all([host.page.waitForEvent("download"), host.page.getByRole("button", { name: "CSV" }).click()]);
+  const csv = await (await import("node:fs/promises")).readFile((await download.path())!, "utf8");
+  expect(csv).toContain("Meeting chat");
+  expect(csv).toContain("Are you there?");
   await Promise.all([host.context.close(), guest.context.close()]);
 });
 
-test("room meeting with a guest: the guest gets the meeting chat only; employees get both, clearly labelled", async ({ browser }) => {
+test("room meeting: one fresh meeting chat for everyone — no room history in it, nothing copied to the room, kept in the report", async ({ browser }) => {
   test.setTimeout(150_000);
   const owner = await Client.login("mc5");
+  const member = await Client.login("mc6");
   const room = await owner.createRoom({ name: "Chat room", members: ["mc6"] });
   await owner.send(room.id, "Internal note — never for guests");
   const meeting = (await owner.post(`/conversations/${room.id}/meetings`, { mode: "now", media: "video" })).body.meeting;
@@ -206,28 +216,28 @@ test("room meeting with a guest: the guest gets the meeting chat only; employees
   const guest = await guestInMeeting(browser, link, "Rae");
   await expect(host.page.locator('.meet-tile[data-name="Rae (Guest)"]')).toBeVisible({ timeout: 20_000 });
 
-  // The guest: meeting chat only — no room history, no tabs.
-  const guestChat = await openChat(guest.page);
-  await expect(guestChat.getByRole("tab")).toHaveCount(0);
-  await expect(guestChat).not.toContainText("Internal note");
-  // The host: both, labelled; room chat still shows the room's history.
+  // Everyone gets the same chat, empty at the start: no tabs, no room history.
   const hostChat = await openChat(host.page);
-  await expect(hostChat.getByRole("tab", { name: /Room chat/ })).toHaveAttribute("aria-selected", "true");
-  await expect(hostChat).toContainText("Internal note — never for guests");
-  await hostChat.getByRole("tab", { name: /Meeting chat/ }).click();
+  const guestChat = await openChat(guest.page);
+  for (const chat of [hostChat, guestChat]) {
+    await expect(chat.getByRole("tab")).toHaveCount(0);
+    await expect(chat).toContainText("No messages yet");
+    await expect(chat).not.toContainText("Internal note");
+  }
   await sendIn(hostChat, "Welcome, Rae");
   await expect(guestChat).toContainText("Welcome, Rae", { timeout: 5_000 });
   await sendIn(guestChat, "Thanks!");
   await expect(hostChat).toContainText("Thanks!", { timeout: 5_000 });
-  // Nothing was copied into the room.
+  // Nothing went into the room's chat.
   const roomMessages = (await owner.page(room.id)).body.messages.map((m: any) => m.body);
-  expect(roomMessages).not.toContain("Welcome, Rae");
-  expect(roomMessages).not.toContain("Thanks!");
+  expect(roomMessages).toEqual(["Internal note — never for guests"]);
   await owner.post(`/meetings/${meeting.id}/end`, {});
-  // Afterwards the details show the guest chat, for employees.
-  await host.page.getByRole("button", { name: "Back to Enercore" }).click();
-  await host.page.goto(`${HUB}?tab=meetings&meeting=${meeting.id}`);
-  await expect(host.page.locator(".meet-details-chat").getByRole("heading", { name: "Chat with guests" })).toBeVisible();
+  // Afterwards: in the meeting's report, for the room's people.
+  const report = (await member.get(`/meetings/${meeting.id}/report`)).body;
+  expect(report.chat.map((c: any) => [c.name, c.guest, c.body])).toEqual([
+    ["Cam Chat5", false, "Welcome, Rae"],
+    ["Rae", true, "Thanks!"],
+  ]);
   await Promise.all([host.context.close(), guest.context.close()]);
 });
 

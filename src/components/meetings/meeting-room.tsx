@@ -44,7 +44,6 @@ import { useCollabEvents } from "@/lib/collab-client";
 import { decideGuest, endMeetingForAll, hostAction, meetingMessagesOf, recordingAction, sendMeetingMessage, waitingGuestsOf, type JoinChoices } from "@/lib/meeting-client";
 import { MEETING_CHAT_TOPIC, durationLabel, type MeetingMessageView, type RoomSession } from "@/lib/meetings";
 import { QUALITY_LABELS, QUALITY_PRESETS, loadPrefs, type QualityMode } from "@/lib/meeting-media";
-import MeetingChat from "./meeting-chat";
 import MeetingMessages, { type ChatTransport } from "./meeting-messages";
 import { DeviceSelect } from "./device-setup";
 import { MeetingShare, useDismiss } from "./meeting-info";
@@ -217,17 +216,10 @@ function Stage({ session, choices, notice, setNotice }: { session: RoomSession; 
   const moderator = session.host && !session.guest;
 
   /* --------------------------------------------------------------- chat */
-  // Room/DM meetings: employees chat in the conversation (it stays there).
-  // Otherwise — standalone meetings, and anyone who is a guest — the
-  // meeting's own chat. Once guests have been in a room meeting, employees
-  // also get the meeting chat (the one guests can see) as a second tab.
-  const roomChat = !!session.conversationId && !session.guest;
-  const [guestsSeen, setGuestsSeen] = useState(false);
-  const guestsHere = participants.some((p) => metaOf(p).guest);
-  useEffect(() => {
-    if (guestsHere) setGuestsSeen(true);
-  }, [guestsHere]);
-  const [chatTab, setChatTab] = useState<"meeting" | "room">(roomChat ? "room" : "meeting");
+  // Every meeting — room, DM or standalone, employees and guests alike —
+  // has its own chat, starting empty. Nothing from the room or DM shows
+  // here and nothing said here goes there; it's kept with the meeting and
+  // shown in the meeting's report afterwards.
   const [chatSignal, setChatSignal] = useState(0);
   const [chatUnread, setChatUnread] = useState(false);
   const panelRef = useRef(panel);
@@ -268,7 +260,6 @@ function Stage({ session, choices, notice, setNotice }: { session: RoomSession; 
       send: async (body, key) => (await sendMeetingMessage(session.meetingId, body, key)).message,
     };
   }, [session.guest, session.chatSecret, session.meetingId]);
-  const showMeetingChat = !roomChat || chatTab === "meeting";
 
   // Notices from either source, one toast.
   const toast = media.notice || notice;
@@ -524,23 +515,7 @@ function Stage({ session, choices, notice, setNotice }: { session: RoomSession; 
               ))}
             </ul>
           ) : (
-            <>
-              {roomChat && (guestsSeen || chatTab === "meeting") && (
-                <div className="meet-chat-tabs" role="tablist" aria-label="Chats">
-                  <button type="button" role="tab" aria-selected={chatTab === "meeting"} onClick={() => setChatTab("meeting")}>
-                    Meeting chat <small>incl. guests</small>
-                  </button>
-                  <button type="button" role="tab" aria-selected={chatTab === "room"} onClick={() => setChatTab("room")}>
-                    Room chat <small>Enercore only</small>
-                  </button>
-                </div>
-              )}
-              {showMeetingChat ? (
-                <MeetingMessages transport={chatTransport} signal={chatSignal} canPost />
-              ) : (
-                <MeetingChat conversationId={session.conversationId!} meId={session.identity} />
-              )}
-            </>
+            <MeetingMessages transport={chatTransport} signal={chatSignal} />
           )}
         </aside>
       )}

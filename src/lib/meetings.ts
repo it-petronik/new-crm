@@ -72,9 +72,7 @@ export type MeetingEvent =
   | { type: "meeting.invited"; conversationId: string; meeting: MeetingView; from: { id: string; name: string } }
   // Hosts only: a guest is waiting, or a guest was admitted/declined.
   | { type: "meeting.guest_waiting"; conversationId: string; meetingId: string; guest: { id: string; name: string } }
-  | { type: "meeting.guest_decided"; conversationId: string; meetingId: string; guestId: string; decision: "admitted" | "declined" }
-  // A meeting-chat message was posted (the content is fetched with the reader's own access).
-  | { type: "meeting.message"; conversationId: string; meetingId: string; messageId: string };
+  | { type: "meeting.guest_decided"; conversationId: string; meetingId: string; guestId: string; decision: "admitted" | "declined" };
 
 /** One meeting-chat message as a participant sees it. `mine` is worked out by the server. */
 export type MeetingMessageView = {
@@ -140,6 +138,8 @@ export type MeetingReport = {
   absent: InviteeView[];
   activity: { type: string; actorName: string | null; at: string }[];
   recordings: RecordingView[];
+  /** The meeting's chat, in order — kept with the meeting, shown here. */
+  chat: { name: string; guest: boolean; at: string; body: string; deleted: boolean }[];
 };
 
 /** A guest's view of the meeting behind their link: title and time only. */

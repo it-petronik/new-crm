@@ -3,17 +3,15 @@ import type { Database } from "./d1";
 import { meetingMessages, type MeetingMessageRow, type MeetingRow } from "./schema";
 import { MESSAGE_MAX, cleanText, messageId } from "./collab";
 import { CollabError } from "./collab-access";
-import { meetingAudience } from "./meeting-data";
-import { publish } from "./collab-realtime";
 import { providerConfig } from "./livekit-config";
 import { sendRoomData } from "./livekit";
 import { MEETING_CHAT_TOPIC, type MeetingMessageView } from "./meetings";
 
 /**
- * Meeting chat: a meeting's own messages, tied to the meeting — for
- * standalone meetings, and the channel guests share with employees in any
- * meeting. (Room and DM meetings keep their Collaboration conversation for
- * employees; nothing is copied between the two.)
+ * Meeting chat: every meeting's own messages, tied to the meeting — room,
+ * DM or standalone, employees and guests alike. It starts empty; nothing is
+ * copied to or from Collaboration. Afterwards it appears in the meeting's
+ * report.
  *
  * Access is always the caller's CURRENT meeting access, checked by the
  * route: an employee through `requireMeeting`, a guest through their
@@ -48,7 +46,7 @@ export const toView = (row: StoredMessage, viewer: { userId?: string; guestId?: 
  * messages in the same millisecond can have ids out of order, and a cursor
  * on them could skip one for good.
  */
-export async function listMeetingMessages(db: Database, meetingId: string, options: { after?: number | null; since?: Date | null } = {}): Promise<StoredMessage[]> {
+export async function listMeetingMessages(db: Database, meetingId: string, options: { after?: number | null; since?: Date | null; limit?: number } = {}): Promise<StoredMessage[]> {
   const rows = await db
     .select({ row: meetingMessages, seq })
     .from(meetingMessages)
@@ -60,7 +58,7 @@ export async function listMeetingMessages(db: Database, meetingId: string, optio
       ),
     )
     .orderBy(desc(seq))
-    .limit(PAGE)
+    .limit(options.limit ?? PAGE)
     .all();
   return rows.reverse().map((r) => ({ ...r.row, seq: Number(r.seq) }));
 }
@@ -118,17 +116,11 @@ export async function postMeetingMessage(db: Database, meeting: MeetingRow, send
 }
 
 /**
- * Tells everyone a message arrived: the people in the call through the
- * provider's data channel (guests included — they have no Enercore
- * connection), and employees elsewhere (the meeting's details) through
- * Collaboration's live events. Neither carries the text.
+ * Tells everyone in the call a message arrived, through the provider's data
+ * channel (guests included — they have no Enercore connection). It carries
+ * the id only, never the text.
  */
-export async function announceMeetingMessage(db: Database, meeting: MeetingRow, id: string) {
+export async function announceMeetingMessage(meeting: MeetingRow, id: string) {
   const config = await providerConfig();
-  await Promise.all([
-    config ? sendRoomData(config, meeting.providerRoom, MEETING_CHAT_TOPIC, { id }).catch(() => {}) : Promise.resolve(),
-    meetingAudience(db, meeting)
-      .then((to) => publish(to, { type: "meeting.message", conversationId: meeting.conversationId ?? "", meetingId: meeting.id, messageId: id }))
-      .catch(() => {}),
-  ]);
+  if (config) await sendRoomData(config, meeting.providerRoom, MEETING_CHAT_TOPIC, { id }).catch(() => {});
 }

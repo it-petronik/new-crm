@@ -747,13 +747,6 @@ html[data-meeting] .ui-dialog { z-index: 221; }
 }
 
 /* ------------------------------------------------------- meeting chat */
-.meet-chat-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 8px 10px 0; }
-.meet-chat-tabs button {
-  display: grid; gap: 1px; padding: 6px 10px; border: 1px solid var(--meet-line); border-radius: 8px;
-  background: none; color: var(--meet-muted); font-size: 13px; text-align: left; cursor: pointer;
-}
-.meet-chat-tabs button small { font-size: 11px; }
-.meet-chat-tabs button[aria-selected="true"] { background: var(--meet-surface-2); color: var(--meet-text); border-color: var(--meet-accent); }
 .meet-chat-empty { display: grid; gap: 4px; padding: 12px 0; }
 .meet-chat-empty b { color: var(--meet-text); font-weight: 600; }
 .meet-chat-list li.is-mine .meet-chat-meta b { color: var(--meet-accent); }
@@ -765,7 +758,6 @@ html[data-meeting] .ui-dialog { z-index: 221; }
 }
 .meet-chat-emoji button { min-height: 36px; border: 0; border-radius: 8px; background: none; font-size: 18px; cursor: pointer; }
 .meet-chat-emoji button:hover, .meet-chat-emoji button:focus-visible { background: var(--meet-surface-2); }
-.meet-chat-readonly { margin: 0; padding: 10px 14px; border-top: 1px solid var(--meet-line); color: var(--meet-muted); font-size: 13px; }
 .meet-control.has-unread { position: relative; }
 .meet-control.has-unread::after { content: ""; position: absolute; top: 8px; right: 14px; width: 9px; height: 9px; border-radius: 50%; background: var(--meet-accent); box-shadow: 0 0 0 2px var(--meet-bg); }
 @media (max-width: 760px) {
@@ -774,12 +766,10 @@ html[data-meeting] .ui-dialog { z-index: 221; }
   .meet-chat-form { padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
 }
 
-/* The meeting chat on the details page (the CRM's light/dark surface). */
-.meet-details-chat:empty { display: none; }
-.meet-details-chat .meet-chat { display: flex; flex-direction: column; max-height: 420px; }
-.meet-details-chat .meet-chat-list { padding: 4px 0; max-height: 320px; }
-.meet-details-chat .meet-chat-meta, .meet-details-chat .meet-chat-empty, .meet-details-chat .meet-chat-readonly { color: var(--e-text-muted); }
-.meet-details-chat .meet-chat-meta b, .meet-details-chat .meet-chat-empty b { color: var(--e-text); }
-.meet-details-chat .meet-chat-form, .meet-details-chat .meet-chat-readonly { border-top-color: var(--e-border-muted); padding-left: 0; padding-right: 0; }
-.meet-details-chat .meet-chat-form textarea { background: var(--e-surface); color: var(--e-text); border-color: var(--e-border); }
-.meet-details-chat .meet-chat-emoji { background: var(--e-surface-raised); border-color: var(--e-border); }
+/* The meeting's chat in its report. */
+.meet-report-chat { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.meet-report-chat li { display: grid; gap: 2px; }
+.meet-report-chat-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: var(--e-caption); color: var(--e-text-muted); }
+.meet-report-chat-meta b { color: var(--e-text); font-weight: var(--e-weight-medium); }
+.meet-report-guest { padding: 0 6px; border-radius: 999px; background: var(--e-neutral-soft); color: var(--e-text-secondary); }
+.meet-report-chat p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--e-secondary); }

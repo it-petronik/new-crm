@@ -12,7 +12,9 @@ import { downloadCsv, toCsv } from "@/lib/export";
  * The meeting report: built only from what Enercore recorded — attendance
  * sessions (summed per person, so reconnecting never double-counts), who
  * was invited and who came, and the activity log. No transcript or summary
- * is invented. Download as CSV (formula-safe) or print / save as PDF.
+ * is invented. The meeting's chat is kept with the meeting and shown here
+ * (never in Collaboration). Download as CSV (formula-safe) or print / save
+ * as PDF.
  */
 
 const ACTIVITY: Record<string, string> = {
@@ -60,6 +62,10 @@ export default function MeetingReportView({ meetingId, onBack }: { meetingId: st
       [],
       ["Invited but did not attend"],
       ...report.absent.map((p) => [p.name, p.role]),
+      [],
+      ["Meeting chat"],
+      ["Time (GST)", "Name", "Participant", "Message"],
+      ...report.chat.map((c) => [businessStamp(c.at), c.name, c.guest ? "Guest" : "Internal", c.deleted ? "(deleted)" : c.body]),
     ];
     const safeTitle = m.title.replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").slice(0, 40) || "meeting";
     downloadCsv(`meeting-report-${safeTitle}.csv`, toCsv(rows));
@@ -193,6 +199,27 @@ function ReportBody({ report }: { report: MeetingReport }) {
               </li>
             ))}
           </ul>
+        )}
+      </section>
+
+      <section className="meet-card" aria-labelledby="report-chat">
+        <h3 id="report-chat">Chat ({report.chat.length})</h3>
+        {report.chat.length ? (
+          <ol className="meet-report-chat">
+            {report.chat.map((c, i) => (
+              <li key={i}>
+                <span className="meet-report-chat-meta">
+                  <time dateTime={c.at}>{businessStampShort(c.at)}</time>
+                  <b>{c.name}</b>
+                  {c.guest && <small className="meet-report-guest">Guest</small>}
+                </span>
+                {/* Plain text, never HTML. */}
+                <p>{c.deleted ? <em>Message deleted</em> : c.body}</p>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="meet-card-note">No messages were sent in this meeting&apos;s chat.</p>
         )}
       </section>
 

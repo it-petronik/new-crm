@@ -26,22 +26,10 @@ export type ChatTransport = {
 export default function MeetingMessages({
   transport,
   signal,
-  canPost,
-  className = "",
-  endedNote = "The meeting has ended. The chat is read-only now.",
-  heading,
-  hideEmpty = false,
 }: {
   transport: ChatTransport;
   /** Bumped when a new message is announced (or the connection came back). */
   signal: number;
-  canPost: boolean;
-  className?: string;
-  endedNote?: string;
-  /** Shown above the messages (e.g. a section title on the details page). */
-  heading?: React.ReactNode;
-  /** Render nothing at all when there are no messages. */
-  hideEmpty?: boolean;
 }) {
   const [messages, setMessages] = useState<MeetingMessageView[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -139,11 +127,8 @@ export default function MeetingMessages({
     });
   };
 
-  if (hideEmpty && (!loaded || (!messages.length && !error))) return null;
-
   return (
-    <div className={`meet-chat ${className}`}>
-      {heading}
+    <div className="meet-chat">
       <ol className="meet-chat-list" ref={list} aria-live="polite" aria-label="Meeting chat messages">
         {messages.map((m) => (
           <li key={m.id} className={m.mine ? "is-mine" : ""}>
@@ -168,8 +153,7 @@ export default function MeetingMessages({
           {error}
         </p>
       )}
-      {canPost ? (
-        <form
+      <form
           className="meet-chat-form"
           onSubmit={(e) => {
             e.preventDefault();
@@ -208,9 +192,7 @@ export default function MeetingMessages({
             <Send size={16} />
           </Button>
         </form>
-      ) : (
-        <p className="meet-chat-readonly">{endedNote}</p>
-      )}
+
     </div>
   );
 }

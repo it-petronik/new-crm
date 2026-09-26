@@ -313,17 +313,16 @@ unavailable, or reconnecting.
 
 ## Meeting chat (migration 0009)
 
-Every meeting has usable chat, and the Chat button always opens it.
+Every meeting has its own chat, and the Chat button always opens it.
 
-**Which chat is used**
-- **Room and DM meetings.** Employees chat in the conversation, as before.
-  Messages stay there, and nothing is copied anywhere else.
-- **Standalone meetings, and every guest.** They use the meeting's own chat:
-  the `MeetingMessage` table, tied to `meetingId`. No Collaboration room is
-  created.
-- **Room meetings with guests.** Once guests have been in the call, employees
-  see two tabs: *Meeting chat* (includes guests) and *Room chat* (Enercore
-  only).
+**One fresh chat per meeting**
+- It applies to room, DM and standalone meetings alike, and employees and
+  guests use the same one.
+- It starts empty. The room's or DM's messages never appear in it, and
+  nothing said in it goes into the room or DM.
+- Messages are stored in the `MeetingMessage` table, tied to `meetingId`.
+- Afterwards the chat appears in the **Meeting Report**, including its CSV
+  and print/PDF, for anyone who may open the meeting.
 
 **Who may use it**
 - **Employees** need their current meeting access (`requireMeeting`), so a
@@ -354,14 +353,11 @@ Every meeting has usable chat, and the Chat button always opens it.
 - After storing a message, the server sends a content-free signal (the
   message id only) into the call through LiveKit's server `SendData`, on topic
   `enercore-meeting-chat`. This reaches guests too.
-- Employees elsewhere, such as on Meeting Details, get a `meeting.message`
-  event on Collaboration's live channel.
-- Each reader then fetches the new messages with their own access.
+- Each person then fetches the new messages with their own access.
 
 **Afterwards**
-- **Meeting Details → Chat** (read-only once ended) is for employees who may
-  open the meeting.
-- Room and DM meetings show this section only when guests chatted.
+- The chat is in the **Meeting Report**, for employees who may open the
+  meeting.
 - Guests have no access after the meeting.
 - Nothing is copied into lead notes. Messages are plain rows, so a future
   summary can read them with the same access rules.

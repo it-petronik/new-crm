@@ -199,12 +199,19 @@ test.describe("with cameras and microphones", () => {
     await expect(people.locator(".meet-person", { hasText: "Maya Meet12" }).getByLabel("Camera off")).toBeVisible();
     await b.page.getByRole("button", { name: "Unmute microphone" }).click();
 
-    // Chat in the meeting is the room's chat.
+    // The meeting has its own chat, starting empty: the room's messages
+    // aren't in it, and nothing said in it goes to the room.
+    await a.client.send(room.id, "Room message from before");
     await a.page.getByRole("button", { name: "Chat", exact: true }).click();
+    await expect(a.page.locator(".meet-chat-list")).toContainText("No messages yet");
+    await expect(a.page.locator(".meet-chat-list")).not.toContainText("Room message from before");
     await a.page.locator(".meet-chat-form textarea").fill("Hello from the meeting");
     await a.page.getByRole("button", { name: "Send message" }).click();
     await expect(a.page.locator(".meet-chat-list")).toContainText("Hello from the meeting");
-    await expect.poll(async () => (await b.client.page(room.id)).body.messages.at(-1)?.body).toBe("Hello from the meeting");
+    await b.page.getByRole("button", { name: /^Chat/ }).click();
+    await expect(b.page.locator(".meet-chat-list")).toContainText("Hello from the meeting", { timeout: 5_000 });
+    await b.page.getByRole("button", { name: "Close panel" }).click();
+    expect((await b.client.page(room.id)).body.messages.map((m: { body: string }) => m.body)).not.toContain("Hello from the meeting");
 
     // Screen sharing starts, leads the stage, and stops.
     await a.page.getByRole("button", { name: "Share screen" }).click();
@@ -238,9 +245,11 @@ test.describe("with cameras and microphones", () => {
     await confirmEnd.getByRole("button", { name: "End meeting" }).click();
     await expect(a.page.getByRole("heading", { name: "The meeting has ended" })).toBeVisible({ timeout: 20_000 });
     await expect.poll(async () => (await a.client.get(`/conversations/${room.id}/meetings`)).body.meetings[0]?.status).toBe("ended");
-    // History records both people.
+    // History records both people, and the report keeps the meeting's chat.
     const history = (await a.client.get(`/conversations/${room.id}/meetings`)).body.meetings[0];
     expect(history.participants.map((p: { name: string }) => p.name).sort()).toEqual(["Maya Meet11", "Maya Meet12"]);
+    const report = (await b.client.get(`/meetings/${history.id}/report`)).body;
+    expect(report.chat.map((c: { name: string; body: string }) => [c.name, c.body])).toEqual([["Maya Meet11", "Hello from the meeting"]]);
     await a.context.close();
     await b.context.close();
   });
