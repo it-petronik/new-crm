@@ -221,13 +221,21 @@ test.describe("with cameras and microphones", () => {
       .toBe(true);
 
     // B leaves; A is alone again. A ends it for everyone.
+    // A participant can only leave: no End, in the bar or under More.
+    await expect(b.page.getByRole("button", { name: "End meeting", exact: true })).toHaveCount(0);
+    await b.page.getByRole("button", { name: "More options" }).click();
+    await expect(b.page.getByRole("menuitem", { name: /End/ })).toHaveCount(0);
+    await b.page.keyboard.press("Escape");
+    // …and the server refuses them anyway.
+    expect((await b.client.post(`/meetings/${(await a.client.get(`/conversations/${room.id}/meetings`)).body.meetings[0].id}/end`, {})).status).toBe(403);
     await b.page.getByRole("button", { name: "Leave meeting" }).click();
     await expect(b.page.locator(".meet-controls")).toHaveCount(0);
     await expect(a.page.locator(".meet-tile")).toHaveCount(1, { timeout: 20_000 });
-    await a.page.getByRole("button", { name: "More options" }).click();
-    await a.page.getByRole("menuitem", { name: "End meeting for everyone" }).click();
+    await a.page.locator(".meet-controls").getByRole("button", { name: "End meeting", exact: true }).click();
     // A deliberate confirmation: everyone, guests included, is disconnected.
-    await a.page.getByRole("dialog", { name: "End the meeting for everyone?" }).getByRole("button", { name: "End for everyone" }).click();
+    const confirmEnd = a.page.getByRole("dialog", { name: "End meeting?" });
+    await expect(confirmEnd).toContainText("Everyone will be disconnected and the meeting will be marked as ended.");
+    await confirmEnd.getByRole("button", { name: "End meeting" }).click();
     await expect(a.page.getByRole("heading", { name: "The meeting has ended" })).toBeVisible({ timeout: 20_000 });
     await expect.poll(async () => (await a.client.get(`/conversations/${room.id}/meetings`)).body.meetings[0]?.status).toBe("ended");
     // History records both people.
@@ -285,10 +293,14 @@ test.describe("with cameras and microphones", () => {
     await joinFromPrejoin(a.page);
     const controls = a.page.locator(".meet-controls");
     // Large controls, all reachable.
-    for (const name of ["Mute microphone", "Turn camera off", "Participants", "Chat", "Leave meeting"]) {
+    for (const name of ["Mute microphone", "Turn camera off", "Participants", "Chat", "Leave meeting", "End meeting"]) {
       const box = await controls.getByRole("button", { name, exact: true }).boundingBox();
       expect(box!.height).toBeGreaterThanOrEqual(44);
     }
+    // The host's End is in the bar and on screen without scrolling it.
+    const end = (await controls.getByRole("button", { name: "End meeting", exact: true }).boundingBox())!;
+    expect(end.x).toBeGreaterThanOrEqual(0);
+    expect(end.x + end.width).toBeLessThanOrEqual(390);
     await a.page.getByRole("button", { name: "Participants" }).click();
     const sheet = a.page.locator(".meet-panel");
     const box = (await sheet.boundingBox())!;

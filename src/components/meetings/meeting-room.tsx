@@ -509,28 +509,33 @@ function Stage({ session, notice, setNotice }: { session: RoomSession; notice: s
                     <Circle size={16} aria-hidden="true" /> Recording isn&apos;t set up
                   </button>
                 ))}
-              {moderator && (
-                <button type="button" role="menuitem" className="is-danger" onClick={() => (setMore(false), setConfirm("end"))}>
-                  <Square size={16} aria-hidden="true" /> End meeting for everyone
-                </button>
-              )}
             </div>
           )}
         </div>
-        <Button className="meet-control meet-leave" aria-label="Leave meeting" onClick={() => void room.disconnect()}>
+        <div className="meet-exit">
+        {/* Leave: only me — the meeting goes on. */}
+        <Button className={`meet-control meet-leave${moderator ? " is-host" : ""}`} aria-label="Leave meeting" onClick={() => void room.disconnect()}>
           <PhoneOff size={20} />
           <span>Leave</span>
         </Button>
+        {/* End: the host ends it for everyone (the server checks this too). */}
+        {moderator && (
+          <Button className="meet-control meet-end" aria-label="End meeting" onClick={() => (setMore(false), setConfirm("end"))}>
+            <Square size={18} aria-hidden="true" />
+            <span>End</span>
+          </Button>
+        )}
+        </div>
       </nav>
 
       <DialogPresence>
         {confirm === "end" && (
-          <Dialog title="End the meeting for everyone?" onClose={() => !busy && setConfirm(null)} dismissOnOutside={!busy} className="dialog-compact meet-dialog">
-            <p>Everyone, including guests, will be disconnected. The meeting's history and report are kept.</p>
+          <Dialog title="End meeting?" onClose={() => !busy && setConfirm(null)} dismissOnOutside={!busy} className="dialog-compact meet-dialog">
+            <p>Everyone will be disconnected and the meeting will be marked as ended.</p>
             <DialogActions
               cancel="Keep meeting"
               onCancel={() => setConfirm(null)}
-              primary={{ label: "End for everyone", pendingLabel: "Ending…", tone: "danger", pending: busy, onClick: () => void hostCall(() => endMeetingForAll(session.meetingId), "Couldn't end the meeting.") }}
+              primary={{ label: "End meeting", pendingLabel: "Ending…", tone: "danger", pending: busy, onClick: () => void hostCall(() => endMeetingForAll(session.meetingId), "Couldn't end the meeting.") }}
             />
           </Dialog>
         )}

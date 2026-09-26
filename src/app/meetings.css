@@ -270,6 +270,12 @@ html[data-meeting] body { overflow: hidden; }
 .meet-control:disabled { opacity: 0.45; cursor: not-allowed; }
 .meet-leave { background: var(--meet-danger); color: #fff; }
 .meet-leave:hover { background: #c93b40; }
+/* The host's Leave is neutral: the red control beside it is End. */
+.meet-leave.is-host { background: var(--meet-surface-2); color: var(--meet-text); }
+.meet-leave.is-host:hover { background: var(--meet-surface); }
+.meet-end { background: var(--meet-danger); color: #fff; }
+.meet-exit { display: flex; gap: 10px; }
+.meet-end:hover { background: #c93b40; }
 .meet-more { position: relative; }
 .meet-menu { bottom: calc(100% + 8px); right: 0; background: var(--meet-surface); border-color: var(--meet-line); color: var(--meet-text); }
 .meet-menu button:hover { background: var(--meet-surface-2); }
@@ -364,6 +370,9 @@ html[data-meeting] body { overflow: hidden; }
   .meet-controls { gap: 8px; padding: 10px 8px calc(12px + env(safe-area-inset-bottom)); flex-wrap: nowrap; overflow-x: auto; justify-content: flex-start; }
   .meet-controls > * { flex: 0 0 auto; }
   .meet-control { min-width: 58px; }
+  /* Leave and End stay in view at the right however far the bar scrolls. */
+  .meet-exit { position: sticky; right: 0; gap: 8px; padding-left: 8px; background: var(--meet-bg); box-shadow: -12px 0 12px -6px var(--meet-bg); }
+  .meet-exit .meet-control { min-width: 52px; }
   /* Participants and chat rise as a sheet over the stage. */
   .meet-panel {
     position: fixed;

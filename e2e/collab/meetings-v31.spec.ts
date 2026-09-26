@@ -365,6 +365,8 @@ test("guest in a private window: waiting room, admit, camera and mic, decline; t
   await more.click();
   await expect(host.page.getByRole("menuitem", { name: "Recording isn't set up" })).toBeDisabled();
   await expect(host.page.getByRole("menuitem", { name: "Record meeting" })).toHaveCount(0);
+  // Ending is not hidden in More: it has its own control in the bar.
+  await expect(host.page.getByRole("menuitem", { name: /End/ })).toHaveCount(0);
   // The More menu closes on Escape and on a click outside it.
   await host.page.keyboard.press("Escape");
   await expect(host.page.locator(".meet-menu")).toHaveCount(0);
@@ -374,13 +376,16 @@ test("guest in a private window: waiting room, admit, camera and mic, decline; t
   await expect(host.page.locator(".meet-menu")).toHaveCount(0);
 
   // The guest leaves; the host ends it.
+  // A guest can only leave.
+  await expect(g.getByRole("button", { name: "End meeting", exact: true })).toHaveCount(0);
   await g.getByRole("button", { name: "Leave meeting" }).click();
   await expect(g.getByRole("heading", { name: "You left the meeting" })).toBeVisible();
   await expect(host.page.locator(".meet-tile")).toHaveCount(1, { timeout: 20_000 });
-  await host.page.getByRole("button", { name: "More options" }).click();
-  await host.page.getByRole("menuitem", { name: "End meeting for everyone" }).click();
+  await host.page.locator(".meet-controls").getByRole("button", { name: "End meeting", exact: true }).click();
   // A deliberate confirmation: everyone, guests included, is disconnected.
-  await host.page.getByRole("dialog", { name: "End the meeting for everyone?" }).getByRole("button", { name: "End for everyone" }).click();
+  const confirmEnd = host.page.getByRole("dialog", { name: "End meeting?" });
+  await expect(confirmEnd).toContainText("Everyone will be disconnected and the meeting will be marked as ended.");
+  await confirmEnd.getByRole("button", { name: "End meeting" }).click();
   await expect(host.page.getByRole("heading", { name: "The meeting has ended" })).toBeVisible({ timeout: 20_000 });
 
   // The report: guest and organiser attended; the invitee didn't.
@@ -465,10 +470,11 @@ test("lead detail: schedule (prefilled), start now, upcoming and past, report, l
   await joinFromPrejoin(m.page);
   const live = ((await m.client.get(`/meetings?recordId=${lead.id}`)).body.meetings as any[]).find((x) => x.status === "live");
   expect(live).toMatchObject({ scope: "standalone", conversationId: null });
-  await m.page.getByRole("button", { name: "More options" }).click();
-  await m.page.getByRole("menuitem", { name: "End meeting for everyone" }).click();
+  await m.page.locator(".meet-controls").getByRole("button", { name: "End meeting", exact: true }).click();
   // A deliberate confirmation: everyone, guests included, is disconnected.
-  await m.page.getByRole("dialog", { name: "End the meeting for everyone?" }).getByRole("button", { name: "End for everyone" }).click();
+  const confirmEnd = m.page.getByRole("dialog", { name: "End meeting?" });
+  await expect(confirmEnd).toContainText("Everyone will be disconnected and the meeting will be marked as ended.");
+  await confirmEnd.getByRole("button", { name: "End meeting" }).click();
   await expect(m.page.getByRole("heading", { name: "The meeting has ended" })).toBeVisible({ timeout: 20_000 });
   // Back to Enercore: the lead is open again, where they left it.
   await m.page.getByRole("button", { name: "Back to Enercore" }).click();

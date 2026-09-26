@@ -351,12 +351,12 @@ export default function MeetingDetailsView({ meetingId, meId, onBack, onReport }
           </Dialog>
         )}
         {confirm === "end" && (
-          <Dialog title="End the meeting for everyone?" onClose={() => !busy && setConfirm(null)} dismissOnOutside={!busy} className="dialog-compact">
-            <p>Everyone, including guests, will be disconnected. The history and report are kept.</p>
+          <Dialog title="End meeting?" onClose={() => !busy && setConfirm(null)} dismissOnOutside={!busy} className="dialog-compact">
+            <p>Everyone will be disconnected and the meeting will be marked as ended.</p>
             <DialogActions
               cancel="Keep meeting"
               onCancel={() => setConfirm(null)}
-              primary={{ label: "End for everyone", pendingLabel: "Ending…", tone: "danger", pending: busy, onClick: () => void act(() => endMeetingForAll(m.id), "Meeting ended.") }}
+              primary={{ label: "End meeting", pendingLabel: "Ending…", tone: "danger", pending: busy, onClick: () => void act(() => endMeetingForAll(m.id), "Meeting ended.") }}
             />
           </Dialog>
         )}
