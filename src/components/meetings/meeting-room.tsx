@@ -47,6 +47,7 @@ import { decideGuest, endMeetingForAll, hostAction, recordingAction, waitingGues
 import { durationLabel, type RoomSession } from "@/lib/meetings";
 import MeetingChat from "./meeting-chat";
 import { DeviceSelect } from "./device-setup";
+import { MeetingShare, useDismiss } from "./meeting-info";
 
 /**
  * The meeting itself, for employees and guests alike. The provider (LiveKit)
@@ -192,17 +193,8 @@ function Stage({ session, notice, setNotice }: { session: RoomSession; notice: s
   const [more, setMore] = useState(false);
   // The More menu closes on Escape or a click anywhere outside it.
   const moreRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!more) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMore(false);
-    const onDown = (e: PointerEvent) => !moreRef.current?.contains(e.target as Node) && setMore(false);
-    document.addEventListener("keydown", onKey);
-    document.addEventListener("pointerdown", onDown);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.removeEventListener("pointerdown", onDown);
-    };
-  }, [more]);
+  const closeMore = useCallback(() => setMore(false), []);
+  useDismiss(more, moreRef, closeMore);
   const [confirm, setConfirm] = useState<"end" | "record" | null>(null);
   const [busy, setBusy] = useState(false);
   const [layout, setLayout] = useState<"gallery" | "speaker">("gallery");
@@ -332,6 +324,7 @@ function Stage({ session, notice, setNotice }: { session: RoomSession; notice: s
             {durationLabel(now - started)} · {participants.length} {participants.length === 1 ? "person" : "people"}
           </span>
         </div>
+        <MeetingShare session={session} onNotice={setNotice} />
         <div className="meet-top-status">
           {recording && (
             <span className="meet-recording" role="status" aria-live="polite">

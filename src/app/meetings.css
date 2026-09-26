@@ -648,3 +648,40 @@ html[data-meeting] .ui-dialog { z-index: 221; }
 .my-day-meeting-main { flex: 1; min-width: 0; display: grid; gap: 1px; }
 .my-day-meeting-main small { color: var(--e-text-muted); font-size: var(--e-caption); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media print { .record-meetings { display: none; } }
+
+/* ------------------------------------ meeting link and info, in the room */
+.meet-share { position: relative; display: flex; align-items: center; gap: 8px; margin-left: auto; min-width: 0; }
+.meet-secure { display: inline-flex; align-items: center; gap: 4px; color: var(--meet-muted); font-size: 12px; white-space: nowrap; }
+.meet-share .meet-share-button {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px;
+  border: 1px solid var(--meet-line); border-radius: 999px; background: var(--meet-surface-2); color: var(--meet-text); font-size: 13px;
+}
+.meet-share .meet-share-button:hover { background: var(--meet-surface); }
+.meet-share .meet-share-button[aria-expanded="true"] { border-color: var(--meet-accent); }
+.meet-info {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 40; width: min(360px, calc(100vw - 32px));
+  display: grid; gap: 12px; padding: 16px; border: 1px solid var(--meet-line); border-radius: 14px;
+  background: var(--meet-surface); color: var(--meet-text); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+}
+.meet-info header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.meet-info h2 { margin: 0; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.meet-info .icon-button { color: var(--meet-text); }
+.meet-info dl { margin: 0; display: grid; gap: 8px; }
+.meet-info dt { color: var(--meet-muted); font-size: 12px; }
+.meet-info dd { margin: 0; font-size: 13px; }
+.meet-info-link { display: grid; gap: 6px; }
+.meet-info-link input, .meet-link-input {
+  width: 100%; min-width: 0; padding: 8px 10px; border: 1px solid var(--meet-line); border-radius: 8px;
+  background: var(--meet-bg); color: var(--meet-text); font-size: 12px;
+}
+.meet-link-input { background: var(--e-surface-sunken); color: var(--e-text); border-color: var(--e-border); margin: 8px 0; }
+.meet-info-link .ui-button, .meet-info-details { justify-self: start; }
+.meet-link-label { margin: 0; color: var(--e-text-muted); font-size: var(--e-caption); }
+.meet-info .meet-link-label { color: var(--meet-muted); font-size: 12px; }
+@media (max-width: 760px) {
+  .meet-secure { display: none; }
+  .meet-share .meet-share-button span { display: none; }
+  .meet-share .meet-share-button { width: 40px; justify-content: center; padding: 0; }
+  /* Phones: a bottom sheet. */
+  .meet-info { position: fixed; top: auto; left: 0; right: 0; bottom: 0; width: 100%; border-radius: 16px 16px 0 0; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+}

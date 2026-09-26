@@ -409,3 +409,36 @@ architecture was chosen.
 The cPanel MySQL and Node-host instructions were removed when this migration
 landed. See `HOSTING-AUDIT.md` for why Workers plus external MySQL was not
 viable, and git history for the previous deployment guide.
+
+
+## Sessions and "Keep me signed in" (migration 0008)
+
+- **Active session:** 8 hours, in the `enercore_session` cookie; every request
+  checks it.
+- **Keep me signed in:** ticked by default on the login form. It adds a
+  refresh credential in the `enercore_refresh` cookie.
+  - The cookie is HttpOnly, Secure, `SameSite=Lax` and `Path=/`.
+  - D1 stores only the SHA-256 of the refresh value, in `RefreshToken`.
+  - It lasts 30 days from the last use. A device is capped at 90 days
+    however active it is, then signs in again.
+- **Renewal:** when the active session has lapsed, the browser calls
+  `POST /api/auth/refresh`. It accepts only that cookie, checks that the
+  person is still active, marks the token used, issues a new session and a
+  new refresh token in the same family, and returns no secret.
+  - In the browser this happens once at a time: a shared promise per tab and
+    a Web Lock across tabs.
+  - A 401 from the API triggers it and the request is retried once.
+  - The login page tries it before showing the form ("Signing you back in…").
+  - A realtime socket closed with 4401 renews and reconnects.
+- **Reuse:** a used refresh token presented again after a 30-second grace
+  period (two tabs racing) revokes that device's whole family.
+- **Unticked:** the 8-hour session only; there is nothing to renew.
+- **Sign out** ends this device (its session and refresh family). **Sign out
+  everywhere** (Profile), a password reset, deactivation or an access change
+  ends every device.
+- **Cleanup:** expired sessions and refresh tokens are purged by the daily
+  cron at 02:23.
+- **Preview:** preview never signs anyone in. `/api/auth/refresh` returns 503
+  there.
+- **Rollback:** `RefreshToken` is additive. Dropping it only signs devices
+  out; Session is unchanged.

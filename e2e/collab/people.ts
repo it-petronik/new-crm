@@ -74,6 +74,9 @@ export const people: TestPerson[] = [
   ...range(12).map((i) => person(`mv${i}`, `Mina Vee${i}`, ["Petronik"], [])),
   person("mvs", "Sami Seller", ["Petronik"], [], "Sales Executive"),
   person("mvs2", "Sara Seller", ["Petronik"], [], "Sales Executive"),
+  // Sessions ("keep me signed in") and meeting links.
+  ...range(12).map((i) => person(`sx${i}`, `Sam Session${i}`, ["Petronik"], [])),
+  ...range(6).map((i) => person(`gl${i}`, `Gil Link${i}`, ["Petronik"], [])),
 ];
 
 export const byKey = (key: string) => {

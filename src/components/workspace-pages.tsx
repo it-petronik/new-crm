@@ -97,6 +97,23 @@ export function ProfilePage({
             <LogOut size={16} />
             {preview ? "Sign out / switch role" : "Sign out"}
           </Button>
+          {!preview && (
+            // Every device — including ones kept signed in — signs out.
+            <Button
+              className="secondary"
+              onClick={async () => {
+                const response = await fetch("/api/auth", {
+                  method: "DELETE",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ everywhere: true }),
+                });
+                if (response.ok) window.location.href = "/login";
+              }}
+            >
+              <LogOut size={16} />
+              Sign out everywhere
+            </Button>
+          )}
         </div>
         <div className="profile-summary">
           <span>

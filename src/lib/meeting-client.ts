@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { collabFetch, useCollabEvents } from "./collab-client";
 import type {
   GuestExpiry,
+  GuestLinkStatus,
   JoinGrant,
   MeetingDetails,
   MeetingMedia,
@@ -136,8 +137,15 @@ export const cancelMeeting = (id: string) => updateMeetingApi(id, { cancel: true
 export const hostAction = (id: string, body: { action: "mute"; identity: string; trackSid: string } | { action: "remove"; identity: string }) =>
   collabFetch(`/meetings/${id}/participants`, { method: "POST", body });
 export const meetingReport = (id: string) => collabFetch<MeetingReport>(`/meetings/${id}/report`);
-export const createGuestLink = (id: string, expiry: GuestExpiry, admission: "open" | "admit") =>
-  collabFetch<{ url: string; expiresAt: string | null; untilMeetingEnd: boolean }>(`/meetings/${id}/guest-link`, { method: "POST", body: { expiry, admission } });
+/** Creates (or regenerates) the guest link. Omitted admission keeps the meeting's rule — "host must admit" by default. */
+export const createGuestLink = (id: string, expiry?: GuestExpiry, admission?: "open" | "admit") =>
+  collabFetch<{ url: string; expiresAt: string | null; untilMeetingEnd: boolean; admission: "open" | "admit" }>(`/meetings/${id}/guest-link`, {
+    method: "POST",
+    body: { ...(expiry ? { expiry } : {}), ...(admission ? { admission } : {}) },
+  });
+/** Managers only (403 otherwise): the current guest link, if any, and whether one may be created. */
+export const guestLinkOf = (id: string) =>
+  collabFetch<{ link: GuestLinkStatus; allowed: boolean; admission: "open" | "admit" }>(`/meetings/${id}/guest-link`);
 export const revokeGuestLink = (id: string) => collabFetch(`/meetings/${id}/guest-link`, { method: "DELETE" });
 export const waitingGuestsOf = (id: string) => collabFetch<{ guests: { id: string; name: string; since: string }[] }>(`/meetings/${id}/guests`);
 export const decideGuest = (id: string, guestId: string, decision: "admit" | "decline") =>
@@ -146,24 +154,10 @@ export const recordingAction = (id: string, action: "start" | "stop") =>
   collabFetch<{ recording: RecordingView }>(`/meetings/${id}/recording`, { method: "POST", body: { action } });
 
 /**
- * The raw guest link exists only when it is created (the server keeps its
- * hash). The organiser's browser keeps it for this session so it can be
- * copied again; another device must regenerate it.
+ * The internal link: for people in Enercore only. It opens the meeting in
+ * Collaboration after signing in — never a way in for anyone else.
  */
-const LINK_KEY = (id: string) => `enercore-guest-link:${id}`;
-export function rememberGuestLink(id: string, url: string | null) {
-  try {
-    if (url) sessionStorage.setItem(LINK_KEY(id), url);
-    else sessionStorage.removeItem(LINK_KEY(id));
-  } catch {}
-}
-export function rememberedGuestLink(id: string) {
-  try {
-    return sessionStorage.getItem(LINK_KEY(id));
-  } catch {
-    return null;
-  }
-}
+export const internalMeetingUrl = (id: string) => `${location.origin}/workspace/all-companies/collaboration?tab=meetings&meeting=${encodeURIComponent(id)}`;
 
 /* ---------------------------------------------------------------- hooks */
 

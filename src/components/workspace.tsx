@@ -128,6 +128,7 @@ import MeetingLayer from "./meetings/meeting-layer";
 import RecordMeetings from "./meetings/record-meetings";
 import TodayMeetings from "./meetings/today-meetings";
 import { openPrejoin, useMeetingFlow } from "@/lib/meeting-client";
+import { installSessionRecovery } from "@/lib/session-client";
 import { useNotifications, claimAlert, showDesktop } from "@/lib/notifications-client";
 import { badgeCount, moduleForKind, titleWithCount, type NotificationView, type NotificationPreferences } from "@/lib/notification-types";
 import Link from "next/link";
@@ -277,6 +278,11 @@ export default function Workspace({
   initialPath?: string;
   initialSearch?: string;
 }) {
+  // Before any child fetches: a lapsed session renews itself quietly (see
+  // session-client). Preview has no sessions.
+  useState(() => {
+    if (!preview) installSessionRecovery();
+  });
   // Preview signs in through demo accounts, so the acting role comes from the
   // browser. Read after mount to keep the server and first client render equal.
   const [previewSignedIn, setPreviewSignedIn] = useState<Actor | null>(null);

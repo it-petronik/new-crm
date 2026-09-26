@@ -11,20 +11,21 @@ import {
   endMeetingForAll,
   getMeeting,
   openPrejoin,
+  internalMeetingUrl,
   openRecord,
-  rememberGuestLink,
-  rememberedGuestLink,
   revokeGuestLink,
 } from "@/lib/meeting-client";
 import { RELATED_NOUN, durationLabel, joinable, scopeLabel, statusLabel, type GuestExpiry, type MeetingDetails, type RelatedRecord } from "@/lib/meetings";
 import { businessStamp } from "@/lib/gst";
 import MeetingForm from "./meeting-form";
+import { CopyMeetingLink } from "./meeting-link";
 
 /**
  * One meeting, in full: when and what it is, who was invited and who came,
  * guest access, recordings — and what the reader may do with it. Kept
- * current by meeting events. The raw guest link is shown only right after
- * it is created (the server keeps its hash only).
+ * current by meeting events. Two links, never confused: the GUEST link
+ * (/meet/<token>, for people outside Enercore; organisers only) and the
+ * INTERNAL link (Collaboration, sign-in required).
  */
 
 const EXPIRY: [GuestExpiry, string][] = [
@@ -41,9 +42,8 @@ export default function MeetingDetailsView({ meetingId, meId, onBack, onReport }
   const [confirm, setConfirm] = useState<"cancel" | "end" | "revoke" | null>(null);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [expiry, setExpiry] = useState<GuestExpiry>("24h");
+  const [expiry, setExpiry] = useState<GuestExpiry>("meeting_end");
   const [admission, setAdmission] = useState<"admit" | "open">("admit");
-  const [link, setLink] = useState<string | null>(null);
   const [outcome, setOutcome] = useState(false);
 
   const load = useCallback(() => {
@@ -54,10 +54,12 @@ export default function MeetingDetailsView({ meetingId, meId, onBack, onReport }
       })
       .catch((e) => setError(e instanceof Error ? e.message : "The meeting couldn't be loaded."));
   }, [meetingId]);
+  useEffect(load, [load]);
+  // The admission choice starts from the meeting's own rule.
+  const rule = data?.meeting.guestAccess;
   useEffect(() => {
-    load();
-    setLink(rememberedGuestLink(meetingId));
-  }, [load, meetingId]);
+    if (rule === "open" || rule === "admit") setAdmission(rule);
+  }, [rule]);
   useCollabEvents(true, (event) => event.type.startsWith("meeting.") && "meeting" in event && event.meeting.id === meetingId && load(), load);
 
   const act = async (fn: () => Promise<unknown>, done: string) => {
@@ -143,8 +145,16 @@ export default function MeetingDetailsView({ meetingId, meId, onBack, onReport }
             </Button>
           )}
           {open && (
-            <Button className="secondary" onClick={() => void copy(`${location.origin}/workspace/all-companies/collaboration?tab=meetings&meeting=${m.id}`, "Invite link copied — for people in Enercore.")}>
-              <Copy size={15} aria-hidden="true" /> Copy invite
+            <CopyMeetingLink
+              meetingId={m.id}
+              className="secondary"
+              label={manage && m.scope !== "direct" ? "Copy meeting link" : "Copy internal link"}
+              onCopied={setNotice}
+            />
+          )}
+          {open && manage && m.scope !== "direct" && (
+            <Button className="secondary" onClick={() => void copy(internalMeetingUrl(m.id), "Internal link copied — for people in Enercore (sign-in required).")}>
+              <Copy size={15} aria-hidden="true" /> Copy internal link
             </Button>
           )}
           {manage && m.status === "scheduled" && (
@@ -201,15 +211,21 @@ export default function MeetingDetailsView({ meetingId, meId, onBack, onReport }
             ) : (
               <p className="meet-card-note">No guest link. Guests without an Enercore account can join only with one.</p>
             )}
-            {link && data.guestLink && (
-              <div className="meet-link-row">
-                <input readOnly value={link} aria-label="Guest link" onFocus={(e) => e.currentTarget.select()} />
-                <Button className="secondary compact" onClick={() => void copy(link, "Guest link copied.")}>
-                  Copy
-                </Button>
-              </div>
+            {data.guestLink?.url && (
+              <>
+                <p className="meet-link-label">For clients and other people outside Enercore</p>
+                <div className="meet-link-row">
+                  <input readOnly value={data.guestLink.url} aria-label="Guest link" onFocus={(e) => e.currentTarget.select()} />
+                  <Button className="secondary compact" onClick={() => void copy(data.guestLink!.url!, "Guest link copied — anyone with it can ask to join.")}>
+                    Copy
+                  </Button>
+                </div>
+              </>
             )}
-            {data.guestLink && !link && <p className="meet-card-note small">The link is shown only when created. Regenerate to get a new one (the old one stops working).</p>}
+            {data.guestLink && !data.guestLink.url && (
+              <p className="meet-card-note small">This link was created before links could be shown again. Regenerate to get one you can copy (the old one stops working).</p>
+            )}
+
             <div className="meet-link-controls">
               <Field>
                 Expires
@@ -234,8 +250,6 @@ export default function MeetingDetailsView({ meetingId, meId, onBack, onReport }
                 onClick={() =>
                   void act(async () => {
                     const r = await createGuestLink(m.id, expiry, admission);
-                    rememberGuestLink(m.id, r.url);
-                    setLink(r.url);
                     await navigator.clipboard?.writeText(r.url).catch(() => {});
                   }, data.guestLink ? "New guest link created and copied. The old link no longer works." : "Guest link created and copied.")
                 }
@@ -360,8 +374,6 @@ export default function MeetingDetailsView({ meetingId, meId, onBack, onReport }
                 onClick: () =>
                   void act(async () => {
                     await revokeGuestLink(m.id);
-                    rememberGuestLink(m.id, null);
-                    setLink(null);
                   }, "Guest link revoked."),
               }}
             />

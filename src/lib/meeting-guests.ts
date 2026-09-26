@@ -12,6 +12,19 @@ const b64url = (bytes: Uint8Array) =>
 
 export const randomToken = () => b64url(crypto.getRandomValues(new Uint8Array(32)));
 
+/**
+ * A guest link's token, derived from its invite's random id with a server
+ * secret: HMAC-SHA256 → 256 bits, unguessable without the secret. The
+ * database still holds only the token's SHA-256, yet an authorised host can
+ * have the server produce the same link again on any device, instead of it
+ * existing only in the browser that created it.
+ */
+export async function deriveToken(secret: string, inviteId: string) {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`enercore-guest-link-v1:${inviteId}`));
+  return b64url(new Uint8Array(mac));
+}
+
 export async function hashToken(token: string) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");

@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, CalendarClock, Circle, Link2, Phone, Plus, Users, Video } from "lucide-react";
 import { Button, DialogPresence } from "../ui/controls";
-import { openPrejoin, rememberedGuestLink, useAllMeetings } from "@/lib/meeting-client";
+import { openPrejoin, useAllMeetings } from "@/lib/meeting-client";
 import { durationLabel, joinable, scopeLabel, statusLabel, type MeetingView } from "@/lib/meetings";
 import { businessDate, businessTime, businessToday } from "@/lib/gst";
 import MeetingForm from "./meeting-form";
 import MeetingDetailsView from "./meeting-details";
 import MeetingReportView from "./meeting-report";
+import { CopyMeetingLink } from "./meeting-link";
 
 /**
  * Collaboration → Meetings: every meeting this person may see — their
@@ -35,7 +36,7 @@ export default function MeetingsPage({
     initialDetails ? { view: initialReport ? "report" : "details", id: initialDetails } : { view: "list" },
   );
   const [creating, setCreating] = useState(false);
-  const [copied, setCopied] = useState("");
+  const [toast, setToast] = useState("");
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -68,14 +69,9 @@ export default function MeetingsPage({
     ["Past", past],
   ];
 
-  const copyInvite = async (m: MeetingView) => {
-    const link = rememberedGuestLink(m.id);
-    const text = link ?? `${location.origin}/workspace/all-companies/collaboration?tab=meetings&meeting=${m.id}`;
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(m.id);
-      setTimeout(() => setCopied(""), 2000);
-    } catch {}
+  const copied = (message: string) => {
+    setToast(message);
+    setTimeout(() => setToast(""), 4000);
   };
 
   return (
@@ -91,6 +87,11 @@ export default function MeetingsPage({
       </header>
       {loaded && !available && <p className="meet-page-note">Meetings aren&apos;t set up yet. Ask your administrator.</p>}
       {error && <p className="form-error" role="alert">Meetings couldn&apos;t be loaded.</p>}
+      {toast && (
+        <p className="meet-page-toast" role="status">
+          {toast}
+        </p>
+      )}
       <div className="meet-page-body">
         {!loaded ? (
           <p className="muted small">Loading meetings…</p>
@@ -112,11 +113,10 @@ export default function MeetingsPage({
                       key={m.id}
                       m={m}
                       now={now}
-                      copied={copied === m.id}
                       onJoin={() => openPrejoin(m.id)}
                       onDetails={() => setPane({ view: "details", id: m.id })}
                       onReport={() => setPane({ view: "report", id: m.id })}
-                      onCopy={() => void copyInvite(m)}
+                      onCopied={copied}
                     />
                   ))}
                 </ul>
@@ -132,19 +132,17 @@ export default function MeetingsPage({
 function MeetingRow({
   m,
   now,
-  copied,
   onJoin,
   onDetails,
   onReport,
-  onCopy,
+  onCopied,
 }: {
   m: MeetingView;
   now: number;
-  copied: boolean;
   onJoin: () => void;
   onDetails: () => void;
   onReport: () => void;
-  onCopy: () => void;
+  onCopied: (message: string) => void;
 }) {
   const start = m.startedAt ?? m.scheduledAt;
   const length =
@@ -198,9 +196,8 @@ function MeetingRow({
           </Button>
         )}
         {!past && (
-          <Button className="secondary compact" onClick={onCopy}>
-            {copied ? "Copied" : "Copy invite"}
-          </Button>
+          // The organiser shares the guest link; everyone else the internal one.
+          <CopyMeetingLink meetingId={m.id} label={m.canManage && m.scope !== "direct" ? "Copy meeting link" : "Copy internal link"} onCopied={onCopied} />
         )}
         {past ? (
           <Button className="secondary compact" onClick={onReport}>

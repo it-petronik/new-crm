@@ -15,6 +15,18 @@ async function requestEnv(): Promise<Record<string, unknown> | null> {
   }
 }
 
+/**
+ * The secret guest-link tokens are derived with: its own MEETING_LINK_SECRET
+ * when set, else the provider secret (under its own HMAC label, so the two
+ * uses never collide). Rotating it only means earlier links can't be shown
+ * again — they keep working until revoked, and a new one can be created.
+ */
+export async function guestLinkSecret(): Promise<string | null> {
+  const env = await requestEnv();
+  const value = env?.MEETING_LINK_SECRET ?? env?.LIVEKIT_API_SECRET;
+  return typeof value === "string" && value.length >= 16 ? value : null;
+}
+
 export async function providerConfig(): Promise<ProviderConfig | null> {
   const env = await requestEnv();
   return env ? configFrom(env) : null;

@@ -1,6 +1,7 @@
 import { eq, and, or, lt, gt, inArray, sql, desc, isNull, ne } from "drizzle-orm";
 import type { Database } from "./d1";
-import { users, sessions, businessRecords, auditEvents, loginAttempts, passwordResets } from "./schema";
+import { users, sessions, businessRecords, auditEvents, loginAttempts, passwordResets, refreshTokens } from "./schema";
+import type { RefreshTokenRow } from "./schema";
 import type { UserRow } from "./schema";
 
 /**
@@ -46,6 +47,8 @@ export const updateUserAndRevokeSessions = (db: Database, id: string, values: Pa
   db.batch([
     db.update(users).set(values).where(eq(users.id, id)),
     db.delete(sessions).where(eq(sessions.userId, id)),
+    // …and every device's "keep me signed in" credential.
+    db.delete(refreshTokens).where(eq(refreshTokens.userId, id)),
     // An outstanding reset link is a credential for this account, so an access
     // change retires it with the sessions rather than leaving it usable until
     // it expires on its own.
@@ -72,6 +75,7 @@ export async function deactivateUnlessLastAdmin(db: Database, id: string): Promi
   if (after?.active) return false;
   await db.batch([
     db.delete(sessions).where(eq(sessions.userId, id)),
+    db.delete(refreshTokens).where(eq(refreshTokens.userId, id)),
     db.delete(passwordResets).where(eq(passwordResets.userId, id)),
   ]);
   return true;
@@ -105,6 +109,66 @@ export const createSession = (db: Database, id: string, userId: string, expiresA
 
 export const deleteSession = (db: Database, id: string) =>
   db.delete(sessions).where(eq(sessions.id, id)).run();
+
+// ------------------------------------------------------ refresh tokens
+
+/**
+ * Claims a refresh token for rotation: marks it used in the same statement
+ * that checks it is unused and unexpired, so of any number of simultaneous
+ * refreshes with one token exactly one wins. Returns the claimed row, or
+ * null (unknown, expired, past the family limit, or already used).
+ */
+export async function claimRefreshToken(db: Database, id: string, now: Date, familyCutoff: Date): Promise<RefreshTokenRow | null> {
+  const rows = await db
+    .update(refreshTokens)
+    .set({ usedAt: now })
+    .where(and(eq(refreshTokens.id, id), isNull(refreshTokens.usedAt), gt(refreshTokens.expiresAt, now), gt(refreshTokens.familyCreatedAt, familyCutoff)))
+    .returning();
+  return rows[0] ?? null;
+}
+
+export const findRefreshToken = (db: Database, id: string) => db.select().from(refreshTokens).where(eq(refreshTokens.id, id)).get();
+
+export const findRefreshBySession = (db: Database, sessionId: string) =>
+  db.select().from(refreshTokens).where(eq(refreshTokens.sessionId, sessionId)).get();
+
+/**
+ * One device's next state, committed together: its new active session and
+ * refresh token in, the session the used token was issued with out.
+ */
+export const rotateDevice = (
+  db: Database,
+  next: { sessionId: string; userId: string; sessionExpiresAt: Date; token: typeof refreshTokens.$inferInsert },
+  previousSessionId: string | null,
+) =>
+  db.batch([
+    db.insert(sessions).values({ id: next.sessionId, userId: next.userId, expiresAt: next.sessionExpiresAt }),
+    db.insert(refreshTokens).values(next.token),
+    ...(previousSessionId ? [db.delete(sessions).where(eq(sessions.id, previousSessionId))] : []),
+  ]);
+
+/** Signs one device out: its token family and every session it was issued. */
+export async function revokeRefreshFamily(db: Database, familyId: string) {
+  const issued = (await db.select({ sessionId: refreshTokens.sessionId }).from(refreshTokens).where(eq(refreshTokens.familyId, familyId)).all())
+    .map((r) => r.sessionId)
+    .filter((s): s is string => !!s);
+  await db.batch([
+    db.delete(refreshTokens).where(eq(refreshTokens.familyId, familyId)),
+    ...(issued.length ? [db.delete(sessions).where(inArray(sessions.id, issued))] : []),
+  ]);
+}
+
+/** Retires a family's refresh tokens only (its current sessions run out on their own). */
+export const retireRefreshFamily = (db: Database, familyId: string) =>
+  db.delete(refreshTokens).where(eq(refreshTokens.familyId, familyId)).run();
+
+/** Signs a person out everywhere: every session and every device's refresh family. */
+export const revokeAllSessions = (db: Database, userId: string) =>
+  db.batch([db.delete(sessions).where(eq(sessions.userId, userId)), db.delete(refreshTokens).where(eq(refreshTokens.userId, userId))]);
+
+/** Housekeeping: expired tokens, and used ones long past the reuse window. */
+export const purgeRefreshTokens = (db: Database, now: Date, usedBefore: Date) =>
+  db.delete(refreshTokens).where(or(lt(refreshTokens.expiresAt, now), lt(refreshTokens.usedAt, usedBefore))).run();
 
 /**
  * Drops sessions that have already expired. Expiry is enforced on read, so
@@ -405,6 +469,7 @@ export async function redeemPasswordReset(
     await db.batch([
       db.update(users).set({ passwordHash }).where(eq(users.id, userId)),
       db.delete(sessions).where(eq(sessions.userId, userId)),
+      db.delete(refreshTokens).where(eq(refreshTokens.userId, userId)),
       insertAudit(db, event),
     ]);
   } catch (cause) {

@@ -1,5 +1,6 @@
 import { test, expect, type Browser, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { Client } from "./client";
 import { byKey, WORKER } from "./people";
 
@@ -11,6 +12,11 @@ import { byKey, WORKER } from "./people";
  *
  * People: mv1–mv12, mvs, mvs2 (exclusive to this file).
  */
+
+// One administrator sign-in for the whole file: the login rate limit is per
+// address, and the suite's files share this account.
+let adminClient: Promise<Client> | null = null;
+const admin = () => (adminClient ??= Client.login("admin"));
 
 const HUB = "/workspace/all-companies/collaboration";
 const HEX_ID = /[0-9a-f]{16,}/i;
@@ -157,10 +163,14 @@ test("guest links: hashed, single-purpose, revocable; guests get no CRM access a
   expect(first.status).toBe(200);
   const token = tokenOf(first.body.url);
   expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
-  // The details say a link exists — never what it is.
+  // The organiser's details carry the link itself (to copy again later) —
+  // never its hash; an invitee's carry neither.
   const details = (await owner.get(`/meetings/${meeting.id}`)).body;
-  expect(details.guestLink).toMatchObject({ active: true, untilMeetingEnd: false });
-  expect(JSON.stringify(details)).not.toContain(token);
+  expect(details.guestLink).toMatchObject({ active: true, untilMeetingEnd: false, url: first.body.url });
+  expect(JSON.stringify(details)).not.toContain(createHash("sha256").update(token).digest("hex"));
+  const inviteeDetails = (await invitee.get(`/meetings/${meeting.id}`)).body;
+  expect(inviteeDetails.guestLink).toBeNull();
+  expect(JSON.stringify(inviteeDetails)).not.toContain(token);
 
   // What a guest may learn: title, time, organiser's first name. No CRM data.
   const lookup = await guest("lookup", { token });
@@ -275,7 +285,7 @@ test("CRM relation: a meeting never opens the lead, and the lead never opens the
   expect(record.due).toBe(due);
   expect(record.notes.at(-1).text).toContain("agreed a trial order");
   // The record history (MD's view) shows the audited change.
-  const audit = (await (await Client.login("admin")).request("GET", "/api/records")).body.audit as any[];
+  const audit = (await (await admin()).request("GET", "/api/records")).body.audit as any[];
   expect(audit.find((a) => a.recordId === sellersLead.id && a.action === "Logged activity and scheduled follow-up")).toBeTruthy();
   await manager.patch(`/meetings/${id}`, { cancel: true });
 });
@@ -480,7 +490,7 @@ test("lead detail: schedule (prefilled), start now, upcoming and past, report, l
   await expect(m.page.getByRole("status")).toContainText("Outcome saved to the lead");
   const record = (await seller.request("GET", `/api/records?id=${lead.id}`)).body.record;
   expect(record.notes.at(-1).text).toContain("Agreed a trial of 5 MT");
-  expect(((await (await Client.login("admin")).request("GET", "/api/records")).body.audit as any[]).some((a) => a.recordId === lead.id && a.action === "Added note")).toBe(true);
+  expect(((await (await admin()).request("GET", "/api/records")).body.audit as any[]).some((a) => a.recordId === lead.id && a.action === "Added note")).toBe(true);
   await m.client.patch(`/meetings/${scheduled.id}`, { cancel: true });
   await m.context.close();
 });

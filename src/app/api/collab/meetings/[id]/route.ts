@@ -1,13 +1,14 @@
 import { z } from "zod";
 import { cleanLine, isId } from "@/lib/collab";
 import { CollabError, collabContext, handle, json } from "@/lib/collab-auth";
-import { activeGuestInvite, findMeeting, listInvitees, recordingsOf, setInvitees, updateMeeting } from "@/lib/meeting-data";
+import { findMeeting, listInvitees, recordingsOf, setInvitees, updateMeeting } from "@/lib/meeting-data";
 import { eligibleInvitees } from "@/lib/meeting-invitees";
 import { evictFromMeetings, inviteesAdded, meetingChanged, announce, requireMeeting, viewFor } from "@/lib/meeting-service";
 import { providerConfig, recordingSetup } from "@/lib/livekit-config";
 import { afterResponse } from "@/lib/collab-realtime";
 import { recordingView } from "@/lib/meeting-recordings";
 import { attachRelated } from "@/lib/meeting-related";
+import { guestLinkStatus } from "@/lib/meeting-link-status";
 import { DURATIONS, MEETING_TITLE_MAX, type MeetingDetails } from "@/lib/meetings";
 
 type Params = { params: Promise<{ id: string }> };
@@ -17,14 +18,11 @@ export function GET(request: Request, { params }: Params) {
   return handle(async () => {
     const { actor, db } = await collabContext(request, false);
     const { meeting, canManage } = await requireMeeting(db, actor, (await params).id);
-    const invite = canManage ? await activeGuestInvite(db, meeting.id) : undefined;
     const details: MeetingDetails = {
       meeting: (await attachRelated(db, actor, [await viewFor(db, actor, meeting, canManage)], [meeting]))[0],
       invitees: (await listInvitees(db, meeting.id)).map(({ id, name, role }) => ({ id, name, role })),
-      // Managers see whether a guest link exists — never the link itself.
-      guestLink: invite
-        ? { active: true, expiresAt: invite.expiresAt?.toISOString() ?? null, untilMeetingEnd: !invite.expiresAt, createdAt: invite.createdAt.toISOString() }
-        : null,
+      // Only the people who manage the meeting ever see its guest link.
+      guestLink: canManage ? await guestLinkStatus(db, meeting) : null,
       recordings: (await recordingsOf(db, meeting.id)).map(recordingView),
       canRecord: canManage && !!(await recordingSetup()),
     };

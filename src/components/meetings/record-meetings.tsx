@@ -7,6 +7,7 @@ import { openMeetingPage, openPrejoin, useAllMeetings } from "@/lib/meeting-clie
 import { durationLabel, joinable, statusLabel, type MeetingView } from "@/lib/meetings";
 import { businessStamp } from "@/lib/gst";
 import MeetingForm from "./meeting-form";
+import { CopyMeetingLink } from "./meeting-link";
 
 /**
  * Meetings about one CRM record, inside the record's detail: schedule one,
@@ -93,6 +94,7 @@ function MeetingList({ title, items }: { title: string; items: MeetingView[] }) 
                     Join
                   </Button>
                 )}
+                {!past && <CopyMeetingLink meetingId={m.id} label={m.canManage ? "Copy meeting link" : "Copy internal link"} />}
                 {past && m.status !== "cancelled" ? (
                   <Button className="secondary compact" onClick={() => openMeetingPage(m.id, "report")}>
                     <FileText size={13} aria-hidden="true" /> Report

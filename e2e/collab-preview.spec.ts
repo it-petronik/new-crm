@@ -42,3 +42,21 @@ test("meetings refuse preview mode: no creation, no join tokens, no provider web
   for (const response of await Promise.all(calls)) expect(response.status()).toBe(409);
   expect((await request.post("/api/meetings/webhook", { data: "{}" })).status()).toBe(404);
 });
+
+test("preview never signs anyone in: no refresh, no session, no remember-me, no guest links", async ({ request, page, baseURL, context }) => {
+  const origin = { Origin: baseURL!, "Content-Type": "application/json" };
+  // A refresh credential (even a well-formed one) is refused outright.
+  await context.addCookies([{ name: "enercore_refresh", value: "a".repeat(64), url: baseURL! }]);
+  expect((await request.post("/api/auth/refresh", { headers: { Origin: baseURL!, Cookie: `enercore_refresh=${"a".repeat(64)}` } })).status()).toBe(503);
+  expect(await (await request.get("/api/auth")).json()).toEqual({ signedIn: false });
+  // Credential sign-in is refused, and nothing is set.
+  const signIn = await request.post("/api/auth", { headers: origin, data: { email: "md@enercore.test", password: "x", remember: true } });
+  expect(signIn.ok()).toBe(false);
+  expect(signIn.headers()["set-cookie"] ?? "").not.toMatch(/enercore_(session|refresh)=[0-9a-f]/);
+  expect((await request.post("/api/meet/lookup", { headers: origin, data: { token: "x".repeat(43) } })).status()).toBe(404);
+  // The login page offers demo accounts only: no "keep me signed in", no resume.
+  await page.goto("/login");
+  await expect(page.getByRole("button", { name: /md@enercore.test/ })).toBeVisible();
+  await expect(page.getByRole("checkbox", { name: /Keep me signed in/ })).toHaveCount(0);
+  await expect(page.getByText("Signing you back in")).toHaveCount(0);
+});

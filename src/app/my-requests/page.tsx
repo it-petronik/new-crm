@@ -7,6 +7,6 @@ export const dynamic = "force-dynamic";
 export default async function Page() {
   const preview = isPreview();
   const actor = preview ? previewActor : await currentActor();
-  if (!actor) redirect("/login");
+  if (!actor) redirect("/login?next=%2Fmy-requests");
   return <Workspace actor={actor} preview={preview} initialSelfService />;
 }

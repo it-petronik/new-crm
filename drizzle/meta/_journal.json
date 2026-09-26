@@ -57,6 +57,13 @@
       "when": 1790373662346,
       "tag": "0007_meetings_v31",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1790403578032,
+      "tag": "0008_refresh_tokens",
+      "breakpoints": true
     }
   ]
 }

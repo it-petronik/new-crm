@@ -2532,6 +2532,17 @@ textarea:focus {
   min-height: 46px;
   justify-content: space-between;
 }
+.login-remember {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.login-remember input { width: 18px; height: 18px; margin: 1px 0 0; accent-color: var(--e-primary, currentColor); }
+.login-remember span { display: grid; gap: 2px; }
+.login-remember small { color: #7b9585; font-size: 12px; }
+.login-resume { margin: 32px 0 26px; font-size: 14px; }
 .secure-note {
   display: flex;
   align-items: center;

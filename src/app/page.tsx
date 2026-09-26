@@ -13,13 +13,15 @@ export default async function Home({
 }) {
   const preview = isPreview();
   const actor = preview ? previewActor : await currentActor();
-  if (!actor) redirect("/login");
   // The route is resolved on the server so the first paint is the right page.
   const segments = (await params)?.path;
   const path = segments?.length ? `/workspace/${segments.join("/")}` : "/";
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries((await searchParams) || {}))
     if (typeof value === "string") query.set(key, value);
+  // Signed out (or the session lapsed): sign in — or be signed back in —
+  // and come back to exactly this page.
+  if (!actor) redirect(`/login?next=${encodeURIComponent(`${path}${query.size ? `?${query}` : ""}`)}`);
   return (
     <Workspace
       actor={actor}

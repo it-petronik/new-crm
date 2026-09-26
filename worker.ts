@@ -9,7 +9,8 @@
  *   to the caller's own CollabHub Durable Object;
  * - Collaboration files and room images, authorised here and streamed from
  *   R2 with exactly the headers they need;
- * - the daily retention purge of deleted/unsent attachments, and the daily
+ * - the daily retention purge of deleted/unsent attachments and old sign-ins
+ *   (expired sessions and refresh tokens), and the daily
  *   notification reminders (follow-ups, expiring quotations, overdue items);
  * - every five minutes, meeting reminders and closing abandoned meetings;
  * - the CollabHub Durable Object class itself.
@@ -22,6 +23,7 @@
 import openNext from "./.open-next/worker.js";
 import { collabSocket, type GatewayEnv } from "./src/realtime/gateway";
 import { collabFile, purgeAttachments, roomAvatar, type FilesEnv } from "./src/realtime/files";
+import { purgeSignIns } from "./src/realtime/auth-purge";
 import { REMINDER_CRON, runReminders } from "./src/realtime/reminders";
 import { MEETING_CRON, runMeetingSweep } from "./src/realtime/meeting-sweep";
 
@@ -49,6 +51,6 @@ export default {
   async scheduled(controller: { cron?: string }, env: Env, ctx: Ctx) {
     if (controller.cron === REMINDER_CRON) ctx.waitUntil(runReminders(env));
     else if (controller.cron === MEETING_CRON) ctx.waitUntil(runMeetingSweep(env as never));
-    else ctx.waitUntil(purgeAttachments(env));
+    else ctx.waitUntil(Promise.all([purgeAttachments(env), purgeSignIns(env as never)]));
   },
 };

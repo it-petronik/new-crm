@@ -1,5 +1,6 @@
 "use client";
 
+import { renewSession } from "./session-client";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { AttachmentView, CollabEvent, CollabSummary, PresenceView } from "./collab";
 import { businessDate, businessTime, businessToday } from "./gst";
@@ -109,10 +110,17 @@ class LiveChannel {
       if (this.ping) clearInterval(this.ping);
       this.ping = null;
       this.socket = null;
-      // Session ended: stop until the page is reloaded after signing in.
+      // Session ended: renew it quietly if this device may, and reconnect;
+      // otherwise stop until the person signs in again.
       if (closed.code === 4401) {
         this.stopped = true;
-        this.setState("unavailable");
+        this.setState("offline");
+        void renewSession().then((ok) => {
+          if (!ok) return this.setState("unavailable");
+          this.stopped = false;
+          this.attempts = 0;
+          this.connect();
+        });
         return;
       }
       this.scheduleRetry();

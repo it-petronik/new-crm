@@ -8,13 +8,27 @@ import {
 } from "@/components/ui/controls";
 import { AlertCircle } from "lucide-react";
 import { check, required, email as emailRule } from "@/lib/validation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { renewSession } from "@/lib/session-client";
 import { ArrowRight, ShieldCheck } from "lucide-react";
 import { BrandLogo } from "@/components/brand";
 import { demoAccounts, demoPassword, previewActorKey } from "@/lib/fixtures";
 import ThemeToggle from "@/components/theme-toggle";
-export default function LoginForm({ preview }: { preview: boolean }) {
+export default function LoginForm({ preview, next = "/", resume = false }: { preview: boolean; next?: string; resume?: boolean }) {
   const [error, setError] = useState("");
+  // "Keep me signed in": try the device's credential before showing the form.
+  const [resuming, setResuming] = useState(resume);
+  useEffect(() => {
+    if (!resume) return;
+    let active = true;
+    void renewSession().then((ok) => {
+      if (ok) window.location.replace(next);
+      else if (active) setResuming(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, [resume, next]);
   // Field messages appear on blur and clear as soon as the value is valid.
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -49,6 +63,11 @@ export default function LoginForm({ preview }: { preview: boolean }) {
           <span className="eyebrow">YOUR WORKSPACE AWAITS</span>
           <h2>Welcome back.</h2>
           <p>Sign in with your company account.</p>
+          {resuming ? (
+            <p className="login-resume" role="status" aria-live="polite">
+              Signing you back in…
+            </p>
+          ) : (
           <form
             noValidate
             onSubmit={async (e) => {
@@ -74,11 +93,12 @@ export default function LoginForm({ preview }: { preview: boolean }) {
                   body: JSON.stringify({
                     email: f.get("email"),
                     password: f.get("password"),
+                    remember: f.get("remember") === "on",
                   }),
                 });
                 const data = await r.json();
                 if (!r.ok) throw new Error(data.error);
-                window.location.href = "/";
+                window.location.href = next;
               } catch (err) {
                 setError(
                   err instanceof Error ? err.message : "Unable to sign in.",
@@ -109,6 +129,15 @@ export default function LoginForm({ preview }: { preview: boolean }) {
                 onChange={(e) => fieldErrors.password && setFieldErrors((f) => ({ ...f, password: check(e.target.value, [required("Password")]) }))}
               />
             </Field>
+            {!preview && (
+              <label className="login-remember">
+                <input type="checkbox" name="remember" defaultChecked />
+                <span>
+                  Keep me signed in on this device
+                  <small>Untick on a shared computer.</small>
+                </span>
+              </label>
+            )}
             {error && (
               <div className="form-error" role="alert">
                 <AlertCircle size={15} aria-hidden="true" />
@@ -120,6 +149,7 @@ export default function LoginForm({ preview }: { preview: boolean }) {
               <ArrowRight size={17} />
             </Button>
           </form>
+          )}
           <div className="secure-note">
             <ShieldCheck size={16} /> Individual access. Protected company data.
           </div>

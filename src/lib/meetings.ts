@@ -74,7 +74,14 @@ export type MeetingEvent =
   | { type: "meeting.guest_waiting"; conversationId: string; meetingId: string; guest: { id: string; name: string } }
   | { type: "meeting.guest_decided"; conversationId: string; meetingId: string; guestId: string; decision: "admitted" | "declined" };
 
-export type GuestLinkStatus = { active: boolean; expiresAt: string | null; untilMeetingEnd: boolean; createdAt: string } | null;
+export type GuestLinkStatus = {
+  active: boolean;
+  expiresAt: string | null;
+  untilMeetingEnd: boolean;
+  createdAt: string;
+  /** The guest URL (/meet/<token>), for managers; null when it can't be shown again (an older link). */
+  url: string | null;
+} | null;
 
 export type InviteeView = { id: string; name: string; role: string };
 
@@ -202,6 +209,9 @@ export type RoomSession = {
   guest: boolean;
   /** Cloud recording is configured and this person may start it. */
   canRecord: boolean;
+  /** For the in-meeting info card (guests: what their guest page showed). */
+  organiser?: string | null;
+  scheduledAt?: string | null;
 };
 
 export const RELATED_KINDS = ["leads", "customers", "quotations", "orders"] as const;

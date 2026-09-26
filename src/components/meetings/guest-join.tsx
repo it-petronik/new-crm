@@ -41,7 +41,7 @@ async function post<T>(path: string, body: unknown): Promise<{ ok: boolean; stat
   return { ok: response.ok, status: response.status, data };
 }
 
-const toSession = (grant: GuestGrant): RoomSession => ({
+const toSession = (grant: GuestGrant, info: GuestMeetingInfo | null): RoomSession => ({
   meetingId: "",
   conversationId: null,
   title: grant.title,
@@ -52,11 +52,15 @@ const toSession = (grant: GuestGrant): RoomSession => ({
   host: false,
   guest: true,
   canRecord: false,
+  organiser: info?.organiser ?? null,
+  scheduledAt: info?.scheduledAt ?? null,
 });
 
 export default function GuestJoin({ token }: { token: string }) {
   const [phase, setPhase] = useState<Phase>({ at: "loading" });
   const [info, setInfo] = useState<GuestMeetingInfo | null>(null);
+  const infoRef = useRef<GuestMeetingInfo | null>(null);
+  infoRef.current = info;
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -81,7 +85,7 @@ export default function GuestJoin({ token }: { token: string }) {
   const enter = useCallback(
     (grant: GuestGrant) => {
       setup.release();
-      setPhase({ at: "room", session: toSession(grant), choices: choices.current });
+      setPhase({ at: "room", session: toSession(grant, infoRef.current), choices: choices.current });
     },
     [setup],
   );
@@ -145,7 +149,7 @@ export default function GuestJoin({ token }: { token: string }) {
         onRejoin={async () => {
           if (!secret.current) return { error: "Open the meeting link again to rejoin.", final: true };
           const { ok, data } = await post<{ state: string; grant?: GuestGrant }>("status", { secret: secret.current });
-          if (ok && data.state === "admitted" && data.grant) return toSession(data.grant);
+          if (ok && data.state === "admitted" && data.grant) return toSession(data.grant, infoRef.current);
           return { error: data.state === "ended" ? "The meeting has ended." : (data.error ?? "You can't rejoin this meeting."), final: true };
         }}
       />

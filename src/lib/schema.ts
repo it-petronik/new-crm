@@ -43,6 +43,42 @@ export const sessions = sqliteTable(
   (table) => [index("Session_expiresAt_idx").on(table.expiresAt)],
 );
 
+/**
+ * "Keep me signed in": one long-lived, rotating credential per device.
+ *
+ * - `id` is the SHA-256 of the raw token; the raw token lives only in the
+ *   device's HttpOnly cookie.
+ * - A device's tokens share a `familyId`. Each successful refresh marks the
+ *   presented token used (`usedAt`) and issues its successor in the same
+ *   family, so presenting a used token again is detectable (reuse) and
+ *   revokes the whole family.
+ * - `sessionId` is the active Session issued with it, so signing out a device
+ *   ends both.
+ * - `expiresAt` slides 30 days from the last refresh; `familyCreatedAt` caps
+ *   a family's life however active it is.
+ */
+export const refreshTokens = sqliteTable(
+  "RefreshToken",
+  {
+    id: text("id").primaryKey(),
+    familyId: text("familyId").notNull(),
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    sessionId: text("sessionId"),
+    createdAt: integer("createdAt", { mode: "timestamp_ms" }).notNull(),
+    expiresAt: integer("expiresAt", { mode: "timestamp_ms" }).notNull(),
+    familyCreatedAt: integer("familyCreatedAt", { mode: "timestamp_ms" }).notNull(),
+    usedAt: integer("usedAt", { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    index("RefreshToken_familyId_idx").on(table.familyId),
+    index("RefreshToken_userId_idx").on(table.userId),
+    index("RefreshToken_sessionId_idx").on(table.sessionId),
+    index("RefreshToken_expiresAt_idx").on(table.expiresAt),
+  ],
+);
+
 export const businessRecords = sqliteTable(
   "BusinessRecord",
   {
@@ -630,3 +666,5 @@ export type ConversationRow = typeof conversations.$inferSelect;
 export type ConversationMemberRow = typeof conversationMembers.$inferSelect;
 export type MessageRow = typeof messages.$inferSelect;
 export type AttachmentRow = typeof attachments.$inferSelect;
+
+export type RefreshTokenRow = typeof refreshTokens.$inferSelect;

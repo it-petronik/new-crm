@@ -137,6 +137,36 @@ refuse them.
 The guest token can publish camera and microphone only, for this one meeting.
 Guests never reach recordings, chat or anything else.
 
+### Sharing a meeting: guest link versus internal link
+
+- **Guest link** (`/meet/<token>`): for clients and anyone outside
+  Enercore. Only people who manage the meeting (the organiser, or a room
+  owner or admin) can see, create, regenerate or revoke it.
+  - "Copy meeting link" copies it from the Meetings list, the details page,
+    a record's meetings, and inside the meeting.
+  - With no link yet, one confirmation ("Create guest link?" → Create & copy)
+    makes one. It keeps the meeting's admission rule, "host must admit" by
+    default, and lasts until the meeting ends.
+- **Internal link** (`/workspace/…/collaboration?tab=meetings&meeting=<id>`):
+  for people in Enercore. It always requires signing in, and afterwards
+  returns to the meeting. Everyone else sees "Copy internal link".
+- **The token.** It is HMAC-SHA256 of the invite's random id, keyed with
+  `MEETING_LINK_SECRET` (falling back to `LIVEKIT_API_SECRET` under its own
+  label). D1 stores only its SHA-256, so a database copy reveals nothing,
+  yet the server can show the same link to a manager on any device.
+- **Older links.** Links created before this change, or before a rotation of
+  that secret, still work but can't be shown again. The UI offers to
+  replace them.
+- **Revocation.** Regenerating revokes earlier links, and ending or cancelling
+  the meeting closes them.
+- **In the meeting.** Next to the title are "Secure meeting",
+  **Copy meeting link** and **Meeting info**. Meeting info is a popover, or a
+  bottom sheet on phones.
+  - Employees see the time, host, guest access, the link, and "Open meeting
+    details" (in a new tab, so the call keeps running).
+  - Guests see only the title, time, host's first name and the link they
+    came with. They never see CRM data.
+
 ### Attendance and reports
 
 - `MeetingSession` holds one row per connection, written from LiveKit
