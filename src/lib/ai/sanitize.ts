@@ -82,6 +82,8 @@ const INJECTION = [
   /\b(?:reveal|print|show|output) (?:your |the )?(?:prompt|instructions|system)\b/i,
   /<\/?(?:system|assistant|user|untrusted|instructions?)\b/i,
   /\b(?:update|delete|approve|assign|change) (?:all|every) (?:records?|leads?|orders?|prices?)\b/i,
+  /\b(?:tell|ask|instruct|make) (?:the )?(?:ai|assistant|model|bot|copilot)\b/i,
+  /\bmark (?:this|the|my) (?:lead|deal|quotation|quote|record|invoice) (?:as )?(?:won|lost|approved|accepted|paid|closed)\b/i,
 ];
 
 export const looksLikeInjection = (text: string) => INJECTION.some((p) => p.test(text));

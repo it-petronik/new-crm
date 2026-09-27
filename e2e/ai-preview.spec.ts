@@ -16,8 +16,14 @@ test("AI endpoints refuse preview mode", async ({ request, baseURL }) => {
     ["meeting", { id: "m1" }],
     ["conversation", { id: "c1" }],
     ["ask", { question: "How is the pipeline?" }],
+    ["sales/today", { scope: "mine" }],
+    ["sales/lead-brief", { id: "EC-1" }],
+    ["sales/draft", { id: "EC-1", channel: "email", tone: "professional", purpose: "follow_up" }],
+    ["sales/quote-prep", { id: "EC-1" }],
+    ["sales/meeting-review", { id: "m1" }],
   ] as const)
     expect((await request.post(`/api/ai/${feature}`, { headers, data })).status(), feature).toBe(409);
+  for (const path of ["/api/ai/sales/today", "/api/ai/sales/lead?id=EC-1"]) expect((await request.get(path)).status(), path).toBe(409);
 });
 
 test("no Enercore AI in the preview workspace", async ({ page }) => {

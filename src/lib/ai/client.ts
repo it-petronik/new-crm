@@ -26,7 +26,7 @@ export type AiResult = {
 export type AiStatus = {
   available: boolean;
   model: string;
-  features: Record<AiFeature, boolean>;
+  features: Record<Exclude<AiFeature, "sales">, boolean> & { sales: boolean };
   tools: { id: string; description: string }[];
   examples: string[];
   limits: { per10Minutes: number; perDay: number };
@@ -72,4 +72,129 @@ export function openReference(ref: Reference) {
   if (t.type === "record") window.dispatchEvent(new CustomEvent("enercore:open-record", { detail: { kind: t.kind, id: t.id } }));
   else if (t.type === "meeting") window.dispatchEvent(new CustomEvent("enercore:open-meeting-page", { detail: { meetingId: t.id, view: t.view ?? "details" } }));
   else window.dispatchEvent(new CustomEvent("enercore:open-conversation-link", { detail: { conversationId: t.id, messageId: t.messageId ?? null } }));
+}
+
+/* --------------------------------------------------------- Sales Copilot */
+
+/**
+ * A reference as people read it: "Lead · ABC Trading", "Quotation · Q-1042",
+ * "Meeting · Product discussion", "Message · Ahmed, 25 Sep". The internal id
+ * (R1, R2…) stays in the data.
+ */
+export function refLabel(ref: Reference) {
+  const m = ref.label.match(/^([^:]+):\s*(.*?)(?:\s*\(([^()]+)\))?$/);
+  if (!m) return ref.label;
+  const [, kind, title, id] = m;
+  if (kind === "Quotation" || kind === "Invoice" || kind === "Order" || kind === "Shipment") return `${kind} · ${id ?? title}`;
+  if (kind.startsWith("Message from")) return `Message · ${kind.slice(13)}${title ? `, ${title}` : ""}`;
+  return `${kind} · ${title}`;
+}
+
+export type SalesSignalView = { type: string; recordId: string; label: string; action: string; score: number; days?: number; meetingId?: string };
+export type SalesPriorityView = {
+  record: { id: string; kind: string; title: string; status: string; company: string; owner: string; ownerId: string; value: string; due: string };
+  signals: SalesSignalView[];
+  score: number;
+  action: string;
+  why: string;
+  lastActivity: string | null;
+  daysIdle: number | null;
+  meetingId?: string;
+};
+export type TodayView = { today: string; scope: "mine" | "team"; priorities: SalesPriorityView[]; counts: Record<string, number>; total: number };
+export type PriorityNotes = TodayView & { notes: { recordId: string; why: string; action: string; label: string }[]; generatedAt: string; cached: boolean; model: string | null };
+export type NextActionView = { action: string; label: string; why: string; refs?: string[]; source: "ai" | "enercore" } | null;
+export type ProfileView = {
+  entries: {
+    field: string;
+    label: string;
+    status: "confirmed" | "requested" | "missing" | "conflict";
+    values: { value: string; source: string; ref: string | null; confidence: string; claim: string; claimLabel: string }[];
+  }[];
+  conflicts: string[];
+  missingForQuote: string[];
+  unconfirmedForQuote: string[];
+};
+export type LeadSignalsView = {
+  record: { id: string; title: string; status: string; contact: string };
+  signals: SalesSignalView[];
+  nextAction: NextActionView;
+  candidates: string[];
+  profile: ProfileView;
+  quotations: { id: string; status: string }[];
+  meetings: { id: string; title: string; status: string }[];
+  canWrite: boolean;
+  canQuote: boolean;
+  hasNotes: boolean;
+};
+export type SalesAnswerView = {
+  summary: string;
+  sections: { key: string; items: { text: string; refs: string[] }[] }[];
+  questions: string[];
+  confidence: string;
+  missing: string[];
+};
+export type SalesResult = {
+  task: string;
+  record?: { id: string; title: string } | null;
+  answer: SalesAnswerView;
+  nextAction?: NextActionView;
+  signals?: SalesSignalView[];
+  profile?: ProfileView;
+  requirements?: { field: string; label: string; value: string; source: string; claim: string; claimLabel: string }[];
+  suggestions?: Suggestion[];
+  scope?: string | null;
+  references: Reference[];
+  figures?: { label: string; value: string; ref?: string }[];
+  flaggedText?: number;
+  model: string;
+  cached: boolean;
+  generatedAt: string;
+};
+export type QuotePrepView = {
+  record: { id: string; title: string; contact: string };
+  customer: string;
+  entries: ProfileView["entries"];
+  readiness: { confirmed: string[]; requested: string[]; missing: string[]; conflicting: string[] };
+  missing: string[];
+  conflicts: string[];
+  setByYou: string[];
+  canCreate: boolean;
+  blockedBecause: string | null;
+  prefill: { leadId: string; product: string; quantity: number; unit: string; destination: string; incoterm: string; packaging: string; paymentTerms: string } | null;
+  references: Reference[];
+  generatedAt: string;
+};
+export type DraftView = {
+  record: { id: string; kind: string; title: string; contact: string };
+  draft: { channel: "email" | "whatsapp" | "message"; tone: string; purpose: string; subject: string; body: string };
+  removed: string[];
+  references: Reference[];
+  generatedAt: string;
+  cached: boolean;
+};
+
+const post = <T>(task: string, body: unknown) =>
+  call<T>(`/api/ai/sales/${task}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
+export const sales = {
+  today: (scope: "mine" | "team") => call<TodayView>(`/api/ai/sales/today?scope=${scope}`),
+  explainToday: (scope: "mine" | "team") => post<PriorityNotes>("today", { scope }),
+  lead: (id: string) => call<LeadSignalsView>(`/api/ai/sales/lead?id=${encodeURIComponent(id)}`),
+  leadBrief: (id: string) => post<SalesResult>("lead-brief", { id }),
+  quotePrep: (id: string) => post<QuotePrepView>("quote-prep", { id }),
+  draft: (body: { id: string; channel: string; tone: string; purpose: string }) => post<DraftView>("draft", body),
+  customer360: (id: string) => post<SalesResult>("customer-360", { id }),
+  customerBrief: (id: string) => post<SalesResult>("customer-brief", { id }),
+  meetingPrep: (id: string) => post<SalesResult>("meeting-prep", { id }),
+  meetingReview: (id: string) => post<SalesResult>("meeting-review", { id }),
+};
+
+/** Saves a reviewed draft as a note on the record (the ordinary records API). */
+export async function saveDraftAsNote(recordId: string, channel: string, text: string) {
+  await call<unknown>("/api/records", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "note", id: recordId, text: `Draft ${channel === "whatsapp" ? "WhatsApp message" : channel} prepared (not sent):\n${text}`.slice(0, 5000) }),
+  });
 }

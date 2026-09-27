@@ -6,6 +6,7 @@ import { Button, Textarea } from "../ui/controls";
 import { askQuestion, type AiResult } from "@/lib/ai/client";
 import type { Actor } from "@/lib/domain";
 import { AiAnswerView, AiLoading, useAiStatus } from "./ai-answer";
+import { SalesHome } from "./sales-copilot";
 
 /**
  * The Enercore AI workspace: ask a management question in plain words.
@@ -68,6 +69,7 @@ export default function AiWorkspace({ actor, preview }: { actor: Actor; preview:
         </section>
       ) : (
         <>
+          {status.features.sales && <SalesHome actor={actor} />}
           <form
             className="panel ai-ask"
             onSubmit={(e) => {

@@ -718,7 +718,7 @@ export const aiUsage = sqliteTable(
       .references(() => users.id, { onDelete: "cascade" }),
     feature: text("feature").notNull(),
     model: text("model").notNull(),
-    status: text("status").$type<"ok" | "invalid" | "error" | "timeout" | "limited">().notNull(),
+    status: text("status").$type<"ok" | "invalid" | "error" | "timeout" | "limited" | "cached">().notNull(),
     durationMs: integer("durationMs").notNull(),
     promptChars: integer("promptChars").notNull(),
     outputChars: integer("outputChars").notNull(),

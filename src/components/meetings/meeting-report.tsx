@@ -8,6 +8,7 @@ import { RELATED_NOUN, durationLabel, scopeLabel, statusLabel, type MeetingRepor
 import { businessStamp, businessStampShort } from "@/lib/gst";
 import { downloadCsv, toCsv } from "@/lib/export";
 import { AiPanel } from "../ai/ai-answer";
+import { MeetingOutcome } from "../ai/sales-copilot";
 
 /**
  * The meeting report: built only from what Enercore recorded — attendance
@@ -136,6 +137,7 @@ function ReportBody({ report }: { report: MeetingReport }) {
       </dl>
 
       <div className="meet-no-print">
+        {m.status === "ended" && m.related?.kind === "leads" && <MeetingOutcome key={`outcome-${m.id}`} meetingId={m.id} />}
         <AiPanel key={m.id} feature="meeting" id={m.id} label="Summarise this meeting" loadingLabel="Reading attendance and the meeting chat…" />
       </div>
 

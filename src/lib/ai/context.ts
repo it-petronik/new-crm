@@ -1,5 +1,5 @@
 import { AI_LIMITS } from "./config";
-import { factText, untrusted } from "./sanitize";
+import { clip, factText, redactSensitive, untrusted } from "./sanitize";
 import { businessToday } from "../gst";
 
 /**
@@ -57,9 +57,13 @@ export class AiContext {
     this.records.push(`- [${ref}] ${parts.join("; ")}`);
   }
 
+  /** Sanitised person-written text per reference, exactly as the model sees it. */
+  private sourceTexts = new Map<string, string[]>();
+
   /** Person-written text: untrusted data. */
   text(source: string, text: string, ref?: string) {
     if (!text.trim()) return;
+    if (ref) this.sourceTexts.set(ref, [...(this.sourceTexts.get(ref) ?? []), clip(redactSensitive(text), AI_LIMITS.maxBlockChars)]);
     const block = untrusted({ source, text, ref }, AI_LIMITS.maxBlockChars);
     if (block.flagged) this.flagged++;
     this.texts.push(block.rendered);
@@ -67,6 +71,11 @@ export class AiContext {
 
   allowSuggestionsFor(ref: string, kind: string, id: string) {
     this.suggestionTargets.set(ref, { kind, id });
+  }
+
+  /** The sanitised text behind a reference (for verifying quoted evidence). */
+  sourceText(ref: string) {
+    return (this.sourceTexts.get(ref) ?? []).join("\n");
   }
 
   /** The computed facts themselves, shown beside the answer as Enercore's figures. */

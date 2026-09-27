@@ -59,7 +59,7 @@ export async function meetingContext(db: Database, actor: Actor, id: unknown) {
   return {
     meeting,
     context: ctx,
-    scope: `No transcript or recording is available — this is based only on attendance, meeting activity and the meeting chat (${report.chat.length} message${report.chat.length === 1 ? "" : "s"}).`,
+    scope: `No transcript is available. This summary uses meeting details and Meeting Chat (${report.chat.length} message${report.chat.length === 1 ? "" : "s"}).`,
     instructions: `Summarise this meeting for people who couldn't attend: who took part and for how long (from FACTS), and what was discussed or agreed as far as the meeting chat shows. The summary MUST say plainly that no transcript or recording is available, so the spoken discussion isn't covered.
 List decisions and action items ONLY if the chat states them (in "nextActions", with who if named). Never write that someone "said" or "discussed" anything unless it is in the meeting chat text, and then say it was in the chat. Never imply audio or video was analysed. Never invent what was said.
 If the meeting is about a CRM record in CONTEXT, you may draft a short follow-up email (kind "email") and suggest up to 2 changes for that record: "add_note" (the meeting outcome, factual) or "set_follow_up" (YYYY-MM-DD)${related?.kind === "leads" ? ` or "change_status"` : ""}.`,

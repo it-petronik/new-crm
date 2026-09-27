@@ -141,3 +141,129 @@ Every model attempt (primary or fallback) is logged in `AiUsage`: feature, model
 - **API and browser suites** (`e2e/collab/ai.spec.ts`, `ai-ui.spec.ts`) run against the built Worker and D1 in live mode. The `AI` binding is a local fake (`scripts/fake-ai-worker.ts`, test only) that records every prompt in the test database. That lets the suite prove exactly which records, and which fenced text, reached the model for each role, branch and company. Fictional data is in `e2e/collab/ai-data.ts`.
 - **Preview** (`e2e/ai-preview.spec.ts`): no AI endpoints and no AI navigation.
 - **Real-model checks** are run manually through a scratch Worker using the same model code with fictional context only; they are not part of CI.
+
+---
+
+# Phase 2 — Sales Copilot
+
+Phase 2 is built on the Phase 1 gateway, tools, sanitiser, limits and suggestion flow, without replacing them.
+
+## Layers
+
+| Layer | File | AI? |
+| --- | --- | --- |
+| Sales Signals and priorities | `src/lib/sales/signals.ts` | No — pure, deterministic |
+| Commercial Requirement Profile | `src/lib/sales/requirements.ts` | Extraction only, verified |
+| Draft and suggestion safety | `src/lib/sales/safety.ts` | No — runs after the model |
+| Output schemas | `src/lib/ai/sales-schema.ts`, `src/lib/sales/sections.ts` | — |
+| Tools | `src/lib/ai/tools/sales.ts`, `tools/management.ts` | Explain / extract / draft |
+| API | `src/app/api/ai/sales/[task]/route.ts` | GET: no · POST: yes |
+| UI | `src/components/ai/sales-copilot.tsx` | On request only |
+
+## Sales Signals (deterministic)
+
+| Signal | Rule |
+| --- | --- |
+| `FOLLOW_UP_OVERDUE` | An open lead's `due` is before today (GST). |
+| `FOLLOW_UP_TODAY` | An open lead's `due` is today. |
+| `LEAD_GONE_QUIET` | An open lead with no update or note for 14+ days. |
+| `NEGOTIATION_STALLED` | A lead in Negotiation idle for 7+ days. |
+| `HIGH_VALUE_NO_NEXT_ACTION` | An open lead over the value threshold for its currency (USD 50k, EUR 45k, SGD 65k, AED 180k) with no follow-up date. |
+| `REQUIREMENT_INCOMPLETE` | A lead at Qualified or Negotiation with no product, quantity or destination. |
+| `QUOTATION_WAITING` | A quotation that is Sent with no activity for 3+ days. |
+| `QUOTATION_EXPIRING` | A Sent or Approved quotation whose validity ends within 7 days. |
+| `QUOTATION_EXPIRED` | A Sent or Approved quotation whose validity has passed. |
+| `MEETING_TODAY` | A scheduled or live meeting linked to the record, dated today. |
+| `MEETING_OUTCOME_MISSING` | A linked meeting ended in the last 14 days with no note on the record since. |
+
+Priorities are records with at least one signal, ranked by a fixed score: the strongest signal, plus 5 for each additional signal, plus a value boost. At most 10 are shown. The AI only explains an item and picks its action from that item's allowed actions; it never ranks.
+
+**Next best action.** Enercore computes an ordered candidate list from the signals, stage, quotation and meeting state, and missing information. The model may pick one of those candidates and write a one-sentence "why". Anything else falls back to the first candidate, with a "why" built from the facts.
+
+## Commercial Requirement Profile
+
+The profile is derived on each request and not stored; there is no new table.
+
+- **Recorded values** come from the lead's fields and from its quotations (Incoterm, payment terms, line packaging).
+- **Stated values** are extracted by the model from notes and meeting chat. Each must quote its evidence, and the server keeps a value only if that evidence is found in the cited block and supports the value.
+- **Conflicts.** Different values for the same field are shown as "Conflicting information" with every source; none is chosen.
+- **Missing information** is the list of fields a quotation needs (product, quantity, destination, Incoterm, packaging, payment terms, delivery timeline) that have no value. Price, freight, availability and validity are always set by the seller and are never proposed by the AI.
+
+## Commercial claim status
+
+A value that is mentioned is not a confirmed commercial fact. Every requirement value carries its **source** and a **status**:
+
+| Status | Meaning | Example |
+| --- | --- | --- |
+| `recorded` | A CRM field, or Enercore's own quotation | Lead field · Quantity |
+| `confirmed` / `agreed` | The text says it was confirmed or agreed | "We agreed on LC at sight." |
+| `requested` | The customer asks for or needs it (including a target price) | "We require CIF Mombasa.", "Our target is USD 800." |
+| `preferred` | "We prefer…" | "We prefer LC at sight." |
+| `proposed` | Our side offered it | "We can offer FOB Jebel Ali." |
+| `discussed` | A question or a mention only | "Can you do LC at sight?", "Can you supply 500 MT?" |
+
+- **Status cap.** The model proposes a status, but it is capped by what the value's own sentence says (`statusFromSentence`). A question or a request can never become "agreed", and "have not agreed" is read as discussed.
+- **Readiness buckets.** Quotation readiness uses four: **known / confirmed**, **requested / discussed — not confirmed**, **missing**, **conflicting**.
+- **Commercial terms** (Incoterm, payment terms, target price, delivery timeline) are never taken as Enercore's acceptance:
+  - a quotation draft is pre-filled with them only when recorded or agreed;
+  - a post-meeting review never writes a merely requested term onto the lead;
+  - meeting prep asks "…can we agree it?".
+- **What to quote** (product, quantity, destination, packaging) may follow the customer's request.
+- **Drafts** may acknowledge a request ("We noted your request for LC at sight") but never confirm it. Sentences that confirm, accept or agree to a requested value, or say it "is fine", are removed after the model answers.
+
+## Drafts
+
+- **Channels:** email, WhatsApp or general message.
+- **Tones:** professional (the default), concise or warm.
+- **Model:** the fast model.
+- **Safety filter:** after the model answers, the server removes any sentence that claims stock or availability, guaranteed delivery, a confirmed price or offer, or accepted payment terms. It also removes any money amount not found in the context. Removals are listed to the user.
+- **Nothing is sent.** The user can Copy the draft, edit it, or use it as a note (the ordinary records API).
+
+## Post-meeting workflow
+
+For an ended meeting linked to a lead, **Review outcome** produces:
+
+- what happened, decisions, requirements mentioned, action items and the next step;
+- the scope line "No transcript is available. This summary uses meeting details and Meeting Chat.";
+- a checklist of suggested updates:
+  - **Outcome note** — pre-ticked. Composed by Enercore and labelled as coming from the meeting chat.
+  - **Follow-up date** — pre-ticked.
+  - **Requirement update** — pre-ticked. The lead's fields, applied as the ordinary edit, guarded by the record version seen when it was suggested.
+  - **Status change** — never pre-ticked.
+
+Apply selected goes through `PATCH /api/records`, as the person, and is audited.
+
+## Quotation preparation
+
+This shows the profile, what is missing, any conflicts, and the "set by you" fields. **Create quotation draft** is enabled only when product and quantity are settled (known and not conflicting). It opens the normal quotation form pre-filled with settled values only, with a unit price of 0. The person reviews, prices and saves it; nothing is approved or sent.
+
+## Manager tools and search
+
+These are added to the fixed tool catalogue:
+
+- `leads_attention`
+- `quotations_waiting`
+- `high_value_no_next_action`
+- `search`
+
+`search` checks structured fields first (title, product, destination and country, contact, packaging, Incoterm), then notes. It uses a small synonym list (asphalt ↔ bitumen). The pipeline answer now includes quiet, stalled and waiting counts, and no forecast.
+
+Anything grouped by person is reported as operational facts. The system rules forbid judging or ranking people.
+
+## Model routing, cost and freshness
+
+- **Primary tier** (70B, with Scout as fallback): lead brief, requirement extraction, customer brief and 360, meeting prep, post-meeting review.
+- **Fast tier** (`@cf/meta/llama-3.1-8b-instruct-fast`, with the primary as fallback): drafts and priority explanations.
+- **No model** for signals, priorities, lead intelligence (GET) or quotation preparation (which reuses the cached extraction).
+- **Cache.** Identical requests from the same person reuse the answer for 30 minutes from the edge cache. The key is a hash of exactly what the model would see, so any change to a record, note, message or meeting, or a new day, produces a fresh answer. Cache hits are logged as `cached` in `AiUsage` and still count toward the rate limits.
+- **No background AI.** AI never runs on page load, per record, or in a loop. My Day shows deterministic signals only.
+
+## Safety additions
+
+- **Rules:** proposals are written in future tense, nothing is claimed as done unless the CRM records it, and people are never judged.
+- **Completed-event claims** ("email sent", "customer agreed") in AI text, suggestions or next actions are dropped unless the context records them.
+- **"Tell the AI to…"** and **"mark this lead Won"** are flagged as injection. While any flagged text is present, no status change is proposed.
+
+## Schema
+
+There is **no new migration.** `AiUsage.status` can now also be `cached`, and there are two new nullable token columns. Those columns are part of migration 0010, which Phase 1 already applied.

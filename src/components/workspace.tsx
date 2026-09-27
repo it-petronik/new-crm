@@ -135,8 +135,12 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useCollabSummary } from "@/lib/collab-client";
 import { HubSkeleton } from "./collaboration/skeletons";
-import { AiPanel } from "./ai/ai-answer";
+import { CustomerCopilot, LeadCopilot, MyDaySuggestions } from "./ai/sales-copilot";
 import { applySuggestion, type Suggestion } from "@/lib/ai/client";
+
+/** An AI task to start when a record opens. */
+type AutoAi = "brief" | "draft" | "customer-brief";
+type QuoteDraftPrefill = { leadId: string; product: string; quantity: number; unit: string; destination: string; incoterm: string; packaging: string; paymentTerms: string };
 
 // Loaded only when someone opens Collaboration, so the rest of the CRM does
 // not carry it. The skeleton keeps the three-pane shape while it arrives.
@@ -623,6 +627,43 @@ export default function Workspace({
     setSelected(record);
   }
   // A meeting's related record, or a record's meeting page, from anywhere.
+  const [autoAi, setAutoAi] = useState<{ id: string; task: AutoAi } | null>(null);
+  async function startQuoteDraft(prefill: QuoteDraftPrefill) {
+    let lead = data.records.find((r) => r.id === prefill.leadId && !r.deletedAt) ?? null;
+    if (!lead) {
+      try {
+        const response = await fetch(`/api/records?id=${encodeURIComponent(prefill.leadId)}`, { cache: "no-store" });
+        if (response.ok) lead = ((await response.json()) as { record: RecordItem }).record;
+      } catch {}
+    }
+    if (!lead || !canRead(actor, lead)) {
+      setToast("This lead is no longer available to you.");
+      return;
+    }
+    // Known values only. The unit price stays 0 (amount 0) — never guessed.
+    const source: RecordItem = {
+      ...lead,
+      product: prefill.product,
+      quantity: prefill.quantity,
+      unit: prefill.unit || lead.unit,
+      destination: prefill.destination,
+      amount: 0,
+      detail: "",
+      attributes: {
+        ...(lead.attributes?.country ? { country: lead.attributes.country } : {}),
+        ...(prefill.incoterm ? { incoterm: prefill.incoterm } : {}),
+        ...(prefill.paymentTerms ? { paymentTerms: prefill.paymentTerms } : {}),
+      },
+      lines: [{ description: prefill.product || lead.title, quantity: prefill.quantity || 1, unitPriceCents: 0, ...(prefill.packaging ? { packaging: prefill.packaging } : {}) }],
+    };
+    setSelected(null);
+    setQuoteSource(source);
+    setForm("quotations");
+  }
+  const quoteDraftRef = useRef(startQuoteDraft);
+  useEffect(() => {
+    quoteDraftRef.current = startQuoteDraft;
+  });
   const openRecordRef = useRef(openRecordById);
   const openViewRef = useRef(openView);
   const viewRef = useRef(view);
@@ -633,9 +674,13 @@ export default function Workspace({
   });
   useEffect(() => {
     const onRecord = (e: Event) => {
-      const { kind, id } = (e as CustomEvent<{ kind: Kind; id: string }>).detail;
+      const { kind, id, ai } = (e as CustomEvent<{ kind: Kind; id: string; ai?: AutoAi }>).detail;
+      setAutoAi(ai ? { id, task: ai } : null);
       void openRecordRef.current(kind, id);
     };
+    // Sales Copilot → "Create quotation draft": the ordinary quotation form,
+    // pre-filled with known values only (no price), for the person to review.
+    const onQuoteDraft = (e: Event) => void quoteDraftRef.current((e as CustomEvent<QuoteDraftPrefill>).detail);
     const onMeeting = (e: Event) => {
       const { meetingId, view: page } = (e as CustomEvent<{ meetingId: string; view: "details" | "report" }>).detail;
       setSelected(null);
@@ -652,7 +697,9 @@ export default function Workspace({
     window.addEventListener("enercore:open-record", onRecord);
     window.addEventListener("enercore:open-meeting-page", onMeeting);
     window.addEventListener("enercore:open-conversation-link", onConversation);
+    window.addEventListener("enercore:quote-draft", onQuoteDraft);
     return () => {
+      window.removeEventListener("enercore:quote-draft", onQuoteDraft);
       window.removeEventListener("enercore:open-record", onRecord);
       window.removeEventListener("enercore:open-meeting-page", onMeeting);
       window.removeEventListener("enercore:open-conversation-link", onConversation);
@@ -1330,7 +1377,14 @@ export default function Workspace({
                 )
               ) : module === "overview" ? (
                 <Overview
-                  meetingsToday={preview ? null : <TodayMeetings />}
+                  meetingsToday={
+                    preview ? null : (
+                      <>
+                        <TodayMeetings />
+                        <MyDaySuggestions onReview={() => openView("ai")} />
+                      </>
+                    )
+                  }
                   records={records}
                   actor={actor}
                   executive={executive}
@@ -1679,6 +1733,27 @@ export default function Workspace({
                   group: "Recent",
                   run: () => setSelected(r),
                 })),
+              // Enercore AI on the record last opened (live only; a few entries, not a menu).
+              ...(preview
+                ? []
+                : (() => {
+                    const seen = resolveVisible(recent.map((x) => x.id), scoped.records);
+                    const lead = seen.find((r) => r.kind === "leads");
+                    const customer = seen.find((r) => r.kind === "customers");
+                    const open = (r: RecordItem, task: AutoAi) => () => {
+                      setAutoAi({ id: r.id, task });
+                      setSelected(r);
+                    };
+                    return [
+                      ...(lead
+                        ? [
+                            { id: `ai-brief-${lead.id}`, label: `Ask AI about ${lead.title}`, detail: "Enercore AI · Lead brief", group: "Enercore AI", run: open(lead, "brief") },
+                            { id: `ai-draft-${lead.id}`, label: `Draft follow-up · ${lead.title}`, detail: "Enercore AI · Draft", group: "Enercore AI", run: open(lead, "draft") },
+                          ]
+                        : []),
+                      ...(customer ? [{ id: `ai-customer-${customer.id}`, label: `Prepare customer brief · ${customer.title}`, detail: "Enercore AI · Pre-call brief", group: "Enercore AI", run: open(customer, "customer-brief") }] : []),
+                    ];
+                  })()),
               // Operational slices: the questions people actually open the CRM
               // to answer, answered inside the palette rather than by building
               // a filter by hand. Each is scoped to what the actor can see.
@@ -1732,7 +1807,7 @@ export default function Workspace({
                 run: () => go(m),
               })),
               ...Object.entries(viewLabels)
-                .filter(([v]) => v !== "access" || canManageUsers(actor))
+                .filter(([v]) => (v !== "access" || canManageUsers(actor)) && (v !== "ai" || !preview))
                 .map(([v, label]) => ({
                   id: v,
                   label,
@@ -1779,6 +1854,8 @@ export default function Workspace({
             onAssign={!preview && canAssign(actor, selectedCurrent) ? () => setAssigning(selectedCurrent) : undefined}
             showMeetings={!preview}
             onAiApply={applyAiSuggestion}
+            onAiChanged={() => void reload()}
+            autoAi={autoAi?.id === selectedCurrent.id ? autoAi.task : undefined}
             onQuote={() => {
               setQuoteSource(selectedCurrent);
               setSelected(null);
@@ -2760,10 +2837,16 @@ function Detail({
   onLog,
   onAssign,
   onAiApply,
+  onAiChanged,
+  autoAi,
   showMeetings = false,
 }: {
   /** Applies one reviewed Enercore AI suggestion (records API), then refreshes. */
   onAiApply: (s: Suggestion) => Promise<void>;
+  /** Refreshes after an AI-assisted change made elsewhere (e.g. a draft saved as a note). */
+  onAiChanged: () => void;
+  /** Opened from the Sales Copilot or command palette: start this AI task straight away. */
+  autoAi?: AutoAi;
   record: RecordItem;
   actor: Actor;
   busy: boolean;
@@ -2891,15 +2974,10 @@ function Detail({
           )}
         </>
       )}
-      {showMeetings && (r.kind === "leads" || r.kind === "customers") && (
-        <AiPanel
-          key={r.id}
-          feature={r.kind === "leads" ? "lead" : "customer"}
-          id={r.id}
-          label={r.kind === "leads" ? "Brief me on this lead" : "Customer 360 summary"}
-          onApply={onAiApply}
-        />
+      {showMeetings && r.kind === "leads" && (
+        <LeadCopilot key={r.id} recordId={r.id} onLog={LOGGABLE.includes(r.kind) && writable ? onLog : undefined} auto={autoAi === "brief" || autoAi === "draft" ? autoAi : undefined} onApply={onAiApply} onChanged={onAiChanged} />
       )}
+      {showMeetings && r.kind === "customers" && <CustomerCopilot key={r.id} recordId={r.id} title={r.title} canNote={writable} auto={autoAi === "customer-brief" ? "brief" : undefined} />}
       {showMeetings && MEETING_KINDS.includes(r.kind) && !isCashEntry(r) && (
         <RecordMeetings record={{ id: r.id, title: r.title, ownerId: r.ownerId, owner: r.owner }} meId={actor.id} canCreate={canRead(actor, r)} />
       )}

@@ -13,9 +13,9 @@ import { CLOSED, customerNamesakes, formatTotals, isOpen, mayBeTruncated, readab
 /** A stored timestamp as its GST business date. */
 const gstDate = (at: string) => (Number.isNaN(Date.parse(at)) ? at.slice(0, 10) : gstToday(new Date(at)));
 
-const KIND_LABEL: Record<string, string> = { leads: "Lead", quotations: "Quotation", orders: "Order", logistics: "Shipment", accounts: "Invoice", customers: "Customer" };
+export const KIND_LABEL: Record<string, string> = { leads: "Lead", quotations: "Quotation", orders: "Order", logistics: "Shipment", accounts: "Invoice", customers: "Customer" };
 
-function describe(ctx: AiContext, r: RecordItem, relationship?: string) {
+export function describe(ctx: AiContext, r: RecordItem, relationship?: string) {
   const ref = ctx.ref(`${KIND_LABEL[r.kind] ?? r.kind}: ${r.title} (${r.id})`, { type: "record", kind: r.kind, id: r.id });
   ctx.record(ref, {
     kind: KIND_LABEL[r.kind] ?? r.kind,
@@ -144,6 +144,10 @@ export async function customerContext(db: Database, actor: Actor, id: unknown) {
   return {
     record: customer,
     context: ctx,
+    /** The related records (heuristic, readable only) and the customer's own reference. */
+    related: list,
+    customerRef: ref,
+    namesakes,
     scope: namesakes
       ? `Related records aren't shown: ${namesakes + 1} customers share this name, so their histories can't be separated.`
       : "Related records are matched by exact customer name (not a recorded link), so this history may be incomplete.",

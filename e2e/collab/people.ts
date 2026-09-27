@@ -98,6 +98,13 @@ export const people: TestPerson[] = [
   person("ai10", "Rex Ratelimit", ["Istanegry"], [], "Sales Manager"),
   person("aiday", "Dee Dailylimit", ["Istanegry"], [], "Sales Manager"),
   ...range(4).map((i) => person(`aiui${i}`, `Uma Aiscreen${i}`, ["Istanegry"], [], "Sales Manager")),
+  // Sales Copilot (Phase 2).
+  person("aisales", "Sana Copilot", ["Istanegry"], [], "Sales Executive"),
+  person("aisales2", "Omar Othersales", ["Istanegry"], [], "Sales Executive"),
+  person("aisales3", "Gus Greaseseller", ["Istanegry"], [], "Sales Executive"),
+  person("aimgr", "Maya Salesmanager", ["Istanegry"], [], "Sales Manager"),
+  person("aisui", "Sol Screen", ["Istanegry"], [], "Sales Executive"),
+  person("aisui2", "Sam Phone", ["Istanegry"], [], "Sales Executive"),
 ];
 
 export const byKey = (key: string) => {

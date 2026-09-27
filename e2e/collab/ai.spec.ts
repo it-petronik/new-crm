@@ -49,7 +49,7 @@ test("AI is on in live mode, and only for a signed-in employee on this origin", 
 
   const before = lastCallId();
   for (const feature of ["lead", "customer", "ask", "meeting", "conversation"]) {
-    const body = feature === "ask" ? { question: "How is the pipeline?" } : { id: "AIT-L1" };
+    const body = feature === "ask" ? { question: "Unauthenticated pipeline probe" } : { id: "AIT-L1" };
     expect((await ai(md, feature, body, { cookie: null })).status, `${feature} without a session`).toBe(401);
     expect((await ai(md, feature, body, { origin: "https://evil.example" })).status, `${feature} from another site`).toBe(403);
     expect((await ai(md, feature, body, { origin: null })).status, `${feature} with no origin`).toBe(403);
@@ -59,7 +59,7 @@ test("AI is on in live mode, and only for a signed-in employee on this origin", 
   expect((await ai(md, "lead", { id: "AIT-L1", extra: "x" })).status).toBe(400);
   expect((await md.request("POST", "/api/ai/lead", undefined, { raw: "{not json" })).status).toBe(400);
   expect((await ai(md, "ask", { question: "x".repeat(601) })).status).toBe(400);
-  expect([...callsSince(before, "AIT-L1"), ...callsSince(before, "How is the pipeline?")]).toHaveLength(0);
+  expect([...callsSince(before, "SUBJECT: Lead Zephyr Lubricants"), ...callsSince(before, "Unauthenticated pipeline probe")]).toHaveLength(0);
 });
 
 test("a meeting guest's credential is not an employee session", async () => {
@@ -82,10 +82,10 @@ test("a meeting guest's credential is not an employee session", async () => {
 
 test("each role gets only the AI its modules allow", async () => {
   const expected: Record<string, { tools: string[]; lead: boolean; customer: boolean; ask: boolean }> = {
-    aimd: { tools: ["overdue_followups", "pipeline_summary", "receivables", "status_breakdown", "top_open_deals"], lead: true, customer: true, ask: true },
-    aism: { tools: ["overdue_followups", "pipeline_summary", "status_breakdown", "top_open_deals"], lead: true, customer: true, ask: true },
-    aise1: { tools: ["overdue_followups", "pipeline_summary", "status_breakdown", "top_open_deals"], lead: true, customer: true, ask: true },
-    aiacc: { tools: ["receivables", "status_breakdown"], lead: false, customer: true, ask: true },
+    aimd: { tools: ["high_value_no_next_action", "leads_attention", "overdue_followups", "pipeline_summary", "quotations_waiting", "receivables", "search", "status_breakdown", "top_open_deals"], lead: true, customer: true, ask: true },
+    aism: { tools: ["high_value_no_next_action", "leads_attention", "overdue_followups", "pipeline_summary", "quotations_waiting", "search", "status_breakdown", "top_open_deals"], lead: true, customer: true, ask: true },
+    aise1: { tools: ["high_value_no_next_action", "leads_attention", "overdue_followups", "pipeline_summary", "quotations_waiting", "search", "status_breakdown", "top_open_deals"], lead: true, customer: true, ask: true },
+    aiacc: { tools: ["receivables", "search", "status_breakdown"], lead: false, customer: true, ask: true },
     aihr: { tools: [], lead: false, customer: false, ask: false },
     aiit: { tools: [], lead: false, customer: false, ask: false },
   };
@@ -101,8 +101,8 @@ test("each role gets only the AI its modules allow", async () => {
     const before = lastCallId();
     expect((await ai(c, "lead", { id: "AIT-L1" })).status).toBe(404);
     expect((await ai(c, "customer", { id: "AIT-C1" })).status).toBe(404);
-    expect((await ai(c, "ask", { question: "[[route:pipeline_summary,Istanegry,]] How is the pipeline?" })).status).toBe(403);
-    expect([...callsSince(before, "AIT-L1"), ...callsSince(before, "AIT-C1"), ...callsSince(before, "How is the pipeline?")]).toHaveLength(0);
+    expect((await ai(c, "ask", { question: "[[route:pipeline_summary,Istanegry,]] HR and IT pipeline probe" })).status).toBe(403);
+    expect([...callsSince(before, "SUBJECT: Lead Zephyr Lubricants"), ...callsSince(before, "SUBJECT: Customer Zephyr Lubricants"), ...callsSince(before, "HR and IT pipeline probe")]).toHaveLength(0);
   }
 });
 
@@ -165,7 +165,8 @@ test("Lead AI follows record scope: own records, branch, company, kind", async (
   expect((await ai(manager, "lead", { id: "AIT-C1" })).status, "not a lead").toBe(404);
   expect((await ai(manager, "lead", { id: "NO-SUCH-RECORD" })).status).toBe(404);
   expect((await ai(manager, "customer", { id: "AIT-C5" })).status, "another company's customer").toBe(404);
-  expect(["AIT-L3", "AIT-L1", "AIT-L8", "AIT-C1", "NO-SUCH-RECORD", "AIT-C5"].flatMap((id) => callsSince(before, id))).toHaveLength(0);
+  // No model call for any of them (each brief's prompt starts with its subject line).
+  expect(["SUBJECT: Lead Harbour Marine Supply", "SUBJECT: Lead Zephyr Lubricants", "SUBJECT: Customer Zephyr Lubricants", "NO-SUCH-RECORD"].flatMap((m) => callsSince(before, m))).toHaveLength(0);
   // The branch manager does get their own branch's lead.
   expect((await ai(branch, "lead", { id: "AIT-L7" })).status).toBe(200);
 });
@@ -234,17 +235,17 @@ test("management answers carry Enercore's own figures, for the person's scope", 
   let a = await ask(md, "[[route:pipeline_summary,Istanegry,]] How is the Istanegry pipeline?");
   expect(a.body.tool).toBe("pipeline_summary");
   expect(figure(a.body, "Scope")).toBe("Istanegry");
-  expect(figure(a.body, "Open leads")).toBe("15");
-  expect(figure(a.body, "Open pipeline value")).toBe("$243,000 + AED 12,000");
+  expect(figure(a.body, "Open leads")).toBe("25");
+  expect(figure(a.body, "Open pipeline value")).toBe("$709,000 + AED 12,000");
   expect(figure(a.body, "Won in the last 30 days")).toBe("1 ($30,000)");
-  expect(figure(a.body, 'At "Negotiation"')).toBe("2 lead(s), $167,000");
+  expect(figure(a.body, 'At "Negotiation"')).toBe("3 lead(s), $257,000");
   expect(recordIdsIn(a.answer!.prompt).some((id) => ["AIT-L8", "AIT-INV4", "AIT-C5"].includes(id))).toBe(false);
   // The (fake) model's points are the facts, verbatim — nothing recomputed.
   for (const p of a.body.answer.points as { text: string }[]) expect(a.answer!.prompt).toContain(p.text);
 
   a = await ask(md, "[[route:overdue_followups,Istanegry,]] Which follow-ups are overdue?");
-  expect(figure(a.body, "Overdue follow-ups")).toBe("3");
-  expect(recordIdsIn(a.answer!.prompt)).toEqual(["AIT-L1", "AIT-L3", "AIT-L7"]);
+  expect(figure(a.body, "Overdue follow-ups")).toBe("7");
+  expect(recordIdsIn(a.answer!.prompt)).toEqual(["AIT-L1", "AIT-L3", "AIT-L7", "AIT-P1", "AIT-P7", "AIT-UM1", "AIT-UP1"]);
 
   a = await ask(md, "[[route:top_open_deals,Istanegry,]] What are our biggest deals?");
   expect(figure(a.body, "Deals listed")).toBe("10");
@@ -252,10 +253,10 @@ test("management answers carry Enercore's own figures, for the person's scope", 
 
   a = await ask(md, "[[route:status_breakdown,Istanegry,leads]] Leads by status?");
   expect([figure(a.body, "Total"), figure(a.body, "New"), figure(a.body, "Qualified"), figure(a.body, "Negotiation"), figure(a.body, "Won"), figure(a.body, "Lost")]).toEqual([
-    "16",
-    "6 ($10,000)",
-    "5 (AED 12,000 + $10,000)",
-    "2 ($167,000)",
+    "26",
+    "7 ($20,000)",
+    "9 ($324,000 + AED 12,000)",
+    "3 ($257,000)",
     "1 ($30,000)",
     "0",
   ]);
@@ -271,8 +272,8 @@ test("management answers carry Enercore's own figures, for the person's scope", 
 
   // Branch scope: only the Dubai lead.
   a = await ask(branch, "[[route:pipeline_summary,,]] How is my pipeline?");
-  expect([figure(a.body, "Open leads"), figure(a.body, "Open pipeline value")]).toEqual(["1", "$77,000"]);
-  expect(recordIdsIn(a.answer!.prompt)).toEqual(["AIT-L7"]);
+  expect([figure(a.body, "Open leads"), figure(a.body, "Open pipeline value")]).toEqual(["2", "$83,000"]);
+  expect(recordIdsIn(a.answer!.prompt)).toEqual(["AIT-L7", "AIT-P7"]);
 
   // A Sales Executive: their own leads only.
   a = await ask(seller, "[[route:overdue_followups,,]] What is overdue for me?");
@@ -334,7 +335,7 @@ test("Meeting AI: only for people who may open the meeting; no transcript implie
   expect(call.prompt).toContain('source="meeting_chat"');
   expect(call.prompt).not.toMatch(/<system>/);
   expect(r.body.flaggedText).toBe(1);
-  expect(r.body.scope).toBe("No transcript or recording is available — this is based only on attendance, meeting activity and the meeting chat (2 messages).");
+  expect(r.body.scope).toBe("No transcript is available. This summary uses meeting details and Meeting Chat (2 messages).");
   expect(r.body.references[0].target).toEqual({ type: "meeting", id: meeting.id, view: "report" });
   // The organiser owns the related lead, so it's in context…
   expect(recordIdsIn(call.prompt)).toEqual(["AIT-L2"]);
@@ -505,8 +506,8 @@ test("AiUsage holds operational metadata only — never prompts, answers or CRM 
   const text = JSON.stringify(rows);
   for (const leak of ["Zephyr", "Ignore all", "TopSecret", "drum", "History 0", "Agreed:", "Harbour", "$"]) expect(text).not.toContain(leak);
   for (const row of rows) {
-    expect(["lead", "customer", "ask", "meeting", "conversation"]).toContain(row.feature);
-    expect(["ok", "invalid", "error", "timeout", "limited"]).toContain(row.status);
+    expect(["lead", "customer", "ask", "meeting", "conversation", "sales"]).toContain(row.feature);
+    expect(["ok", "invalid", "error", "timeout", "limited", "cached"]).toContain(row.status);
   }
 });
 

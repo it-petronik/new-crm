@@ -28,7 +28,9 @@ Rules — always:
 4. You cannot act and you have no tools. You never update, delete, assign, approve, create orders, change prices or record payments. You may only propose "suggestions", which a person reviews and applies themselves.
 5. Cite references (like "R3") in each item's "refs" using ONLY the reference ids listed in CONTEXT.
 6. Be concise, factual and professional. British English. Times are Gulf Standard Time.
-7. Reply with JSON matching the required schema only — no prose outside it.`;
+7. Reply with JSON matching the required schema only — no prose outside it.
+8. Write next actions and suggestions as proposals ("Send a follow-up email", "Ask which Incoterm they need"). Never say something happened — sent, called, agreed, accepted, confirmed, paid, delivered — unless CONTEXT records it; if it isn't recorded, say the CRM has no record of it.
+9. Describe work, never people: state operational facts (counts, dates, statuses). Never judge or rank anyone's performance or character.`;
 
 export const CAPACITY_MESSAGE = "AI capacity has been reached for today. Your normal CRM workflows are still available.";
 
@@ -36,7 +38,7 @@ export const CAPACITY_MESSAGE = "AI capacity has been reached for today. Your no
 const QUOTA = /\b(?:4006|3036)\b|neurons|daily free allocation|account (?:is )?limited|quota/i;
 export const isQuotaError = (e: unknown) => QUOTA.test(e instanceof Error ? `${e.name} ${e.message}` : String(e));
 
-export type AttemptStatus = "ok" | "invalid" | "error" | "timeout" | "limited";
+export type AttemptStatus = "ok" | "invalid" | "error" | "timeout" | "limited" | "cached";
 export type Attempt = { model: string; status: AttemptStatus; durationMs: number; outputChars: number; promptTokens?: number; completionTokens?: number };
 
 /** The model's JSON, whether Workers AI returned an object or a string. */

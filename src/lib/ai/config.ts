@@ -11,7 +11,19 @@ export const AI_MODELS = {
   primary: "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
   /** Used only if the primary fails or is unavailable. Also JSON-schema capable. */
   fallback: "@cf/meta/llama-4-scout-17b-16e-instruct",
+  /**
+   * Fast: short, bounded tasks (drafts, explaining deterministic priorities,
+   * meeting preparation). Falls back to the primary.
+   */
+  fast: "@cf/meta/llama-3.1-8b-instruct-fast",
 } as const;
+
+/** Which models a task tier tries, in order (each once). */
+export type AiTier = "primary" | "fast";
+export const TIER_MODELS: Record<AiTier, readonly string[]> = {
+  primary: [AI_MODELS.primary, AI_MODELS.fallback],
+  fast: [AI_MODELS.fast, AI_MODELS.primary],
+};
 
 export const AI_LIMITS = {
   /** Low temperature: explanations of facts, not creativity. */
@@ -28,9 +40,11 @@ export const AI_LIMITS = {
   perUserPerDay: 200,
   /** Across the whole company, per day (capacity guard). */
   globalPerDay: 3_000,
+  /** A cached answer is reused for identical input (same person, same data) for this long. */
+  cacheSeconds: 1_800,
 } as const;
 
-export type AiFeature = "lead" | "customer" | "ask" | "meeting" | "conversation";
+export type AiFeature = "lead" | "customer" | "ask" | "meeting" | "conversation" | "sales";
 
 export const FEATURE_LABELS: Record<AiFeature, string> = {
   lead: "Lead brief",
@@ -38,6 +52,7 @@ export const FEATURE_LABELS: Record<AiFeature, string> = {
   ask: "Ask Enercore AI",
   meeting: "Meeting summary",
   conversation: "Conversation summary",
+  sales: "Sales Copilot",
 };
 
 type AiRun = (model: string, input: unknown, options?: unknown) => Promise<unknown>;

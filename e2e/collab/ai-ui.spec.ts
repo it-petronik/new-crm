@@ -10,7 +10,7 @@ import { note } from "./ai-helpers";
  * and one request per click however it's clicked.
  *
  * People: aiui1–aiui4 and aihr (read-only use here). Data: ai-data.ts.
- * Only notes are applied here, so ai.spec.ts's figures are unaffected.
+ * Only a future follow-up date is applied here, so ai.spec.ts's figures are unaffected.
  */
 
 const AI = "/workspace/all-companies/enercore-ai";
@@ -120,42 +120,40 @@ test("a role without AI tools sees why, with no prompts", async ({ browser }) =>
 test("Lead AI: one request per click, suggestions change nothing until reviewed and applied", async ({ browser }) => {
   const { client, page, context } = await signedIn(browser, "aiui3");
   await note(client, "AIT-U3", "Spoke to buyer. [[fake:suggest]]");
-  const leads = countRequests(page, "/api/ai/lead");
+  const briefs = countRequests(page, "/api/ai/sales/lead-brief");
   await page.goto("/workspace/all-companies/sales-pipeline");
   await openRecord(page, "leads", "AIT-U3");
   const dialog = page.getByRole("dialog", { name: "Screen Test Lead 3" });
   await expect(dialog).toBeVisible();
   const panel = dialog.getByRole("region", { name: "Enercore AI" });
-  await panel.getByRole("button", { name: "Brief me on this lead" }).dblclick();
-  await expect(panel.locator(".ai-answer")).toBeVisible();
-  expect(leads).toHaveLength(1);
-  await expect(panel.locator(".ai-draft")).toContainText("Nothing is sent. Review and send it yourself.");
+  await panel.getByRole("button", { name: "Brief me" }).dblclick();
+  await expect(panel.locator(".copilot-answer")).toBeVisible();
+  expect(briefs).toHaveLength(1);
 
-  // Only the three safe kinds are offered.
-  const items = panel.locator(".ai-suggestions li");
-  await expect(items).toHaveCount(3);
-  await expect(items.nth(0)).toContainText("Add a note to Screen Test Lead 3");
-  await expect(items.nth(2)).toContainText("Change Screen Test Lead 3 from Qualified to Negotiation");
+  // Only safe kinds are offered (the "delete" proposal is gone); a status change is never pre-ticked.
+  const items = panel.locator(".copilot-checklist li");
+  await expect(items).toHaveCount(2);
+  await expect(items.nth(0)).toContainText("Set the next follow-up on Screen Test Lead 3");
+  await expect(items.nth(1)).toContainText("Change Screen Test Lead 3 from Qualified to Negotiation");
+  await expect(items.nth(0).getByRole("checkbox")).toBeChecked();
+  await expect(items.nth(1).getByRole("checkbox")).not.toBeChecked();
 
-  // Review → cancel: nothing changes.
-  await items.nth(0).getByRole("button", { name: "Review" }).click();
+  // Details → cancel: nothing changes.
+  await items.nth(0).getByRole("button", { name: "Details" }).click();
   const review = page.getByRole("dialog", { name: "Review suggested change" });
-  await expect(review).toContainText("Customer confirmed interest in a trial order.");
-  await expect(review).toContainText("(Suggested by Enercore AI, reviewed by Uma Aiscreen3.)");
+  await expect(review).toContainText("Next follow-up");
   await review.getByRole("button", { name: "Cancel" }).click();
   await expect(review).toBeHidden();
   let record = (await client.request("GET", "/api/records?id=AIT-U3")).body.record;
-  expect(record.notes).toHaveLength(1);
+  const due = record.due as string;
 
-  // Review → Apply: saved through the records API as this person.
-  await items.nth(0).getByRole("button", { name: "Review" }).click();
-  await review.getByRole("button", { name: "Apply change" }).click();
-  await expect(review).toBeHidden();
+  // Apply selected: only the ticked follow-up, through the records API as this person.
+  await panel.getByRole("button", { name: "Apply selected" }).click();
   await expect(items.nth(0)).toContainText("Applied");
-  await expect(page.getByText("Change applied.")).toBeVisible();
   record = (await client.request("GET", "/api/records?id=AIT-U3")).body.record;
-  expect(record.notes.map((n: { text: string }) => n.text).at(-1)).toBe("Customer confirmed interest in a trial order.\n\n(Suggested by Enercore AI, reviewed by Uma Aiscreen3.)");
+  expect(record.due).not.toBe(due);
   expect(record.status).toBe("Qualified");
+  expect(record.notes.at(-1).text).toMatch(/^Follow-up scheduled for \d{4}-\d{2}-\d{2}: Follow up after the meeting\.$/);
   await context.close();
 });
 
@@ -166,7 +164,7 @@ test("Customer 360, meeting report and conversation summaries in place", async (
   await page.goto("/workspace/all-companies/customers");
   await openRecord(page, "customers", "AIT-UC4");
   const customer = page.getByRole("dialog", { name: "Screen Test Lead 4" }).getByRole("region", { name: "Enercore AI" });
-  await customer.getByRole("button", { name: "Customer 360 summary" }).click();
+  await customer.getByRole("button", { name: "Customer 360" }).click();
   await expect(customer.locator(".ai-scope")).toHaveText("Related records are matched by exact customer name (not a recorded link), so this history may be incomplete.");
   await page.getByRole("button", { name: "Close dialog" }).click();
 
@@ -177,7 +175,7 @@ test("Customer 360, meeting report and conversation summaries in place", async (
   await page.goto(`${HUB}?tab=meetings&meeting=${meeting.id}&mview=report`);
   const report = page.getByRole("region", { name: "Enercore AI" });
   await report.getByRole("button", { name: "Summarise this meeting" }).click();
-  await expect(report.locator(".ai-scope")).toHaveText("No transcript or recording is available — this is based only on attendance, meeting activity and the meeting chat (1 message).");
+  await expect(report.locator(".ai-scope")).toHaveText("No transcript is available. This summary uses meeting details and Meeting Chat (1 message).");
 
   // Conversation: the header button opens a summary with its scope.
   const room = await client.createRoom({ name: "Screen AI room", members: ["aiui1"] });

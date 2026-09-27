@@ -9,6 +9,7 @@ import {
   applySuggestion,
   askAi,
   openReference,
+  refLabel,
   type AiResult,
   type AiStatus,
   type Reference,
@@ -36,14 +37,14 @@ export function useAiStatus(enabled = true) {
   return enabled ? status : null;
 }
 
-function RefChips({ ids, refs }: { ids: string[]; refs: Map<string, Reference> }) {
+export function RefChips({ ids, refs }: { ids: string[]; refs: Map<string, Reference> }) {
   const known = [...new Set(ids)].map((id) => refs.get(id)).filter((r): r is Reference => !!r);
   if (!known.length) return null;
   return (
     <span className="ai-refs">
       {known.map((r) => (
         <button key={r.id} type="button" className="ai-ref" title={r.label} onClick={() => openReference(r)}>
-          {r.id}
+          {refLabel(r)}
         </button>
       ))}
     </span>
@@ -92,7 +93,7 @@ function Draft({ draft }: { draft: NonNullable<AiResult["answer"]["draft"]> }) {
   );
 }
 
-function ReviewSuggestion({ suggestion, onClose, onApplied, apply }: { suggestion: Suggestion; onClose: () => void; onApplied: () => void; apply: (s: Suggestion) => Promise<void> }) {
+export function ReviewSuggestion({ suggestion, onClose, onApplied, apply }: { suggestion: Suggestion; onClose: () => void; onApplied: () => void; apply: (s: Suggestion) => Promise<void> }) {
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const a = suggestion.apply;
@@ -116,6 +117,15 @@ function ReviewSuggestion({ suggestion, onClose, onApplied, apply }: { suggestio
                 {suggestion.record.status} → <b>{a.status}</b>
               </dd>
             </div>
+          ) : a.action === "edit" ? (
+            (suggestion.changes ?? []).map((c) => (
+              <div key={c.field}>
+                <dt>{c.field}</dt>
+                <dd>
+                  {c.from} → <b>{c.to}</b> <small className="muted">({c.source})</small>
+                </dd>
+              </div>
+            ))
           ) : (
             <>
               {a.due && (
@@ -236,10 +246,9 @@ export function AiAnswerView({ result, onApply }: { result: AiResult; onApply?: 
           <ul>
             {result.references.map((r) => (
               <li key={r.id}>
-                <button type="button" className="ai-ref" onClick={() => openReference(r)}>
-                  {r.id}
-                </button>{" "}
-                {r.label}
+                <button type="button" className="ai-ref" title={r.label} onClick={() => openReference(r)}>
+                  {refLabel(r)}
+                </button>
               </li>
             ))}
           </ul>

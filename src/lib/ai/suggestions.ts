@@ -20,13 +20,21 @@ import { clip } from "./sanitize";
 
 export type Suggestion = {
   id: string;
-  type: "add_note" | "set_follow_up" | "change_status";
+  type: "add_note" | "set_follow_up" | "change_status" | "update_profile";
   record: { id: string; kind: string; title: string; status: string; due: string };
   /** What will change, in words. */
   label: string;
   reason: string;
   /** Body for PATCH /api/records — sent only when the person applies it. */
-  apply: { action: "note"; id: string; text: string; due?: string } | { action: "status"; id: string; status: string };
+  apply:
+    | { action: "note"; id: string; text: string; due?: string }
+    | { action: "status"; id: string; status: string }
+    /** A requirement update: the ordinary edit, guarded by the version seen when it was suggested. */
+    | { action: "edit"; id: string; expectedUpdatedAt: string; values: Record<string, unknown> };
+  /** Pre-ticked in a review checklist (status changes never are). */
+  defaultSelected?: boolean;
+  /** Field-level detail for requirement updates: what changes, and the source. */
+  changes?: { field: string; from: string; to: string; source: string }[];
 };
 
 /** A follow-up date the CRM would accept from AI: today through today + 1 calendar year (GST). */

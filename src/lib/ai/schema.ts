@@ -48,12 +48,25 @@ export const answerJsonSchema = z.toJSONSchema(answerSchema, { target: "draft-7"
 
 /* ------------------------------------------------ management question router */
 
-export const MANAGEMENT_TOOLS = ["pipeline_summary", "overdue_followups", "status_breakdown", "top_open_deals", "receivables", "none"] as const;
+export const MANAGEMENT_TOOLS = [
+  "pipeline_summary",
+  "overdue_followups",
+  "status_breakdown",
+  "top_open_deals",
+  "receivables",
+  "leads_attention",
+  "quotations_waiting",
+  "high_value_no_next_action",
+  "search",
+  "none",
+] as const;
 
 export const routeSchema = z.object({
   tool: z.enum(MANAGEMENT_TOOLS),
   company: z.string().max(40).nullable().default(null),
   kind: z.enum(["leads", "quotations", "orders", "logistics", "accounts", "customers"]).nullable().default(null),
+  /** Search terms (search tool only): product, grade, port, customer words. */
+  terms: z.array(z.string().trim().min(2).max(40)).max(5).default([]),
   /** Why this tool answers the question (for the audit trail, not shown). */
   because: z.string().max(200).default(""),
 });
@@ -115,4 +128,4 @@ export const ANSWER_FORMAT = `Output format — one JSON object with these field
 - "missing": up to 5 short items the answer would need but CONTEXT doesn't have.
 Keep every text short. Never put the whole answer into "summary".`;
 
-export const ROUTE_FORMAT = `Output format — one JSON object: {"tool": one tool name from the list, or "none"; "company": a company name from the allowed list, or null; "kind": "leads" | "quotations" | "orders" | "logistics" | "accounts" | "customers" (status_breakdown only), or null; "because": a few words}.`;
+export const ROUTE_FORMAT = `Output format — one JSON object: {"tool": one tool name from the list, or "none"; "company": a company name from the allowed list, or null; "kind": "leads" | "quotations" | "orders" | "logistics" | "accounts" | "customers" (status_breakdown only), or null; "terms": for "search" only, 1–5 short search words from the question (e.g. ["SN500"], ["asphalt"], ["Mombasa"]), otherwise []; "because": a few words}.`;
