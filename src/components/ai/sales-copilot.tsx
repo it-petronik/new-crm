@@ -643,68 +643,6 @@ export function CustomerCopilot({ recordId, title, canNote, auto }: { recordId: 
   );
 }
 
-/* ------------------------------------------------------ post-meeting review */
-
-export function MeetingOutcome({ meetingId }: { meetingId: string }) {
-  const status = useAiStatus();
-  const [result, setResult] = useState<SalesResult | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const once = useOnce();
-  if (!status?.available || !status.features.sales) return null;
-  const run = () =>
-    once(async () => {
-      setBusy(true);
-      setError("");
-      try {
-        setResult(await sales.meetingReview(meetingId));
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Enercore AI couldn't answer right now.");
-      } finally {
-        setBusy(false);
-      }
-    });
-  return (
-    <section className="ai-panel copilot-panel" aria-label="Meeting outcome">
-      <header className="ai-panel-head">
-        <span className="ai-panel-title">
-          <Sparkles size={15} aria-hidden="true" /> Meeting completed
-        </span>
-        <Button className="secondary compact" disabled={busy} onClick={() => void run()}>
-          {result ? "Review again" : "Review outcome"}
-        </Button>
-      </header>
-      {busy && <AiLoading label="Reading the meeting and its chat…" />}
-      {error && (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      )}
-      {!busy && result && (
-        <>
-          <SectionsView result={result} />
-          {result.requirements && result.requirements.length > 0 && (
-            <div className="ai-section">
-              <h4>Requirements stated in the chat</h4>
-              <ul>
-                {result.requirements.map((r, i) => (
-                  <li key={i}>
-                    {r.label}: {r.value}{" "}
-                    <small className="muted">
-                      — {r.source} · <span className={SETTLED.has(r.claim) ? "copilot-claim is-settled" : "copilot-claim is-open"}>{r.claimLabel}</span>
-                    </small>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {result.suggestions && <SuggestionChecklist suggestions={result.suggestions} />}
-        </>
-      )}
-    </section>
-  );
-}
-
 /* ---------------------------------------------------------- Sales Copilot home */
 
 const greeting = () => {

@@ -105,6 +105,14 @@ export const people: TestPerson[] = [
   person("aimgr", "Maya Salesmanager", ["Istanegry"], [], "Sales Manager"),
   person("aisui", "Sol Screen", ["Istanegry"], [], "Sales Executive"),
   person("aisui2", "Sam Phone", ["Istanegry"], [], "Sales Executive"),
+  // Meeting Intelligence (Phase 3, zero-cost): Petronik, meetings and leads created by the tests.
+  person("aim1", "Imran Organiser", ["Petronik"], [], "Sales Manager"),
+  person("aim2", "Ines Invitee", ["Petronik"], [], "Sales Executive"),
+  person("aim3", "Oscar Outsider", ["Petronik"], [], "Sales Manager"),
+  person("aim4", "Afrah Othercompany", ["Afrilube"], [], "Sales Manager"),
+  person("aim5", "Dora Deactivated", ["Petronik"], [], "Sales Manager"),
+  person("aim6", "Luca Longmeeting", ["Petronik"], [], "Sales Manager"),
+  person("aim7", "Nadia Notesui", ["Petronik"], [], "Sales Manager"),
 ];
 
 export const byKey = (key: string) => {

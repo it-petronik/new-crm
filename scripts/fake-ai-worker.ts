@@ -140,6 +140,50 @@ function priorityNotes(prompt: string) {
   return { items: [...refs.map((ref) => ({ ref, why: "It matters today because of its facts.", action: "prepare_quotation" })), { ref: "R99", why: "Invented priority.", action: "call_customer" }] };
 }
 
+/**
+ * Meeting Intelligence extraction — a careless model on purpose: it invents an
+ * owner, promotes hedges to decisions, cites a reference that doesn't exist
+ * and calls every requirement "agreed". The server must correct all of it.
+ */
+function meetingExtraction(prompt: string, system: string) {
+  const bs = blocks(prompt);
+  const single = /"summary": 2–4 short sentences/.test(system);
+  const plainText = (t: string) => t.replace(/^[^:]*·[^:]*: /, "");
+  const decisions = bs
+    .filter((b) => /\b(?:decision|agreed|decided|we will|maybe we should)\b/i.test(b.text))
+    .map((b) => ({ text: plainText(b.text).slice(0, 200), refs: [b.ref] }));
+  decisions.push({ text: "Invented decision with no source.", refs: ["R99"] });
+  const actionItems = bs
+    .filter((b) => /\b(?:will send|will share|action item|to do)\b|\(action\)/i.test(b.text))
+    .map((b) => {
+      const named = b.text.match(/owner: ([A-Z][a-z]+(?: [A-Z][a-z]+)?)/)?.[1] ?? b.text.match(/\b([A-Z][a-z]+) will (?:send|share)\b/)?.[1];
+      const due = b.text.match(/due (\d{4}-\d{2}-\d{2})/)?.[1] ?? null;
+      return { task: plainText(b.text).slice(0, 200), owner: named ?? "Invented Owner", due, refs: [b.ref] };
+    });
+  const openQuestions = bs.filter((b) => /\?\s*$/.test(b.text.trim())).map((b) => ({ text: plainText(b.text).slice(0, 200), refs: [b.ref] }));
+  const followUp = bs.map((b) => ({ b, d: b.text.match(/follow up on (\d{4}-\d{2}-\d{2})/i)?.[1] })).find((x) => x.d);
+  return {
+    summary: single ? "Fake meeting summary from the written record." : "",
+    keyPoints: bs.slice(0, 3).map((b) => ({ text: plainText(b.text).slice(0, 200), refs: [b.ref] })),
+    decisions,
+    actionItems,
+    openQuestions,
+    nextSteps: [{ text: "Send the revised offer.", refs: bs[0] ? [bs[0].ref] : [] }],
+    requirements: extraction(prompt, "").items,
+    followUp: followUp ? { date: followUp.d, ref: followUp.b.ref } : { date: null, ref: null },
+  };
+}
+
+function meetingSynthesis(prompt: string) {
+  const facts = (prompt.split("FACTS")[1]?.split("RECORDS")[0] ?? "").split("\n").filter((l) => l.startsWith("- ") && l !== "- (none)");
+  const cited = facts.filter((f) => refsIn(f).length).slice(0, 6);
+  return {
+    summary: "Fake synthesis over the merged facts.",
+    keyPoints: cited.map((f) => ({ text: f.slice(2, 200), refs: refsIn(f) })),
+    nextSteps: cited.slice(0, 1).map((f) => ({ text: "Follow up on the open points.", refs: refsIn(f) })),
+  };
+}
+
 export class FakeAi extends WorkerEntrypoint<Env> {
   async run(model: string, input: Input) {
     const system = input.messages?.[0]?.content ?? "";
@@ -163,6 +207,8 @@ export class FakeAi extends WorkerEntrypoint<Env> {
       const [tool = "none", company = "", kind = "", terms = ""] = (route ?? "none").split(",");
       return { response: { tool, company: company || null, kind: kind || null, terms: terms ? terms.split("|") : [], because: "test route" }, usage };
     }
+    if ("actionItems" in props) return { response: meetingExtraction(prompt, system), usage };
+    if ("nextSteps" in props && "keyPoints" in props) return { response: meetingSynthesis(prompt), usage };
     if ("sections" in props) return { response: salesAnswer(system, prompt, mode), usage };
     if ("body" in props) return { response: draft(system, mode), usage };
     if ("items" in props) return { response: /extract the customer's commercial requirements/i.test(system) ? extraction(prompt, mode) : priorityNotes(prompt), usage };

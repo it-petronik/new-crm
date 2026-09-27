@@ -139,7 +139,7 @@ export type MeetingReport = {
   activity: { type: string; actorName: string | null; at: string }[];
   recordings: RecordingView[];
   /** The meeting's chat, in order — kept with the meeting, shown here. */
-  chat: { name: string; guest: boolean; at: string; body: string; deleted: boolean }[];
+  chat: { id: string; name: string; guest: boolean; userId: string | null; at: string; body: string; deleted: boolean }[];
 };
 
 /** A guest's view of the meeting behind their link: title and time only. */

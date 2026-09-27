@@ -17,6 +17,7 @@ import {
 } from "@livekit/components-react";
 import { ConnectionState, DisconnectReason, RoomEvent, ScreenSharePresets, Track, VideoPreset, type Participant, type RoomOptions } from "livekit-client";
 import {
+  NotebookPen,
   Circle,
   ClipboardCopy,
   Loader2,
@@ -45,6 +46,7 @@ import { decideGuest, endMeetingForAll, hostAction, meetingMessagesOf, recording
 import { MEETING_CHAT_TOPIC, durationLabel, type MeetingMessageView, type RoomSession } from "@/lib/meetings";
 import { QUALITY_LABELS, QUALITY_PRESETS, loadPrefs, type QualityMode } from "@/lib/meeting-media";
 import MeetingMessages, { type ChatTransport } from "./meeting-messages";
+import MeetingNotes from "./meeting-notes";
 import { DeviceSelect } from "./device-setup";
 import { MeetingShare, useDismiss } from "./meeting-info";
 import { MediaTile, metaOf, useParticipantTick } from "./media-tile";
@@ -199,7 +201,7 @@ function Stage({ session, choices, notice, setNotice }: { session: RoomSession; 
   );
   const participants = useParticipants();
   const speaking = useSpeakingParticipants();
-  const [panel, setPanel] = useState<"people" | "chat" | null>(null);
+  const [panel, setPanel] = useState<"people" | "chat" | "notes" | null>(null);
   const [more, setMore] = useState(false);
   // The More menu closes on Escape or a click anywhere outside it.
   const moreRef = useRef<HTMLDivElement>(null);
@@ -487,9 +489,9 @@ function Stage({ session, choices, notice, setNotice }: { session: RoomSession; 
       </main>
 
       {panel && (
-        <aside className="meet-panel" aria-label={panel === "people" ? "Participants" : "Chat"}>
+        <aside className="meet-panel" aria-label={panel === "people" ? "Participants" : panel === "notes" ? "Meeting notes" : "Chat"}>
           <div className="meet-panel-head">
-            <h2>{panel === "people" ? `People (${participants.length})` : "Chat"}</h2>
+            <h2>{panel === "people" ? `People (${participants.length})` : panel === "notes" ? "Meeting notes" : "Chat"}</h2>
             <Button className="icon-button" aria-label="Close panel" onClick={() => setPanel(null)}>
               <X size={16} />
             </Button>
@@ -514,6 +516,8 @@ function Stage({ session, choices, notice, setNotice }: { session: RoomSession; 
                 <PersonRow key={p.identity} p={p} meId={session.identity} canModerate={moderator} meetingId={session.meetingId} onError={setNotice} />
               ))}
             </ul>
+          ) : panel === "notes" && !session.guest ? (
+            <MeetingNotes meetingId={session.meetingId} compact />
           ) : (
             <MeetingMessages transport={chatTransport} signal={chatSignal} />
           )}
@@ -634,6 +638,14 @@ function Stage({ session, choices, notice, setNotice }: { session: RoomSession; 
                       <Circle size={16} aria-hidden="true" /> <span>Recording isn&apos;t set up</span>
                     </button>
                   )}
+                </section>
+              )}
+              {!session.guest && (
+                <section aria-labelledby="more-notes">
+                  <h3 id="more-notes">Meeting record</h3>
+                  <button type="button" className="meet-menu-item" onClick={() => (setMore(false), setPanel("notes"))}>
+                    <NotebookPen size={16} aria-hidden="true" /> <span>Meeting notes</span>
+                  </button>
                 </section>
               )}
               <section aria-labelledby="more-help">

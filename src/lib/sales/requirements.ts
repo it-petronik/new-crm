@@ -48,7 +48,7 @@ export const REQUIREMENT_LABELS: Record<RequirementField, string> = {
 /** What a quotation needs before it can be prepared (price is always the seller's to set). */
 export const QUOTE_REQUIRED: RequirementField[] = ["product", "quantity", "destination", "incoterm", "packaging", "paymentTerms", "deliveryTimeline"];
 
-export type RequirementSource = { label: string; ref?: string; kind: "field" | "quotation" | "note" | "meeting_chat" | "message" | "description" };
+export type RequirementSource = { label: string; ref?: string; kind: "field" | "quotation" | "note" | "meeting_chat" | "meeting_note" | "message" | "description" };
 /**
  * What a value's source actually says about it. "recorded" = a CRM field or
  * our own quotation; the rest describe person-written text. Only recorded,

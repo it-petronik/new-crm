@@ -730,3 +730,61 @@ export const aiUsage = sqliteTable(
   },
   (table) => [index("AiUsage_userId_createdAt_idx").on(table.userId, table.createdAt), index("AiUsage_createdAt_idx").on(table.createdAt)],
 );
+
+/* ------------------------------------------------------------------------
+ * Meeting Intelligence (Phase 3, zero-cost: no transcription)
+ * --------------------------------------------------------------------- */
+
+/**
+ * Structured meeting notes, written by employees during (or right after) a
+ * meeting: a decision, an action item, a customer requirement or a general
+ * note. Internal only — guests never see them. `data` holds the few typed
+ * fields of that kind (requirement fields with their stated status; an
+ * action's owner and due date), never free-form blobs.
+ */
+export const meetingNotes = sqliteTable(
+  "MeetingNote",
+  {
+    id: text("id").primaryKey(),
+    meetingId: text("meetingId")
+      .notNull()
+      .references(() => meetings.id, { onDelete: "cascade" }),
+    authorId: text("authorId")
+      .notNull()
+      .references(() => users.id),
+    kind: text("kind").$type<"decision" | "action" | "requirement" | "note">().notNull(),
+    text: text("text").notNull(),
+    data: text("data", { mode: "json" }).$type<Record<string, string>>(),
+    createdAt: integer("createdAt", { mode: "timestamp_ms" }).notNull(),
+    deletedAt: integer("deletedAt", { mode: "timestamp_ms" }),
+  },
+  (table) => [index("MeetingNote_meetingId_createdAt_idx").on(table.meetingId, table.createdAt)],
+);
+
+/**
+ * The persisted AI meeting report — one current version per meeting,
+ * generated only when an employee asks. Built ONLY from meeting sources
+ * (details, attendance, Meeting Chat, meeting notes), which everyone who may
+ * open the meeting may see; lead-specific suggestions are derived per viewer
+ * at read time and never stored here. `fingerprint` identifies the inputs,
+ * so a stale report is flagged rather than silently regenerated.
+ */
+export const meetingReports = sqliteTable(
+  "MeetingReport",
+  {
+    meetingId: text("meetingId")
+      .primaryKey()
+      .references(() => meetings.id, { onDelete: "cascade" }),
+    version: integer("version").notNull().default(1),
+    fingerprint: text("fingerprint").notNull(),
+    report: text("report", { mode: "json" }).$type<unknown>().notNull(),
+    models: text("models").notNull(),
+    generatedBy: text("generatedBy")
+      .notNull()
+      .references(() => users.id),
+    generatedAt: integer("generatedAt", { mode: "timestamp_ms" }).notNull(),
+    editedSummary: text("editedSummary"),
+    editedBy: text("editedBy").references(() => users.id),
+    editedAt: integer("editedAt", { mode: "timestamp_ms" }),
+  },
+);

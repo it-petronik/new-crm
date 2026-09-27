@@ -23,6 +23,8 @@ import {
   QUOTE_REQUIRED,
   REQUIREMENT_LABELS,
   isSettledStatus,
+  STATED_STATUSES,
+  type ClaimStatus,
   buildProfile,
   canStartQuotation,
   quotationPrefill,
@@ -59,6 +61,7 @@ import {
 import type { AiAnswer } from "../schema";
 import { reviewSuggestions, type Suggestion } from "../suggestions";
 import { customerContext, describe } from "./crm";
+import { listMeetingNotes, NOTE_REQUIREMENT_FIELDS } from "../../meeting-notes";
 import { meetingContext } from "./meetings-collab";
 
 /**
@@ -135,7 +138,24 @@ async function leadBundle(db: Database, actor: Actor, id: unknown) {
   for (const [ref, s] of sources) s.text = ctx.sourceText(ref);
   for (const [ref, s] of [...sources]) if (!s.text.trim()) sources.delete(ref);
 
-  const recorded = recordedValues(lead, quotes, { lead: leadRef, quotation: (q) => quoteRefs.get(q.id) });
+  // Structured meeting notes on this lead's meetings: requirement notes are typed values
+  // (with the status the employee chose); the rest is context.
+  const noteValues: { field: RequirementField; value: RequirementValue }[] = [];
+  for (const m of meetings.slice(0, 5)) {
+    const ref = meetingRefs.get(m.id);
+    if (!ref) continue;
+    for (const n of await listMeetingNotes(db, m.id)) {
+      if (n.kind === "requirement") {
+        const data = (n.data ?? {}) as Record<string, string>;
+        const status = (STATED_STATUSES as readonly string[]).includes(data.status) ? (data.status as ClaimStatus) : "requested";
+        for (const [field, value] of Object.entries(data))
+          if (field !== "status" && (NOTE_REQUIREMENT_FIELDS as readonly string[]).includes(field) && value?.trim())
+            noteValues.push({ field: field as RequirementField, value: { value: value.trim(), source: { label: `Meeting note · ${m.title}`, ref, kind: "meeting_note" }, confidence: "high", status } });
+      } else ctx.text("meeting_note", `${n.kind}: ${n.text}`, ref);
+    }
+  }
+
+  const recorded = [...recordedValues(lead, quotes, { lead: leadRef, quotation: (q) => quoteRefs.get(q.id) }), ...noteValues];
   return { lead, quotes, meetings, signals, ctx, leadRef, quoteRefs, meetingRefs, sources, recorded, today };
 }
 type LeadBundle = Awaited<ReturnType<typeof leadBundle>>;
@@ -613,68 +633,8 @@ ${salesFormat(REVIEW_KEYS, { questions: false, nextAction: !!lead, suggestions: 
     // 2. Follow-up / status, checked exactly like Phase 1 suggestions.
     for (const s of await safeSuggestions(db, actor, r.data, ctx)) suggestions.push({ ...s, defaultSelected: s.type !== "change_status" });
     // 3. Requirement profile: stated in the chat, verified, and different from the lead's fields.
-    const changes: { field: string; from: string; to: string; source: string }[] = [];
-    const values: Record<string, unknown> = {};
-    const attributes: Record<string, string> = {};
-    for (const field of PROFILE_EDITABLE) {
-      const stated = kept.filter((k) => k.field === field);
-      if (stated.length !== 1) continue; // several different values → the person reviews them, nothing is proposed
-      // A commercial term the customer only asked for must never become a recorded term.
-      if (COMMERCIAL_TERMS.includes(field) && !isSettledStatus(stated[0].value.status)) continue;
-      const to = stated[0].value.value;
-      const from = settled(recordedProfile!, field) ?? "";
-      if (from && buildProfile([{ field, value: stated[0].value }, ...recordedValues(lead, []).filter((v) => v.field === field)]).conflicts.length === 0) continue;
-      if (field === "quantity") {
-        const n = Number(to.replace(/,/g, "").match(/\d+(?:\.\d+)?/)?.[0]);
-        if (!n) continue;
-        values.quantity = n;
-        const unit = to.match(/\b(MT|kg|litre|drum|pail|piece)s?\b/i)?.[1];
-        if (unit) values.unit = unit.toLowerCase() === "mt" ? "MT" : unit.toLowerCase();
-      } else if (field === "product") values.product = to;
-      else if (field === "destination") values.destination = to;
-      else if (field === "incoterm") {
-        const code = ["EXW", "FCA", "FOB", "CFR", "CIF", "DAP", "DDP"].find((c) => new RegExp(`\\b${c}\\b`, "i").test(to));
-        if (!code) continue;
-        attributes.incoterm = code;
-      } else attributes[field] = to;
-      changes.push({ field: REQUIREMENT_LABELS[field], from: from || "not set", to, source: `${stated[0].value.source.label} · ${CLAIM_LABELS[stated[0].value.status]}` });
-    }
-    const validDue = /^\d{4}-\d{2}-\d{2}$/.test(lead.due || "");
-    if (changes.length && validDue && ["USD", "AED", "EUR", "SGD"].includes(lead.currency))
-      suggestions.push({
-        id: "profile-update",
-        type: "update_profile",
-        record: { id: lead.id, kind: lead.kind, title: lead.title, status: lead.status, due: lead.due },
-        label: `Update the requirement on ${lead.title}: ${changes.map((c) => `${c.field} → ${c.to}`).join("; ")}`,
-        reason: "Stated in the meeting chat.",
-        changes,
-        apply: {
-          action: "edit",
-          id: lead.id,
-          expectedUpdatedAt: lead.updatedAt,
-          values: {
-            kind: lead.kind,
-            company: lead.company,
-            branch: lead.branch,
-            title: lead.title,
-            contact: lead.contact ?? "",
-            product: lead.product ?? "",
-            quantity: lead.quantity ?? 0,
-            unit: lead.unit ?? "",
-            amount: lead.amount ?? 0,
-            currency: lead.currency,
-            due: lead.due,
-            detail: lead.detail ?? "",
-            source: lead.source ?? "",
-            ...(lead.email ? { email: lead.email } : {}),
-            ...(lead.phone ? { phone: lead.phone } : {}),
-            ...(lead.destination ? { destination: lead.destination } : {}),
-            ...values,
-            ...(Object.keys(attributes).length ? { attributes } : {}),
-          },
-        },
-        defaultSelected: true,
-      });
+    const update = requirementUpdateSuggestion(lead, kept, { reason: "Stated in the meeting chat." });
+    if (update) suggestions.push(update);
   }
   const candidateLead = lead;
   return {
@@ -750,3 +710,81 @@ ${PRIORITY_FORMAT}`,
 
 /** Lookups used by routes and tests. */
 export const isNextAction = (v: string): v is NextAction => (NEXT_ACTIONS as readonly string[]).includes(v);
+
+/**
+ * A requirement update for a lead, from verified meeting values — or null.
+ * Proposed only when a value differs from (or is missing on) the lead;
+ * a commercial term only when recorded / confirmed / agreed (a customer's
+ * request never becomes our term). With several different values, nothing is
+ * proposed — unless `latest` (values given in time order): then the latest is
+ * proposed, labelled as changed during the meeting, still for review.
+ * Applied as the ordinary edit, guarded by the version seen now.
+ */
+export function requirementUpdateSuggestion(lead: RecordItem, kept: { field: RequirementField; value: RequirementValue }[], options: { reason: string; latest?: boolean }): Suggestion | null {
+  const recordedProfile = buildProfile(recordedValues(lead, []));
+  const changes: { field: string; from: string; to: string; source: string }[] = [];
+  const values: Record<string, unknown> = {};
+  const attributes: Record<string, string> = {};
+  for (const field of PROFILE_EDITABLE) {
+    const stated = kept.filter((k) => k.field === field);
+    if (!stated.length) continue;
+    const distinct = buildProfile(stated).entries.find((e) => e.field === field)!;
+    if (distinct.status === "conflict" && !options.latest) continue; // several different values → the person reviews them
+    const pick = stated[stated.length - 1];
+    // A commercial term the customer only asked for must never become a recorded term.
+    if (COMMERCIAL_TERMS.includes(field) && !isSettledStatus(pick.value.status)) continue;
+    const to = pick.value.value;
+    const from = settled(recordedProfile, field) ?? "";
+    if (from && buildProfile([{ field, value: pick.value }, ...recordedValues(lead, []).filter((v) => v.field === field)]).conflicts.length === 0) continue;
+    if (field === "quantity") {
+      const n = Number(to.replace(/,/g, "").match(/\d+(?:\.\d+)?/)?.[0]);
+      if (!n) continue;
+      values.quantity = n;
+      const unit = to.match(/\b(MT|kg|litre|drum|pail|piece)s?\b/i)?.[1];
+      if (unit) values.unit = unit.toLowerCase() === "mt" ? "MT" : unit.toLowerCase();
+    } else if (field === "product") values.product = to;
+    else if (field === "destination") values.destination = to;
+    else if (field === "incoterm") {
+      const code = ["EXW", "FCA", "FOB", "CFR", "CIF", "DAP", "DDP"].find((c) => new RegExp(`\\b${c}\\b`, "i").test(to));
+      if (!code) continue;
+      attributes.incoterm = code;
+    } else attributes[field] = to;
+    changes.push({ field: REQUIREMENT_LABELS[field], from: from || "not set", to, source: `${pick.value.source.label} · ${CLAIM_LABELS[pick.value.status]}${distinct.status === "conflict" ? " · changed during the meeting (latest)" : ""}` });
+  }
+  const validDue = /^\d{4}-\d{2}-\d{2}$/.test(lead.due || "");
+  if (!changes.length || !validDue || !["USD", "AED", "EUR", "SGD"].includes(lead.currency)) return null;
+  return {
+    id: "profile-update",
+    type: "update_profile",
+    record: { id: lead.id, kind: lead.kind, title: lead.title, status: lead.status, due: lead.due },
+    label: `Update the requirement on ${lead.title}: ${changes.map((c) => `${c.field} → ${c.to}`).join("; ")}`,
+    reason: options.reason,
+    changes,
+    apply: {
+      action: "edit",
+      id: lead.id,
+      expectedUpdatedAt: lead.updatedAt,
+      values: {
+        kind: lead.kind,
+        company: lead.company,
+        branch: lead.branch,
+        title: lead.title,
+        contact: lead.contact ?? "",
+        product: lead.product ?? "",
+        quantity: lead.quantity ?? 0,
+        unit: lead.unit ?? "",
+        amount: lead.amount ?? 0,
+        currency: lead.currency,
+        due: lead.due,
+        detail: lead.detail ?? "",
+        source: lead.source ?? "",
+        ...(lead.email ? { email: lead.email } : {}),
+        ...(lead.phone ? { phone: lead.phone } : {}),
+        ...(lead.destination ? { destination: lead.destination } : {}),
+        ...values,
+        ...(Object.keys(attributes).length ? { attributes } : {}),
+      },
+    },
+    defaultSelected: true,
+  };
+}

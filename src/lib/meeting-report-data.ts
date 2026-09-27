@@ -6,7 +6,7 @@ import { recordingView } from "./meeting-recordings";
 import { listMeetingMessages } from "./meeting-chat";
 
 /** Enough for any real meeting; the report stays one page. */
-const REPORT_CHAT_LIMIT = 5000;
+export const REPORT_CHAT_LIMIT = 5000;
 import { meetingAttendance, type MeetingRow } from "./schema";
 import type { MeetingReport, MeetingView, ReportParticipant } from "./meetings";
 
@@ -76,6 +76,6 @@ export async function buildReport(db: Database, meeting: MeetingRow, view: Meeti
       }),
     ].sort((a, b) => a.at.localeCompare(b.at)),
     recordings: recordings.map(recordingView),
-    chat: chat.map((m) => ({ name: m.senderName, guest: !!m.senderGuestId, at: m.createdAt.toISOString(), body: m.deletedAt ? "" : m.body, deleted: !!m.deletedAt })),
+    chat: chat.map((m) => ({ id: m.id, name: m.senderName, guest: !!m.senderGuestId, userId: m.senderUserId ?? null, at: m.createdAt.toISOString(), body: m.deletedAt ? "" : m.body, deleted: !!m.deletedAt })),
   };
 }

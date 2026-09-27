@@ -317,9 +317,9 @@ test("quality preference: applied live and kept on this device; microphone fallb
   expect(JSON.parse((await host.page.evaluate(() => localStorage.getItem("enercore-meeting-media")))!).quality).toBe("saver");
   // Still publishing a live camera after the quality change.
   await expect.poll(async () => (await diag(host.page))!.local.camera).toMatchObject({ on: true, live: true });
-  // No bitrate numbers for people; and only Devices, Video quality, Layout (+ host tools).
+  // No bitrate numbers for people; and only Devices, Video quality, Layout (+ host tools, and the employees' meeting notes).
   await expect(more).not.toContainText(/kbps|Mbps|bitrate/i);
-  await expect(more.getByRole("heading")).toHaveText(["Devices", "Video quality", "Layout", "Recording", "Troubleshooting"]);
+  await expect(more.getByRole("heading")).toHaveText(["Devices", "Video quality", "Layout", "Recording", "Meeting record", "Troubleshooting"]);
   await expect(more.getByRole("radio", { name: /Grid/ })).toHaveAttribute("aria-checked", "true");
   await more.getByRole("radio", { name: /Speaker/ }).click();
   await expect(more.getByRole("radio", { name: /Speaker/ })).toHaveAttribute("aria-checked", "true");

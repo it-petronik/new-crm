@@ -159,3 +159,32 @@
 .copilot-bucket.is-open li svg { color: var(--e-warning); }
 .copilot-bucket.is-conflict li svg { color: var(--e-warning); }
 .copilot-profile-list .is-requested { border-left: 3px solid var(--e-warning-soft); padding-left: 6px; }
+
+/* ------------------------------------------ Meeting Intelligence & notes */
+
+.meet-intel-empty { display: grid; gap: var(--e-3); justify-items: start; }
+.meet-intel-conflict { display: grid; gap: 4px; margin-top: var(--e-2); padding: var(--e-2) var(--e-3); border-radius: var(--e-radius); background: var(--e-warning-soft); font-size: var(--e-secondary); }
+.meet-intel-conflict b { display: inline-flex; align-items: center; gap: 6px; }
+.meet-intel-conflict ul { margin: 0; padding-left: 18px; }
+.meet-intel-lead { display: grid; gap: var(--e-3); padding-top: var(--e-3); border-top: 1px solid var(--e-border); }
+.meet-intel-lead h4 { margin: 0; font-size: var(--e-card); overflow-wrap: anywhere; }
+.meet-intel-edit { display: grid; gap: var(--e-2); }
+.meet-notes { display: grid; gap: var(--e-3); min-width: 0; }
+.meet-notes.is-compact { padding: var(--e-3); overflow-y: auto; }
+.meet-notes-hint { margin: 0; font-size: var(--e-meta); }
+.meet-notes-add { display: flex; flex-wrap: wrap; gap: 6px; }
+.meet-notes-add .is-active { border-color: var(--e-accent); background: var(--e-accent-soft); }
+.meet-note-form { display: grid; gap: var(--e-2); padding: var(--e-3); border: 1px solid var(--e-border); border-radius: var(--e-radius); background: var(--e-surface-sunken); }
+.meet-note-form label { display: grid; gap: 4px; font-size: var(--e-meta); color: var(--e-text-secondary); min-width: 0; }
+.meet-note-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: var(--e-2); }
+.meet-note-actions { display: flex; justify-content: flex-end; gap: var(--e-2); flex-wrap: wrap; }
+.meet-note-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--e-2); }
+.meet-note-list li { position: relative; display: grid; gap: 2px; padding: var(--e-2) 2.25rem var(--e-2) var(--e-3); border: 1px solid var(--e-border); border-radius: var(--e-radius); background: var(--e-surface); overflow-wrap: anywhere; }
+.meet-note-list li .icon-button { position: absolute; top: 4px; right: 4px; }
+.meet-note-kind { font-size: var(--e-caption); font-weight: var(--e-weight-strong); text-transform: uppercase; letter-spacing: 0.05em; color: var(--e-text-muted); }
+.meet-note-kind.is-decision { color: var(--e-success); }
+.meet-note-kind.is-action { color: var(--e-accent-strong); }
+.meet-note-kind.is-requirement { color: var(--e-warning); }
+.meet-note-status { color: var(--e-warning); font-size: var(--e-meta); }
+.meet-report-chat li.is-cited, .meet-note-list li.is-cited { outline: 2px solid var(--e-accent); outline-offset: 2px; border-radius: var(--e-radius-sm); }
+@media (max-width: 640px) { .meet-note-grid { grid-template-columns: 1fr; } }

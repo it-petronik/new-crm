@@ -198,3 +198,54 @@ export async function saveDraftAsNote(recordId: string, channel: string, text: s
     body: JSON.stringify({ action: "note", id: recordId, text: `Draft ${channel === "whatsapp" ? "WhatsApp message" : channel} prepared (not sent):\n${text}`.slice(0, 5000) }),
   });
 }
+
+/* ----------------------------------------------------- Meeting Intelligence */
+
+export type MeetingReportSource = { kind: "chat" | "note" | "meeting"; id: string; label: string; speaker: string | null; guest: boolean; at: string | null };
+type CitedView = { text: string; refs: string[] };
+export type MeetingReportView = {
+  meeting: { id: string; title: string; status: string; ended: boolean };
+  transcript: { provider: "none"; available: false };
+  canGenerate: boolean;
+  canEdit: boolean;
+  coverage: { chatMessages: number; notes: number };
+  report: null | {
+    scope: string;
+    coverage: { chatMessages: number; notes: number; analysedMessages: number; truncated: boolean };
+    summary: string;
+    aiSummary: string;
+    edited: { by: string; at: string | null } | null;
+    keyPoints: CitedView[];
+    decisions: CitedView[];
+    actionItems: { task: string; owner: string | null; due: string | null; refs: string[] }[];
+    openQuestions: CitedView[];
+    nextSteps: CitedView[];
+    requirements: { field: string; label: string; value: string; status: string; statusLabel: string; source: string; ref: string; at: string | null }[];
+    conflicts: { field: string; label: string; mentions: { value: string; statusLabel: string; source: string; ref: string; at: string | null }[]; latest: { value: string } }[];
+    followUp: { date: string; ref: string } | null;
+    sources: Record<string, MeetingReportSource>;
+    version: number;
+    models: string;
+    generatedAt: string;
+    generatedBy: string;
+    stale: boolean;
+  };
+  lead: null | { id: string; title: string; canWrite: boolean; suggestions: Suggestion[]; unconfirmed: string[] };
+};
+
+const reportUrl = (id: string) => `/api/ai/meeting-report/${encodeURIComponent(id)}`;
+export const meetingIntelligence = {
+  get: (id: string) => call<MeetingReportView>(reportUrl(id)),
+  generate: (id: string, regenerate = false) => call<MeetingReportView>(reportUrl(id), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ regenerate }) }),
+  edit: (id: string, summary: string) => call<MeetingReportView>(reportUrl(id), { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ summary }) }),
+};
+
+/* ------------------------------------------------------------ meeting notes */
+
+export type MeetingNote = { id: string; kind: "decision" | "action" | "requirement" | "note"; text: string; data: Record<string, string>; author: { id: string; name: string }; createdAt: string; mine: boolean };
+const notesUrl = (id: string) => `/api/collab/meetings/${encodeURIComponent(id)}/notes`;
+export const meetingNotesApi = {
+  list: (id: string) => call<{ notes: MeetingNote[] }>(notesUrl(id)).then((r) => r.notes),
+  add: (id: string, body: Record<string, unknown>) => call<{ note: MeetingNote }>(notesUrl(id), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.note),
+  remove: (id: string, noteId: string) => call<unknown>(`${notesUrl(id)}?note=${encodeURIComponent(noteId)}`, { method: "DELETE" }),
+};

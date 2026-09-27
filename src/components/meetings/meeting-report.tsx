@@ -7,8 +7,8 @@ import { meetingReport } from "@/lib/meeting-client";
 import { RELATED_NOUN, durationLabel, scopeLabel, statusLabel, type MeetingReport } from "@/lib/meetings";
 import { businessStamp, businessStampShort } from "@/lib/gst";
 import { downloadCsv, toCsv } from "@/lib/export";
-import { AiPanel } from "../ai/ai-answer";
-import { MeetingOutcome } from "../ai/sales-copilot";
+import MeetingIntelligence from "../ai/meeting-intelligence";
+import MeetingNotes from "./meeting-notes";
 
 /**
  * The meeting report: built only from what Enercore recorded — attendance
@@ -137,8 +137,7 @@ function ReportBody({ report }: { report: MeetingReport }) {
       </dl>
 
       <div className="meet-no-print">
-        {m.status === "ended" && m.related?.kind === "leads" && <MeetingOutcome key={`outcome-${m.id}`} meetingId={m.id} />}
-        <AiPanel key={m.id} feature="meeting" id={m.id} label="Summarise this meeting" loadingLabel="Reading attendance and the meeting chat…" />
+        <MeetingIntelligence key={m.id} meetingId={m.id} />
       </div>
 
       <section className="meet-card" aria-labelledby="report-participants">
@@ -214,7 +213,7 @@ function ReportBody({ report }: { report: MeetingReport }) {
         {report.chat.length ? (
           <ol className="meet-report-chat">
             {report.chat.map((c, i) => (
-              <li key={i}>
+              <li key={i} id={`chat-${c.id}`}>
                 <span className="meet-report-chat-meta">
                   <time dateTime={c.at}>{businessStampShort(c.at)}</time>
                   <b>{c.name}</b>
@@ -228,6 +227,11 @@ function ReportBody({ report }: { report: MeetingReport }) {
         ) : (
           <p className="meet-card-note">No messages were sent in this meeting&apos;s chat.</p>
         )}
+      </section>
+
+      <section className="meet-card meet-no-print" aria-labelledby="report-notes">
+        <h3 id="report-notes">Meeting notes</h3>
+        <MeetingNotes meetingId={m.id} />
       </section>
 
       {report.recordings.length > 0 && (

@@ -18,7 +18,7 @@ import { businessToday } from "../gst";
 
 export type RefTarget =
   | { type: "record"; kind: string; id: string }
-  | { type: "meeting"; id: string; view?: "details" | "report" }
+  | { type: "meeting"; id: string; view?: "details" | "report"; anchor?: string }
   | { type: "conversation"; id: string; messageId?: string };
 
 export type Reference = { id: string; label: string; target: RefTarget };

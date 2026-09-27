@@ -168,14 +168,14 @@ test("Customer 360, meeting report and conversation summaries in place", async (
   await expect(customer.locator(".ai-scope")).toHaveText("Related records are matched by exact customer name (not a recorded link), so this history may be incomplete.");
   await page.getByRole("button", { name: "Close dialog" }).click();
 
-  // Meeting report: says there is no transcript.
+  // Meeting report: AI notes on request, saying there is no transcript.
   const meeting = (await client.post("/meetings", { mode: "now", media: "video", title: "Screen meeting", inviteeIds: [], guestAccess: "off" })).body.meeting;
   await client.post(`/meetings/${meeting.id}/messages`, { body: "We agreed on a trial order.", clientKey: `ui${Date.now()}` });
   await client.post(`/meetings/${meeting.id}/end`, {});
   await page.goto(`${HUB}?tab=meetings&meeting=${meeting.id}&mview=report`);
-  const report = page.getByRole("region", { name: "Enercore AI" });
-  await report.getByRole("button", { name: "Summarise this meeting" }).click();
-  await expect(report.locator(".ai-scope")).toHaveText("No transcript is available. This summary uses meeting details and Meeting Chat (1 message).");
+  const report = page.getByRole("region", { name: "AI meeting notes" });
+  await report.getByRole("button", { name: "Generate AI report" }).click();
+  await expect(report.locator(".ai-scope")).toHaveText("No transcript is available. This report uses meeting details, attendance and Meeting Chat.");
 
   // Conversation: the header button opens a summary with its scope.
   const room = await client.createRoom({ name: "Screen AI room", members: ["aiui1"] });

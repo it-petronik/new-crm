@@ -143,27 +143,30 @@ test("My Day shows a few Copilot suggestions (not the overdue ones it already li
 test("post-meeting review in the meeting report: checklist, status never pre-ticked, applied as the person", async ({ browser }) => {
   const { client, page, context } = await signedIn(browser, "aisui");
   const meeting = (await client.post("/meetings", { mode: "now", media: "video", title: "Screen outcome call", inviteeIds: [], guestAccess: "off", relatedRecordId: "AIT-UP1" })).body.meeting;
-  await client.post(`/meetings/${meeting.id}/messages`, { body: "Customer now requires 800 MT per month. [[fake:suggest]]", clientKey: `ui${Date.now()}` });
+  const followUp = new Date(Date.now() + 4 * 3600_000 + 8 * 86_400_000).toISOString().slice(0, 10);
+  await client.post(`/meetings/${meeting.id}/messages`, { body: `Customer now requires 800 MT per month. Let's follow up on ${followUp}.`, clientKey: `ui${Date.now()}` });
+  await client.request("POST", `/api/collab/meetings/${meeting.id}/notes`, { kind: "decision", text: "Move the lead to Negotiation after the revised offer." });
   await client.post(`/meetings/${meeting.id}/end`, {});
   await page.goto(`${HUB}?tab=meetings&meeting=${meeting.id}&mview=report`);
-  const outcome = page.getByRole("region", { name: "Meeting outcome" });
-  await outcome.getByRole("button", { name: "Review outcome" }).click();
-  await expect(outcome.locator(".ai-scope")).toHaveText("No transcript is available. This summary uses meeting details and Meeting Chat.");
-  const list = outcome.locator(".copilot-checklist li");
+  const intel = page.getByRole("region", { name: "AI meeting notes" });
+  await intel.getByRole("button", { name: "Generate AI report" }).click();
+  await expect(intel.locator(".ai-scope").first()).toContainText("No transcript is available. This report uses meeting details, attendance and Meeting Chat.");
+  const list = intel.locator(".meet-intel-lead .copilot-checklist li");
   await expect(list).toHaveCount(4);
   const status = list.filter({ hasText: "Change Screen Copilot Oils" });
   await expect(status.getByRole("checkbox")).not.toBeChecked();
   const profile = list.filter({ hasText: "Update the requirement on Screen Copilot Oils" });
   await expect(profile).toContainText("Quantity → 800 MT per month");
   await expect(profile.getByRole("checkbox")).toBeChecked();
+  await expect(list.filter({ hasText: `Set the next follow-up on Screen Copilot Oils to ${followUp}` }).getByRole("checkbox")).toBeChecked();
   // Leave only the outcome note ticked, then apply.
   await profile.getByRole("checkbox").uncheck();
   await list.filter({ hasText: "Set the next follow-up" }).getByRole("checkbox").uncheck();
-  await outcome.getByRole("button", { name: "Apply selected" }).click();
+  await intel.getByRole("button", { name: "Apply selected" }).click();
   await expect(list.filter({ hasText: "Add the meeting outcome" })).toContainText("Applied");
   const lead = (await client.request("GET", "/api/records?id=AIT-UP1")).body.record;
   expect([lead.quantity, lead.status]).toEqual([500, "Qualified"]);
-  expect(lead.notes.at(-1).text).toMatch(/^Meeting outcome — Screen outcome call \(from the meeting chat; no transcript\):/);
+  expect(lead.notes.at(-1).text).toMatch(/^Meeting outcome — Screen outcome call \(from Meeting Chat and meeting notes; no transcript\):/);
   await context.close();
 });
 
