@@ -113,6 +113,7 @@ export const people: TestPerson[] = [
   person("aim5", "Dora Deactivated", ["Petronik"], [], "Sales Manager"),
   person("aim6", "Luca Longmeeting", ["Petronik"], [], "Sales Manager"),
   person("aim7", "Nadia Notesui", ["Petronik"], [], "Sales Manager"),
+  person("aim8", "Pia Printviewer", ["Petronik"], [], "Sales Executive"),
 ];
 
 export const byKey = (key: string) => {

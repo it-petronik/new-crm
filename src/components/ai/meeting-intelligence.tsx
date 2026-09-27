@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, FileText, RotateCcw, Sparkles } from "lucide-react";
+import { AlertTriangle, FileText, Printer, RotateCcw, Sparkles } from "lucide-react";
+import type { MeetingReport } from "@/lib/meetings";
+import { MeetingIntelligencePrint } from "./meeting-intelligence-print";
 import { Button, DialogPresence, Textarea } from "../ui/controls";
 import { meetingIntelligence, sales, type MeetingReportView, type QuotePrepView } from "@/lib/ai/client";
 import { businessTime } from "@/lib/gst";
@@ -67,7 +69,19 @@ function Section({ title, items, report }: { title: string; items: { text: strin
   );
 }
 
-export default function MeetingIntelligence({ meetingId }: { meetingId: string }) {
+/** Browser print of the Meeting Intelligence document only (not the page, not the chat). */
+function printIntelligence() {
+  const root = document.documentElement;
+  root.dataset.printIntel = "true";
+  const done = () => {
+    delete root.dataset.printIntel;
+    window.removeEventListener("afterprint", done);
+  };
+  window.addEventListener("afterprint", done);
+  window.print();
+}
+
+export default function MeetingIntelligence({ meetingId, meeting }: { meetingId: string; meeting?: MeetingReport }) {
   const status = useAiStatus();
   const [view, setView] = useState<MeetingReportView | null>(null);
   const [busy, setBusy] = useState(false);
@@ -111,9 +125,16 @@ export default function MeetingIntelligence({ meetingId }: { meetingId: string }
           <Sparkles size={15} aria-hidden="true" /> AI meeting notes
         </span>
         {report && (
-          <Button className="secondary compact" disabled={busy} onClick={() => void run(() => meetingIntelligence.generate(meetingId, true))}>
-            <RotateCcw size={14} aria-hidden="true" /> Regenerate
-          </Button>
+          <span className="copilot-actions">
+            {meeting && (
+              <Button className="secondary compact" disabled={busy} onClick={printIntelligence}>
+                <Printer size={14} aria-hidden="true" /> Print / Save PDF
+              </Button>
+            )}
+            <Button className="secondary compact" disabled={busy} onClick={() => void run(() => meetingIntelligence.generate(meetingId, true))}>
+              <RotateCcw size={14} aria-hidden="true" /> Regenerate
+            </Button>
+          </span>
         )}
       </header>
       {!view && !error && <p className="muted small">Loading…</p>}
@@ -240,6 +261,7 @@ export default function MeetingIntelligence({ meetingId }: { meetingId: string }
           </DialogPresence>
         </div>
       )}
+      {report && meeting && view && <MeetingIntelligencePrint meeting={meeting} view={view} />}
     </section>
   );
 }

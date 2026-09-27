@@ -137,7 +137,7 @@ function ReportBody({ report }: { report: MeetingReport }) {
       </dl>
 
       <div className="meet-no-print">
-        <MeetingIntelligence key={m.id} meetingId={m.id} />
+        <MeetingIntelligence key={m.id} meetingId={m.id} meeting={report} />
       </div>
 
       <section className="meet-card" aria-labelledby="report-participants">

@@ -188,3 +188,37 @@
 .meet-note-status { color: var(--e-warning); font-size: var(--e-meta); }
 .meet-report-chat li.is-cited, .meet-note-list li.is-cited { outline: 2px solid var(--e-accent); outline-offset: 2px; border-radius: var(--e-radius-sm); }
 @media (max-width: 640px) { .meet-note-grid { grid-template-columns: 1fr; } }
+
+/* ------------------------------------ Meeting Intelligence — print / PDF */
+
+/* Rendered into <body> (outside the app shell, so nothing can clip it); screen-hidden. */
+.intel-print-root { display: none; }
+@media print {
+  html[data-print-intel] body > *:not(.intel-print-root) { display: none !important; }
+  html[data-print-intel] body { background: #fff !important; }
+  html[data-print-intel] .intel-print-root { display: block !important; }
+  html[data-print-intel] .intel-print-root * { visibility: visible !important; }
+  @page { size: A4; margin: 16mm 14mm 18mm; }
+}
+.intel-print { color: #111; background: #fff; font: 10.5pt/1.45 "Inter Variable", Inter, system-ui, sans-serif; max-width: 182mm; }
+.intel-print * { color: inherit; }
+.intel-print-head { padding-bottom: 8pt; margin-bottom: 10pt; border-bottom: 1.5pt solid #111; }
+.intel-print-brand { font-size: 8.5pt; font-weight: 700; letter-spacing: 0.18em; color: #555; }
+.intel-print-head h1 { margin: 2pt 0 0; font-size: 17pt; line-height: 1.2; }
+.intel-print-title { margin: 2pt 0 0; font-size: 12pt; font-weight: 600; overflow-wrap: anywhere; }
+.intel-print-section { margin: 0 0 10pt; break-inside: avoid; page-break-inside: avoid; }
+.intel-print-section h2 { margin: 0 0 4pt; font-size: 11pt; text-transform: uppercase; letter-spacing: 0.06em; color: #333; break-after: avoid; page-break-after: avoid; }
+.intel-print-section p { margin: 0 0 3pt; overflow-wrap: anywhere; }
+.intel-print-section ul { margin: 0; padding-left: 14pt; }
+.intel-print-section li { margin-bottom: 2pt; overflow-wrap: anywhere; break-inside: avoid; }
+.intel-print-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6pt 12pt; margin: 0; }
+.intel-print-facts dt { font-size: 8pt; text-transform: uppercase; letter-spacing: 0.06em; color: #666; }
+.intel-print-facts dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.intel-print-disclosure { margin: 0 0 10pt; padding: 6pt 8pt; border: 0.75pt solid #999; border-radius: 3pt; background: #f4f4f4; font-size: 9.5pt; break-inside: avoid; }
+.intel-print-source { display: block; font-size: 8.5pt; color: #555; }
+.intel-print-muted, .intel-print-none { color: #666; font-size: 9pt; }
+.intel-print-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 9.5pt; }
+.intel-print-table th, .intel-print-table td { padding: 3pt 4pt; border-bottom: 0.5pt solid #bbb; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.intel-print-table th { font-size: 8pt; text-transform: uppercase; letter-spacing: 0.05em; color: #555; border-bottom-width: 1pt; }
+.intel-print-table tr { break-inside: avoid; page-break-inside: avoid; }
+.intel-print-foot { margin-top: 12pt; padding-top: 6pt; border-top: 0.75pt solid #999; font-size: 8.5pt; color: #555; }
