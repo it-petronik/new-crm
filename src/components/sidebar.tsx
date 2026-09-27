@@ -28,6 +28,7 @@ import {
   Keyboard,
   MessagesSquare,
   Sparkles,
+  ListChecks,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -176,6 +177,19 @@ export default function Sidebar({
               >
                 <Sparkles size={19} />
                 <span className="nav-label">Enercore AI</span>
+              </Button>
+            </Tooltip>
+          )}
+          {!preview && (
+            <Tooltip label="Action Center" enabled={compact}>
+              <Button
+                className={`nav-item ${module === "actions" ? "active" : ""}`}
+                onClick={() => onView("actions")}
+                aria-label="Action Center"
+                aria-current={module === "actions" ? "page" : undefined}
+              >
+                <ListChecks size={19} />
+                <span className="nav-label">Action Center</span>
               </Button>
             </Tooltip>
           )}

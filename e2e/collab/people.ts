@@ -114,6 +114,15 @@ export const people: TestPerson[] = [
   person("aim6", "Luca Longmeeting", ["Petronik"], [], "Sales Manager"),
   person("aim7", "Nadia Notesui", ["Petronik"], [], "Sales Manager"),
   person("aim8", "Pia Printviewer", ["Petronik"], [], "Sales Executive"),
+  // Action Center (Phase 5): Petronex, branch Sharjah only (e2e/collab/proactive-data.ts).
+  person("pxse1", "Parveen Sharjah", ["Petronex"], ["Sharjah"], "Sales Executive"),
+  person("pxse2", "Pavel Sharjah", ["Petronex"], ["Sharjah"], "Sales Executive"),
+  person("pxsm", "Priya Sharjahmanager", ["Petronex"], ["Sharjah"], "Sales Manager"),
+  person("pxmd", "Pablo Director", ["Petronex"], ["Sharjah"], "MD"),
+  person("pxacc", "Pema Accounts", ["Petronex"], ["Sharjah"], "Accounts Manager"),
+  person("pxhr", "Pia People", ["Petronex"], ["Sharjah"], "HR Manager"),
+  person("pxout", "Paz Dubai", ["Petronex"], ["Dubai"], "Sales Executive"),
+  person("pxui", "Pat Screen", ["Petronex"], ["Sharjah"], "Sales Executive"),
 ];
 
 export const byKey = (key: string) => {

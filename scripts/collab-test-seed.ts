@@ -8,6 +8,7 @@ import { hashPassword } from "../src/lib/password";
 import { messageId } from "../src/lib/collab";
 import { people, PASSWORD, PAGING_ROOM, byKey } from "../e2e/collab/people";
 import { aiRecords } from "../e2e/collab/ai-data";
+import { proactiveRecords } from "../e2e/collab/proactive-data";
 
 const q = (v: string) => `'${v.replace(/'/g, "''")}'`;
 
@@ -49,7 +50,7 @@ async function main() {
         `);`,
     );
   // Enercore AI: fictional CRM records (company Istanegry / Afrilube).
-  for (const r of aiRecords(now))
+  for (const r of [...aiRecords(now), ...proactiveRecords(now)])
     lines.push(
       `INSERT INTO "BusinessRecord" ("id","kind","company","branch","ownerId","status","payload","version","createdAt","updatedAt") VALUES (` +
         [q(r.id), q(r.kind), q(r.company), q(r.branch), q(r.ownerId), q(r.status), q(JSON.stringify(r)), 1, Date.parse(r.createdAt), Date.parse(r.updatedAt)].join(",") +

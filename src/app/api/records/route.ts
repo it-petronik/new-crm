@@ -303,6 +303,28 @@ export async function PATCH(request: Request) {
     const command = z.discriminatedUnion("action", [
       z.object({ action: z.literal("edit"), id: z.string().max(100), expectedUpdatedAt: z.string(), values: input }),
       z.object({ action: z.literal("delete"), id: z.string().max(100), expectedUpdatedAt: z.string() }),
+      // Quick Complete: fill in missing details only. Same checks as an edit
+      // (permission, allow-listed fields, version guard, audit) — and nothing
+      // that isn't sent changes (no default due date is ever added).
+      z.object({
+        action: z.literal("complete"),
+        id: z.string().max(100),
+        expectedUpdatedAt: z.string(),
+        values: z
+          .object({
+            contact: z.string().trim().min(1).max(160).optional(),
+            email: z.email().optional(),
+            phone: z.string().trim().min(3).max(50).optional(),
+            product: z.string().trim().min(1).max(160).optional(),
+            quantity: z.number().positive().max(100000000).optional(),
+            unit: z.string().trim().min(1).max(20).optional(),
+            destination: z.string().trim().min(1).max(160).optional(),
+            due: z.iso.date().optional(),
+            attributes: z.object({ country: z.string().trim().min(1).max(80) }).strict().optional(),
+          })
+          .strict()
+          .refine((v) => Object.keys(v).length > 0, "Enter at least one detail."),
+      }),
       z.object({
         action: z.literal("status"),
         id: z.string().max(100),
@@ -337,6 +359,9 @@ export async function PATCH(request: Request) {
     const row = await findRecord(db, id);
     if (!row) throw new Error("Record not found.");
     const record = row.payload as RecordItem;
+    // Quick Complete never touches a quotation, order, shipment or invoice.
+    if (c.action === "complete" && !["leads", "customers", "suppliers"].includes(record.kind))
+      throw new Error("Only missing lead, customer or supplier details can be completed here.");
     const before = { records: [record], audit: [] };
     if (c.action === "delete") {
       const peers = await listRecordsForCompany(db, record.company);
@@ -353,8 +378,8 @@ export async function PATCH(request: Request) {
     const result =
       c.action === "assign"
         ? assign(before, actor, id, assignee!)
-        : c.action === "edit" || c.action === "delete"
-        ? mutateRecord(before, actor, id, c.expectedUpdatedAt, c.action === "edit" ? c.values : undefined)
+        : c.action === "edit" || c.action === "delete" || c.action === "complete"
+        ? mutateRecord(before, actor, id, c.expectedUpdatedAt, c.action === "delete" ? undefined : (c.values as Partial<RecordItem>))
         : c.action === "status"
           ? transition(before, actor, id, c.status)
           : c.action === "note"

@@ -788,3 +788,24 @@ export const meetingReports = sqliteTable(
     editedAt: integer("editedAt", { mode: "timestamp_ms" }),
   },
 );
+
+/**
+ * Action Center: a person's snooze / dismiss of ONE derived signal (by its
+ * dedupe key). UI state only — it never changes business data; the signal
+ * itself is re-derived from the records and resolves when they change.
+ */
+export const proactiveStates = sqliteTable(
+  "ProactiveState",
+  {
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    signalKey: text("signalKey").notNull(),
+    /** Hash of the condition's facts when snoozed/dismissed (no CRM data). */
+    fingerprint: text("fingerprint").notNull(),
+    snoozedUntil: integer("snoozedUntil", { mode: "timestamp_ms" }),
+    dismissedAt: integer("dismissedAt", { mode: "timestamp_ms" }),
+    updatedAt: integer("updatedAt", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.signalKey] })],
+);

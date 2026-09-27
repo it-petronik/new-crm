@@ -105,6 +105,7 @@ import { Dialog, DialogPresence, DialogActions } from "./ui/controls";
 import ThemeToggle from "./theme-toggle";
 import MyRequests from "./my-requests";
 import { storedPreviewActor, previewActorKey } from "@/lib/fixtures";
+import { RECORDS_CHANGED } from "@/lib/proactive/client";
 import { Avatar } from "./avatar";
 import RecordForm from "./record-form";
 import { recordProfiles, detailFields } from "@/lib/record-profiles";
@@ -145,6 +146,8 @@ type QuoteDraftPrefill = { leadId: string; product: string; quantity: number; un
 // Loaded only when someone opens Collaboration, so the rest of the CRM does
 // not carry it. The skeleton keeps the three-pane shape while it arrives.
 const AiWorkspace = dynamic(() => import("./ai/ai-workspace"), { ssr: false });
+const ActionCenter = dynamic(() => import("./ai/action-center"), { ssr: false });
+const ActionDigest = dynamic(() => import("./ai/action-center").then((m) => m.ActionDigest), { ssr: false });
 const CollaborationHub = dynamic(() => import("./collaboration/collaboration-hub"), {
   ssr: false,
   loading: () => <HubSkeleton />,
@@ -475,6 +478,8 @@ export default function Workspace({
     if (!response.ok)
       throw new Error(result.error || "Unable to load workspace.");
     setData(result);
+    // Open Action Center / My Day digests recompute from the new data.
+    window.dispatchEvent(new Event(RECORDS_CHANGED));
   }
   useEffect(() => {
     let active = true;
@@ -717,6 +722,8 @@ export default function Workspace({
    * and nothing when the person is already looking at the thing itself.
    */
   async function onNotification(n: NotificationView, prefs: NotificationPreferences) {
+    // Something changed somewhere: open Action Center views recompute.
+    window.dispatchEvent(new Event(RECORDS_CHANGED));
     if (!(await claimAlert(actor.id, n.id))) return;
     const t = n.target;
     if (document.visibilityState === "visible") {
@@ -1202,6 +1209,14 @@ export default function Workspace({
                 />
               )}
               {view === "ai" && <AiWorkspace actor={actor} preview={preview} />}
+              {view === "actions" &&
+                (preview ? (
+                  <section className="panel ai-unavailable">
+                    <p>The Action Center isn&apos;t available in the preview — it works from the live CRM records.</p>
+                  </section>
+                ) : (
+                  <ActionCenter />
+                ))}
               {view === "appearance" && <AppearancePage />}
               {view === "notifications" && (
                 <NotificationsPage
@@ -1381,6 +1396,7 @@ export default function Workspace({
                     preview ? null : (
                       <>
                         <TodayMeetings />
+                        <ActionDigest onOpen={() => openView("actions")} />
                         <MyDaySuggestions onReview={() => openView("ai")} />
                       </>
                     )
@@ -1807,7 +1823,7 @@ export default function Workspace({
                 run: () => go(m),
               })),
               ...Object.entries(viewLabels)
-                .filter(([v]) => (v !== "access" || canManageUsers(actor)) && (v !== "ai" || !preview))
+                .filter(([v]) => (v !== "access" || canManageUsers(actor)) && (!["ai", "actions"].includes(v) || !preview))
                 .map(([v, label]) => ({
                   id: v,
                   label,

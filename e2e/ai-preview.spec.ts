@@ -26,6 +26,18 @@ test("AI endpoints refuse preview mode", async ({ request, baseURL }) => {
   for (const path of ["/api/ai/sales/today", "/api/ai/sales/lead?id=EC-1"]) expect((await request.get(path)).status(), path).toBe(409);
 });
 
+test("the Action Center refuses preview mode and is not in the preview sidebar", async ({ request, baseURL, page }) => {
+  const headers = { Origin: baseURL!, "Content-Type": "application/json" };
+  for (const path of ["/api/proactive", "/api/proactive?scope=team", "/api/proactive/changes"]) expect((await request.get(path)).status(), path).toBe(409);
+  expect((await request.post("/api/proactive/state", { headers, data: { key: "FOLLOW_UP_OVERDUE:EC-1", action: "dismiss" } })).status()).toBe(409);
+  expect((await request.post("/api/proactive/brief", { headers, data: { kind: "today" } })).status()).toBe(409);
+  await page.goto("/");
+  await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Action Center" })).toHaveCount(0);
+  await page.goto("/workspace/all-companies/action-center");
+  await expect(page.getByText("The Action Center isn't available in the preview")).toBeVisible();
+});
+
 test("no Enercore AI in the preview workspace", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();

@@ -44,7 +44,7 @@ export const AI_LIMITS = {
   cacheSeconds: 1_800,
 } as const;
 
-export type AiFeature = "lead" | "customer" | "ask" | "meeting" | "conversation" | "sales";
+export type AiFeature = "lead" | "customer" | "ask" | "meeting" | "conversation" | "sales" | "proactive";
 
 export const FEATURE_LABELS: Record<AiFeature, string> = {
   lead: "Lead brief",
@@ -53,6 +53,7 @@ export const FEATURE_LABELS: Record<AiFeature, string> = {
   meeting: "Meeting summary",
   conversation: "Conversation summary",
   sales: "Sales Copilot",
+  proactive: "Action Center brief",
 };
 
 type AiRun = (model: string, input: unknown, options?: unknown) => Promise<unknown>;

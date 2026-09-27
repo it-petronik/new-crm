@@ -23,6 +23,7 @@ const ROUTES = [
   "/reset-password",
   "/workspace/all-companies/collaboration",
   "/workspace/all-companies/notifications",
+  "/workspace/all-companies/action-center",
 ];
 /**
  * API routes compile on first request too, and a compile mid-suite can make
@@ -37,6 +38,10 @@ const API = [
   "/api/collab/summary",
   "/api/collab/conversations",
   "/api/auth",
+  "/api/proactive",
+  "/api/proactive/changes",
+  "/api/proactive/state",
+  "/api/proactive/brief",
 ];
 
 export default async function globalSetup(config: FullConfig) {

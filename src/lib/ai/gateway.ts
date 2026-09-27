@@ -166,9 +166,9 @@ export function keepKnownRefs(answer: AiAnswer, references: Reference[]): AiAnsw
 }
 
 /** One answer over a prepared context. */
-export async function answerOver(options: { db: Database; actor: Actor; feature: AiFeature; instructions: string; context: AiContext; question?: string }) {
+export async function answerOver(options: { db: Database; actor: Actor; feature: AiFeature; instructions: string; context: AiContext; question?: string; tier?: AiTier }) {
   const prompt = `${options.question ? `QUESTION (from the signed-in employee): ${options.question}\n\n` : ""}CONTEXT:\n${options.context.render()}`;
-  const { data, model } = await generateStructured({
+  const r = await generateStructured({
     db: options.db,
     actor: options.actor,
     feature: options.feature,
@@ -178,6 +178,7 @@ export async function answerOver(options: { db: Database; actor: Actor; feature:
     jsonSchema: answerJsonSchema,
     prepare: prepareAnswer,
     flagged: options.context.flagged,
+    tier: options.tier,
   });
-  return { answer: keepKnownRefs(data, options.context.references()), model };
+  return { answer: keepKnownRefs(r.data, options.context.references()), model: r.model, cached: r.cached, generatedAt: r.generatedAt };
 }

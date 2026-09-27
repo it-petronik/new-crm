@@ -6,7 +6,7 @@ import type { Database } from "../d1";
 import type { Actor } from "../domain";
 import { AiError, answerOver, checkLimits } from "./gateway";
 import type { AiContext } from "./context";
-import type { AiFeature } from "./config";
+import type { AiFeature, AiTier } from "./config";
 import { reviewSuggestions } from "./suggestions";
 
 /**
@@ -35,8 +35,8 @@ export async function aiEndpoint(request: Request, run: (ctx: { actor: Actor; db
 }
 
 /** Runs one answer over a prepared context and reviews its suggestions. */
-export async function respond(db: Database, actor: Actor, feature: AiFeature, context: AiContext, instructions: string, question?: string, scope?: string) {
-  const { answer, model } = await answerOver({ db, actor, feature, instructions, context, question });
+export async function respond(db: Database, actor: Actor, feature: AiFeature, context: AiContext, instructions: string, question?: string, scope?: string, tier?: AiTier) {
+  const { answer, model, cached, generatedAt } = await answerOver({ db, actor, feature, instructions, context, question, tier });
   const suggestions = await reviewSuggestions(db, actor, answer, context);
   return {
     feature,
@@ -49,6 +49,7 @@ export async function respond(db: Database, actor: Actor, feature: AiFeature, co
     figures: context.figures(),
     flaggedText: context.flagged,
     model,
-    generatedAt: new Date().toISOString(),
+    cached,
+    generatedAt,
   };
 }

@@ -267,3 +267,92 @@ Anything grouped by person is reported as operational facts. The system rules fo
 ## Schema
 
 There is **no new migration.** `AiUsage.status` can now also be `cached`, and there are two new nullable token columns. Those columns are part of migration 0010, which Phase 1 already applied.
+
+# Phase 5 — Action Center (proactive intelligence, controlled automation)
+
+The pipeline: **deterministic signal → priority → the person allowed to see it → (optional) AI explanation or draft → human review → the ordinary records API → audit.** Detection, ranking, counts, data-quality checks, rendering, snooze/dismiss and resolution make **no AI call**. AI is used only when someone presses a brief or draft button.
+
+## Architecture
+
+| Layer | File | Notes |
+|---|---|---|
+| Signal engine (pure) | `src/lib/proactive/signals.ts` | `proactiveSignals({actor, records, meetings, today, now})`. Sales and quotation rules are the Phase 2 `recordSignals` (one source of truth), mapped to categories, sections and actions. |
+| Service | `src/lib/proactive/service.ts` | `actionCenter` (scope, groups, personal snooze/dismiss, team summary), `setSignalState`, `changesSince` (audit trail). |
+| Briefs | `src/lib/proactive/brief.ts` | On demand only: `today`, `changes` (since yesterday), `week`. One fast-model call over the deterministic facts; cached by the Phase 2 fingerprint. |
+| Automation foundation | `src/lib/proactive/automation.ts` | Typed trigger → conditions → actions. **Not wired to live events yet.** |
+| API | `GET /api/proactive?scope=mine\|team&group=…`, `POST /api/proactive/state`, `GET /api/proactive/changes?days=1\|7`, `POST /api/proactive/brief` | Preview → 409. Only the brief spends AI allowance. |
+| UI | `src/components/ai/action-center.tsx` | Action Center page (sidebar, hidden in preview) and the My Day digest. |
+
+## Signals
+
+Each signal has a dedupe `key` (one condition = one signal, e.g. `FOLLOW_UP_OVERDUE:<id>`, `DATA_INCOMPLETE:<id>`, `DUPLICATE:<a>:<b>`), a category, a severity (**urgent / important / normal**), a section (**Needs action / Today / Waiting / Data to complete**), the actions it allows, and whether it may be snoozed or dismissed.
+
+- **Sales / quotation:** follow-up overdue or due today, gone quiet, negotiation stalled, high value without a next action, quotation waiting / expiring / validity ended, approval pending or overdue (for approvers only, never the owner), accepted with no order.
+- **Operations:** order delayed (a delayed shipment or its required-by date passed), order status stale, shipment delayed, delivery overdue, ETA approaching, documents pending, shipment not updated.
+- **Accounts:** payment overdue (outstanding balance, in its own currency), invoice left in draft.
+- **Meetings:** starting soon, today, ended without an outcome, report not generated (for the organiser, only when there is chat or notes).
+- **Data quality (stage-aware):** New/Contacted leads need a way to reach them; Qualified adds product, quantity, destination and next follow-up; Quote Sent adds a linked quotation; Negotiation needs contact and core fields. Active customers need a contact and country; active suppliers a contact, product and country.
+- **Duplicate candidates:** same normalised name (legal suffixes ignored), same email, or same phone (last 9 digits), within one company and kind. Advisory only; nothing is merged.
+
+Thresholds are central (`PROACTIVE_THRESHOLDS`): approval overdue 2 days, order stale 7, shipment not updated 5, documents pending 3, ETA approaching 3, delivery severely overdue 7, invoice draft 3, meeting starting within 30 minutes, report window 7 days.
+
+**Priority** is severity first, then days, then value tiers **within one currency**. Values in different currencies are never added together or compared.
+
+**Resolution** is re-derivation: when the record changes (a follow-up is set, a field is completed, a quotation is approved), the signal no longer exists. Nothing needs clearing.
+
+## Snooze and dismiss
+
+Both are personal UI state, stored in `ProactiveState` (userId, signalKey). They never change business data.
+- Snooze lasts up to 14 days. It is not allowed for approvals, payments overdue or meetings about to start.
+- Dismiss is allowed only for advisory types: gone quiet, stale order, shipment not updated, duplicates, data gaps before Quote Sent, and report not generated.
+- Both work only on a signal the person can currently see.
+
+## Actions (always previewed, always the person's own edit)
+
+- **Quick Complete:** a small dialog with only the missing fields. It saves via `PATCH /api/records {action: "complete", id, expectedUpdatedAt, values}`, whose values are an allow-listed subset. The request goes through the same permission, version-guard and audit path as an edit. No other field changes; in particular, no default due date is added.
+- **Set follow-up (single or bulk):** the preview shows current → new for every record. Each item is re-read first and skipped if it changed since it was shown. It is then saved as the person's note with the new due date, with a per-item result. This is the only bulk action.
+- **Drafts** reuse the Phase 2 draft dialog and safety rules. Nothing is ever sent.
+
+## Team views (no employee scoring)
+
+Managers and the MD see a **Team** scope and exception tiles:
+- Decisions required
+- Commercial risks
+- Money requiring attention (totals per currency)
+- Operations exceptions
+- High-value opportunities without a next action
+- Quotations waiting
+
+It also lists overdue follow-ups by owner, as plain counts.
+
+There is no score, rank or rating of people.
+
+**What changed since yesterday / this week** comes from `AuditEvent` rows and record `createdAt`, over records the person may read.
+
+## Refresh
+
+The Action Center and the My Day digest refetch when:
+- the workspace reloads records (`enercore:records-changed`);
+- a notification arrives;
+- the tab regains focus.
+
+There is no polling and no new socket.
+
+## Automation foundation (not live)
+
+Triggers: `RECORD_CREATED`, `STATUS_CHANGED`, `MEETING_ENDED`, `FOLLOW_UP_DUE`, `QUOTATION_EXPIRING`, `PAYMENT_OVERDUE`. Conditions are a closed union (`kind_is`, `status_to`, `status_from`, `amount_at_least` in one currency), and actions only create a notification, signal or review request. There is no eval, no scripting and no SQL, and nothing writes business data. `validRule` rejects anything else. Every default rule is disabled, and nothing is wired to events yet.
+
+## Future work (no data source today)
+
+- Payment promises.
+- "Customer waiting for our response".
+- Quotation revision requested.
+- Open meeting action items.
+
+**Customer 360 proposal (not implemented):** add a `customerId` link on leads, quotations and orders. Relationships would then no longer be inferred from names. This needs a migration and a backfill review, so it is proposed separately.
+
+`src/lib/attention.ts` (the older My Day / Morning Brief engine) is unchanged and is a candidate to consolidate onto the signal engine.
+
+## Schema
+
+Migration `0012_proactive_state.sql` adds `ProactiveState` only. It is applied locally, not remotely. No new index is needed, because the change queries use the existing `AuditEvent` company/at indexes.

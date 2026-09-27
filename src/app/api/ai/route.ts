@@ -30,6 +30,7 @@ export function GET(request: Request) {
           ask: tools.length > 0,
           meeting: true,
           conversation: true,
+          proactive: true,
           sales: allowedModules(actor).includes("leads"),
         },
         tools: tools.map((t) => ({ id: t, description: TOOL_CATALOGUE[t].description })),
