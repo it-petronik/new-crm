@@ -477,3 +477,7 @@ The Prospecting workspace now has documented company/person filters, confirmed s
 ### Phase 7 Apollo AI search UX — local release hold
 
 Natural-language interpretation now sits above the existing Apollo workspace. The employee reviews structured allowlisted criteria before the existing confirmed Apollo operation. Manual filters, staged permissions, paid idempotency, import, export and deterministic report paths remain authoritative. Workers AI receives only explicit query text with one model attempt; no passive model calls or Apollo execution. The original query travels with structured search metadata without a new migration. Fictional review providers only; no commit, push, production change, real credit use, R2 or Phase 8. See the search-first section of `docs/PHASE-7-APOLLO.md`.
+
+### Phase 7 Prospecting correction
+
+Phase 7 migrations 0014 and 0015 and the original Worker were released on 28 September 2026; Apollo sign-off remained on HOLD after a handled search failure. The next candidate fixes the Workers native-fetch receiver defect and replaces the interpretation/review/confirmation sequence with one explicit Search action. New search identities are independent; replay protection, scope enforcement and paid enrichment confirmation remain. No new migration, sourcing change, R2 or Phase 8. See `docs/PHASE-7-APOLLO.md` for the updated search contract.

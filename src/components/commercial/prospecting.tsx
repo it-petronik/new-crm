@@ -49,8 +49,11 @@ const call = async <T,>(c: Record<string, unknown>): Promise<T> => {
   });
   const data = await res.json();
   if (!res.ok)
-    throw Error(
-      `${data.error || "Request failed."}${data.retryAfter ? ` Try again in at least ${Math.ceil(data.retryAfter)} seconds.` : ""}`,
+    throw Object.assign(
+      Error(
+        `${data.error || "Request failed."}${data.retryAfter ? ` Try again in ${Math.ceil(data.retryAfter)} seconds.` : ""}`,
+      ),
+      { status: res.status },
     );
   return data;
 };
@@ -73,6 +76,8 @@ export default function Prospecting({
     keywords ? `Find buyers for ${keywords}` : "",
   );
   const [interpreting, setInterpreting] = useState(false);
+  const searchRunning = useRef(false);
+  const queryDirty = useRef(!!keywords);
   const manualKeys = useRef(new Set<string>());
   const resultCache = useRef<
     Partial<Record<"company" | "person", { page: Page; rows: DatasetItem[] }>>
@@ -196,6 +201,7 @@ export default function Prospecting({
     resultCache.current[p.criteria.kind] = { page: p, rows: r };
     setDraft(p.criteria);
     if (p.criteria.discovery) setQuery(p.criteria.discovery.query);
+    queryDirty.current = false;
     setPage(p);
     setRows(r);
     setSelection([]);
@@ -206,6 +212,10 @@ export default function Prospecting({
     criteria?: SearchInput,
     refs?: ProspectRef[],
   ) {
+    if (type === "search") {
+      await executeSearch(criteria!);
+      return;
+    }
     const key = JSON.stringify({
       company,
       branch,
@@ -284,6 +294,7 @@ export default function Prospecting({
     (f) => (!f.mode || f.mode === draft.kind) && getFilter(f.key),
   );
   function mode(kind: "company" | "person") {
+    queryDirty.current = false;
     const cached = resultCache.current[kind];
     setPage(cached?.page || null);
     setRows(cached?.rows || []);
@@ -308,50 +319,82 @@ export default function Prospecting({
     }));
     setSelection([]);
   }
-  async function understand() {
-    if (busy || interpreting || preview) return;
-    setInterpreting(true);
+  async function executeSearch(criteria: SearchInput) {
+    const version = scopeVersion.current;
+    const next = await call<OperationView>({
+      action: "search",
+      requestId: crypto.randomUUID(),
+      company,
+      branch,
+      criteria,
+    });
+    if (version !== scopeVersion.current) return;
+    setDraft(criteria);
+    queryDirty.current = false;
+    if (next.data.resultStageId) await loadPage(next.data.resultStageId);
+    await metadata();
+    if (next.status !== "completed") {
+      const wait =
+        next.data.retryAt && next.data.retryAt > Date.now()
+          ? ` Try again in ${Math.ceil((next.data.retryAt - Date.now()) / 1000)} seconds.`
+          : "";
+      throw Error(
+        (next.data.message ||
+          "Search could not complete. Edit your query and try again.") + wait,
+      );
+    }
+  }
+  async function search() {
+    if (searchRunning.current || busy || preview) return;
+    searchRunning.current = true;
     const version = scopeVersion.current;
     await task(async () => {
-      try {
-        const data = await call<{ criteria: SearchInput }>({
-          action: "interpret",
-          company,
-          branch,
-          query,
-          current: draft,
-          manualKeys: [...manualKeys.current],
-        });
-        if (version !== scopeVersion.current) return;
-        setDraft(data.criteria);
-        setSelection([]);
-        setNotice(
-          "Interpretation ready. Review it, then Search Apollo. No Apollo credits used.",
-        );
-        if (page?.criteria.kind !== data.criteria.kind) {
-          setPage(null);
-          setRows([]);
+      setNotice("");
+      let criteria = searchInput.parse({ ...draft, page: 1 });
+      if (query.trim() && queryDirty.current) {
+        setInterpreting(true);
+        try {
+          const data = await call<{ criteria: SearchInput }>({
+            action: "interpret",
+            company,
+            branch,
+            query: query.trim(),
+            current: draft,
+            manualKeys: [...manualKeys.current],
+          });
+          criteria = data.criteria;
+        } catch (e) {
+          const status = (e as Error & { status?: number }).status;
+          if (!status || status === 400 || status === 401 || status === 403)
+            throw e;
+          if (query.trim().length > 150)
+            throw Error("Use a shorter keyword search or edit Filters.");
+          criteria = searchInput.parse({
+            ...draft,
+            page: 1,
+            keywords: query.trim(),
+            discovery: undefined,
+          });
+          setNotice("AI interpretation unavailable — using keyword search.");
+        } finally {
+          setInterpreting(false);
         }
-      } finally {
-        setInterpreting(false);
       }
+      if (version !== scopeVersion.current) return;
+      setDraft(criteria);
+      await executeSearch(criteria);
     });
+    searchRunning.current = false;
   }
   function findPeople(ids: string[]) {
-    setDraft(
-      decisionMakerCriteria(
-        ids,
-        draft.discovery?.roles || [...suggestedRoles],
-        draft.discovery,
-      ),
+    const criteria = decisionMakerCriteria(
+      ids,
+      draft.discovery?.roles || [...suggestedRoles],
+      draft.discovery,
     );
-    setPage(null);
-    setRows([]);
-    setSelection([]);
-    setNotice(
-      "Decision-maker filters ready. Edit roles in Advanced filters, then Search Apollo. No search has run.",
-    );
-    queryInput.current?.focus();
+    setDraft(criteria);
+    queryDirty.current = false;
+    void task(() => executeSearch(criteria));
   }
   async function viewProspect(r: DatasetItem, target: HTMLElement) {
     trigger.current = target;
@@ -395,9 +438,8 @@ export default function Prospecting({
           if (!parsed.success) throw Error(parsed.error.issues[0].message);
           setDraft(parsed.data);
           setDrawer(false);
-          setNotice(
-            "Filters updated. Search Apollo when ready; no credits used.",
-          );
+          queryDirty.current = false;
+          setNotice("");
           restoreFocus();
         });
       }}
@@ -522,10 +564,7 @@ export default function Prospecting({
       </p>
       {!drawer && (
         <Button type="submit" className="primary" disabled={busy || preview}>
-          Apply filters · review{" "}
-          {draft.kind === "company"
-            ? `${meta?.policy.companySearch ?? 1} credit`
-            : "free search"}
+          Apply filters
         </Button>
       )}
     </form>
@@ -539,13 +578,10 @@ export default function Prospecting({
     >
       <PageTitle
         title="Prospecting"
-        subtitle="Find your next business relationship."
+        subtitle="Find companies and decision-makers with Apollo."
       />
       {contextProduct && (
-        <p className="apollo-context">
-          Product context is ready in your search. Choose a market and review
-          the interpretation.
-        </p>
+        <p className="apollo-context">Searching with your product context.</p>
       )}
       {preview && (
         <p>
@@ -572,32 +608,20 @@ export default function Prospecting({
             </Button>
           ))}
         </div>
-        <p className="muted small">
-          Opening this workspace uses no Apollo credits or AI.
-        </p>
       </div>
-      {error && (
-        <p className="form-error apollo-notice" role="alert">
+      {tab !== "results" && error && (
+        <p className="form-error" role="alert">
           {error}
-        </p>
-      )}
-      {notice && (
-        <p className="apollo-notice" role="status">
-          {notice}
         </p>
       )}
       {tab === "results" && (
         <>
           <div className="apollo-search-hero">
-            <p className="eyebrow">
-              <Sparkles size={15} /> Commercial discovery
-            </p>
-            <h2>Who are you looking for?</h2>
             <form
               className="apollo-query-form"
               onSubmit={(e) => {
                 e.preventDefault();
-                void understand();
+                void search();
               }}
             >
               <label htmlFor="apollo-natural-query" className="sr-only">
@@ -610,10 +634,17 @@ export default function Prospecting({
                 maxLength={800}
                 value={query}
                 disabled={busy}
-                placeholder="Search for companies or decision-makers..."
-                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search companies or decision-makers..."
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  queryDirty.current = true;
+                }}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
+                  if (
+                    e.key === "Enter" &&
+                    !e.shiftKey &&
+                    !e.nativeEvent.isComposing
+                  ) {
                     e.preventDefault();
                     e.currentTarget.form?.requestSubmit();
                   }
@@ -622,20 +653,39 @@ export default function Prospecting({
               <Button
                 className="primary"
                 type="submit"
-                disabled={busy || preview || query.trim().length < 3}
+                disabled={
+                  busy || preview || (!active.length && query.trim().length < 3)
+                }
               >
-                <Sparkles size={17} />
-                {interpreting
-                  ? "Understanding your search..."
-                  : "Understand search"}
+                <Search size={17} />
+                {busy
+                  ? interpreting
+                    ? "Understanding query…"
+                    : "Searching Apollo…"
+                  : "Search Apollo"}
               </Button>
             </form>
-            {interpreting && <p role="status">Understanding your search...</p>}
-            <p className="muted small">
-              Enter to interpret with AI. Apollo runs only after you review and
-              confirm.
+            <p className="muted small apollo-search-cost">
+              {draft.kind === "company"
+                ? `Company search · ~${meta?.policy.companySearch ?? 1} credit/page`
+                : "People search · 0 search credits"}
             </p>
-            {!page && !draft.discovery && (
+            {busy && (
+              <span className="sr-only" role="status">
+                {interpreting ? "Understanding query" : "Searching Apollo"}
+              </span>
+            )}
+            {error && (
+              <p className="form-error apollo-search-error" role="alert">
+                {error}
+              </p>
+            )}
+            {notice && (
+              <p className="small apollo-search-notice" role="status">
+                {notice}
+              </p>
+            )}
+            {!page && !active.length && (
               <div
                 className="apollo-query-examples"
                 aria-label="Example searches"
@@ -643,9 +693,7 @@ export default function Prospecting({
                 {[
                   "Bitumen importing companies in Vietnam",
                   "Lubricant manufacturers in Kenya",
-                  "Base oil buyers in UAE",
-                  "Procurement managers at lubricant companies in Tanzania",
-                  "SN500 buyers in East Africa",
+                  "Procurement managers at lubricant manufacturers in Kenya",
                 ].map((example) => (
                   <Button
                     key={example}
@@ -653,6 +701,7 @@ export default function Prospecting({
                     disabled={busy}
                     onClick={() => {
                       setQuery(example);
+                      queryDirty.current = true;
                       queryInput.current?.focus();
                     }}
                   >
@@ -662,70 +711,6 @@ export default function Prospecting({
               </div>
             )}
           </div>
-          {(draft.discovery || active.length > 0) && (
-            <section
-              className="apollo-interpretation panel"
-              aria-label="Search interpretation"
-            >
-              <div>
-                <p className="eyebrow">
-                  Searching for ·{" "}
-                  {draft.kind === "company" ? "Companies" : "Decision-makers"}
-                </p>
-                <h3>
-                  Potential matches
-                  {draft.location ? ` in ${draft.location}` : ""}
-                </h3>
-                <p>
-                  {draft.keywords || "Your reviewed company and role filters"}
-                </p>
-              </div>
-              {draft.discovery && (
-                <p className="small">
-                  <strong>Suggested roles:</strong>{" "}
-                  {draft.discovery.roles.join(" · ")}
-                </p>
-              )}
-              <p className="muted small">
-                Keywords identify potential matches. They do not verify
-                importing activity, buying intent or product demand.
-              </p>
-              {draft.discovery && query.trim() !== draft.discovery.query && (
-                <p role="status" className="small">
-                  Search text changed. Interpret it again, or continue with the
-                  reviewed filters shown here.
-                </p>
-              )}
-              {draft.discovery?.warnings.map((w, i) => (
-                <p key={i} role="status" className="small">
-                  {w}
-                </p>
-              ))}
-              <div className="apollo-search-confirm">
-                <Button
-                  className="primary"
-                  disabled={busy || preview}
-                  onClick={(e) => {
-                    trigger.current = e.currentTarget;
-                    void task(() =>
-                      prepare(
-                        "search",
-                        searchInput.parse({ ...draft, page: 1 }),
-                      ),
-                    );
-                  }}
-                >
-                  <Search size={16} />
-                  Search Apollo
-                </Button>
-                <span className="muted small">
-                  {draft.kind === "company"
-                    ? `Estimated ${meta?.policy.companySearch ?? 1} Apollo credit per page`
-                    : "No search credit · enrichment is separate"}
-                </span>
-              </div>
-            </section>
-          )}
           <div className="apollo-mode">
             <Button
               disabled={busy}
@@ -759,7 +744,7 @@ export default function Prospecting({
               }}
             >
               <SlidersHorizontal size={16} />
-              Advanced filters ({active.length})
+              Filters{active.length ? ` (${active.length})` : ""}
             </Button>
             <Button
               className="secondary"
@@ -783,25 +768,16 @@ export default function Prospecting({
                 onClick={() => setFilter(f.key, "")}
                 aria-label={`Remove ${f.label} filter`}
               >
-                {f.label}: {getFilter(f.key)} <X size={12} />
+                {getFilter(f.key)} <X size={12} />
               </Button>
             ))}
           </div>
           <div className="apollo-layout">
             <div className="apollo-results">
-              {!page && (
-                <div className="panel apollo-empty">
-                  <Search size={32} />
-                  <h2>Find your next business relationship</h2>
-                  <p>
-                    Describe your market above, or use Advanced filters. Results
-                    appear here after you confirm Search Apollo.
-                  </p>
-                  <p className="muted">
-                    Regular search results expire after 10 minutes. Confirmed
-                    bulk operations reserve a snapshot for 30 minutes.
-                  </p>
-                </div>
+              {!page && !busy && !error && (
+                <p className="apollo-start-hint muted">
+                  Search a market or choose Filters to get started.
+                </p>
               )}
               {page && (
                 <>
@@ -813,19 +789,32 @@ export default function Prospecting({
                           : "People"}{" "}
                         results
                       </h2>
-                      <p>
-                        Page {page.page} · {page.prospects.length} on this page
+                      <p className="muted small">
+                        Potential matches
+                        {page.criteria.location
+                          ? ` in ${page.criteria.location}`
+                          : ""}{" "}
+                        · Page {page.page} · {page.prospects.length} on this
+                        page
                         {page.total !== undefined
                           ? ` · ${page.total.toLocaleString()} reported by Apollo`
                           : ""}
                       </p>
                     </div>
-                    <span className="muted small">
-                      Review until{" "}
-                      {new Date(page.expiresAt).toLocaleTimeString()}
-                    </span>
                   </div>
-                  <div className="apollo-selection-toolbar panel">
+                  {page.criteria.discovery?.roles.length ? (
+                    <p className="muted small apollo-roles">
+                      Suggested decision-makers:{" "}
+                      {page.criteria.discovery.roles.join(" · ")}
+                    </p>
+                  ) : null}
+                  <details className="apollo-selection-toolbar panel">
+                    <summary>
+                      Selection &amp; export
+                      {selection.length
+                        ? ` · ${selection.length} selected`
+                        : ""}
+                    </summary>
                     <div className="execution-actions">
                       <strong aria-live="polite">
                         {selection.length} selected
@@ -967,7 +956,7 @@ export default function Prospecting({
                         data only · 0 credits
                       </small>
                     </div>
-                  </div>
+                  </details>
                   {!shown.length && (
                     <div className="panel apollo-empty">
                       <h3>
@@ -1044,8 +1033,10 @@ export default function Prospecting({
                             {r.imported
                               ? "Imported"
                               : r.match === "No match in checked records"
-                                ? "New · no checked match"
-                                : r.match}
+                                ? "New"
+                                : r.match === "Possible Customer match"
+                                  ? "Possible Match"
+                                  : r.match}
                           </span>
                           <span>
                             {r.prospect.enrichmentStatus || "Not enriched"}
@@ -1174,10 +1165,7 @@ export default function Prospecting({
       {tab === "saved" && (
         <section className="panel execution-card">
           <h2>Saved searches</h2>
-          <p>
-            Load filters, review them and explicitly run a search. Saved
-            searches contain no prospect results.
-          </p>
+          <p>Open saved filters for free, then run your search.</p>
           {!meta?.saved.length && <p>No saved searches yet.</p>}
           {meta?.saved.map((s) => (
             <article key={s.id} className="apollo-saved-row">
@@ -1195,14 +1183,19 @@ export default function Prospecting({
                   setDraft(s.criteria);
                   manualKeys.current.clear();
                   setQuery(s.criteria.discovery?.query || "");
+                  queryDirty.current = false;
                   setContextProduct(s.productId || undefined);
                   setTab("results");
-                  setNotice(
-                    "Saved filters loaded. Search Apollo when ready; no Apollo call has been made.",
-                  );
+                  setNotice("Saved filters loaded.");
                 }}
               >
-                Load filters
+                Open
+              </Button>
+              <Button
+                disabled={busy || preview}
+                onClick={() => void task(() => executeSearch(s.criteria))}
+              >
+                Run search
               </Button>
               <Button
                 className="secondary"
@@ -1240,7 +1233,13 @@ export default function Prospecting({
                       action: "operation",
                       id: r.id,
                     });
-                    setOp(o);
+                    if (o.data.type === "enrich") setOp(o);
+                    else {
+                      setDraft(o.data.criteria);
+                      setQuery(o.data.criteria.discovery?.query || "");
+                      queryDirty.current = false;
+                      setTab("results");
+                    }
                     if (o.data.resultStageId)
                       await loadPage(o.data.resultStageId);
                   })
@@ -1253,95 +1252,114 @@ export default function Prospecting({
         </section>
       )}
       {tab === "usage" && (
-        <section className="panel execution-card">
-          <h2>
-            <Coins size={20} /> Apollo Credit Center
-          </h2>
-          <p>
-            Cached account counters and your recent Enercore operations. Opening
-            this page does not contact Apollo.
-          </p>
-          <Button
-            disabled={busy || preview}
-            onClick={() =>
-              void task(async () => {
-                await call({ action: "refresh-account", company, branch });
-                await metadata();
-              })
-            }
-          >
-            Refresh Apollo counters · 0 credits
-          </Button>
-          <p className="muted small">
-            Refresh is cached for 10 minutes. The plan name and prior
-            2,890-credit review are not treated as current billing data.
-          </p>
-          {meta?.account ? (
-            <>
-              <p>{meta.account.source}</p>
-              <div className="apollo-stat-grid">
-                <p>
-                  Available{" "}
-                  <strong>{meta.account.available ?? "Unavailable"}</strong>
+        <section className="apollo-credit-center">
+          <div className="panel execution-card apollo-balance">
+            <div className="apollo-filter-heading">
+              <h2>
+                <Coins size={20} /> Apollo credits
+              </h2>
+              <Button
+                className="secondary compact"
+                disabled={busy || preview}
+                onClick={() =>
+                  void task(async () => {
+                    await call({ action: "refresh-account", company, branch });
+                    await metadata();
+                  })
+                }
+              >
+                Refresh balance
+              </Button>
+            </div>
+            {meta?.account?.available != null ? (
+              <>
+                <p className="apollo-balance-value">
+                  {meta.account.available.toLocaleString()}{" "}
+                  <span>remaining</span>
                 </p>
-                <p>
-                  Used <strong>{meta.account.used ?? "Unavailable"}</strong>
+                {meta.account.cycleEnd && (
+                  <p>
+                    Renews{" "}
+                    {new Date(meta.account.cycleEnd).toLocaleDateString(
+                      undefined,
+                      { day: "numeric", month: "short" },
+                    )}
+                  </p>
+                )}
+                <p className="muted">
+                  This cycle ·{" "}
+                  {meta.account.used == null
+                    ? "Usage unavailable"
+                    : `${meta.account.used.toLocaleString()} used`}
                 </p>
-                <p>
-                  Allowance{" "}
-                  <strong>{meta.account.allowance ?? "Unavailable"}</strong>
-                </p>
-              </div>
-              <p>
-                Checked {new Date(meta.account.checkedAt).toLocaleString()} ·
-                Cycle end{" "}
-                {meta.account.cycleEnd
-                  ? new Date(meta.account.cycleEnd).toLocaleDateString()
-                  : "Unavailable"}
+              </>
+            ) : (
+              <p className="apollo-balance-unavailable">
+                Balance unavailable from Apollo API
               </p>
-              {meta.account.creditError && (
-                <p role="alert">{meta.account.creditError}</p>
-              )}
-              {meta.account.limitsError && <p>{meta.account.limitsError}</p>}
-              <details>
-                <summary>Reported endpoint limits</summary>
-                <ul>
-                  {meta.account.limits.map((l, i) => (
-                    <li key={i}>
-                      {l.endpoint}: {l.limit}/{l.window},{" "}
-                      {l.remaining ?? "unknown"} remaining
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            </>
-          ) : (
-            <p>
-              No cached account counter. Refresh explicitly to check API access;
-              phone credit buckets are not shown or summed.
+            )}
+            <p className="muted small">
+              External Apollo account counter
+              {meta?.account
+                ? ` · Checked ${new Date(meta.account.checkedAt).toLocaleString()}`
+                : ""}
             </p>
-          )}
-          <h3>Your recent Apollo usage</h3>
-          <p className="muted small">
-            Estimated and observed charges are separate. Unreported charges
-            remain unknown. History retained for 90 days; this is not Apollo’s
-            account-wide invoice.
-          </p>
-          <div className="apollo-usage-list">
-            {!meta?.usage.length && <p>No operations recorded.</p>}
-            {meta?.usage.map((u) => (
-              <article key={u.id}>
-                <strong>{u.operation.replaceAll("_", " ")}</strong>
-                <span>
-                  {u.actorName} · {new Date(u.createdAt).toLocaleString()}
-                </span>
-                <span>
-                  Results {u.count} · Estimated {u.estimatedCredits} credits ·
-                  Observed {u.actualCredits ?? "unknown"}
-                </span>
-                <small>{u.status}</small>
-              </article>
-            ))}
+            <a href="https://app.apollo.io/" target="_blank" rel="noreferrer">
+              Open Apollo
+            </a>
+            <details>
+              <summary>Details</summary>
+              <p className="muted small">
+                Refresh uses no credits. Counters are cached for 60 seconds.
+                Account balances are separate from Enercore operation estimates.
+              </p>
+              {meta?.account?.creditError && <p>{meta.account.creditError}</p>}
+              {meta?.account?.limitsError && <p>{meta.account.limitsError}</p>}
+              {meta?.account?.limits.map((l, i) => (
+                <p key={i}>
+                  {l.endpoint}: {l.limit}/{l.window} ·{" "}
+                  {l.remaining ?? "unknown"} remaining
+                </p>
+              ))}
+            </details>
+          </div>
+          <div className="panel execution-card">
+            <h2>Enercore usage</h2>
+            <p className="muted small">
+              Estimated and observed costs for your Apollo operations in
+              Enercore.
+            </p>
+            <div className="apollo-usage-list">
+              {!meta?.usage.length && <p>No operations recorded.</p>}
+              {meta?.usage.map((u) => (
+                <article key={u.id}>
+                  <div>
+                    <strong>{u.operation.replaceAll("_", " ")}</strong>
+                    <span className="muted small">
+                      {new Date(u.createdAt).toLocaleString()}
+                    </span>
+                  </div>
+                  <dl>
+                    <div>
+                      <dt>Results</dt>
+                      <dd>{u.count}</dd>
+                    </div>
+                    <div>
+                      <dt>Estimated</dt>
+                      <dd>{u.estimatedCredits}</dd>
+                    </div>
+                    <div>
+                      <dt>Observed</dt>
+                      <dd>{u.actualCredits ?? "Unknown"}</dd>
+                    </div>
+                  </dl>
+                  <details>
+                    <summary>Details</summary>
+                    <p>{u.status}</p>
+                  </details>
+                </article>
+              ))}
+            </div>
           </div>
         </section>
       )}
@@ -1369,7 +1387,7 @@ export default function Prospecting({
           />
         </Dialog>
       )}
-      {op && (
+      {op?.data.type === "enrich" && (
         <CreditDialog
           op={op}
           error={error}

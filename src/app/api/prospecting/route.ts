@@ -64,9 +64,21 @@ export async function POST(request: Request) {
           if (e instanceof CommercialError) throw e;
           throw new CommercialError(
             e instanceof AiError ? e.status : 503,
-            "AI interpretation unavailable. Try again or use Advanced filters; no Apollo search was run.",
+            "AI interpretation unavailable — using keyword search.",
           );
         }
+      }
+      case "search": {
+        const prepared = await ops.prepare(db, actor, { ...c, type: "search" });
+        return reply(
+          await ops.advance(
+            db,
+            actor,
+            prepared.id,
+            true,
+            await apolloProvider(),
+          ),
+        );
       }
       case "workspace":
         return reply(await ops.workspace(db, actor, c.company, c.branch));

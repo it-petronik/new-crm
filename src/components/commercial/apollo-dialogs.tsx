@@ -33,11 +33,10 @@ export function CreditDialog({
     ).length;
   return (
     <Dialog
-      title="Apollo credit review"
-      className="execution-editor apollo-dialog"
+      title="Review enrichment"
+      className="execution-editor apollo-dialog apollo-enrichment-dialog"
       onClose={onClose}
     >
-      <p className="eyebrow">Explicit Apollo action</p>
       {busy && (
         <p role="status">
           {d.type === "search"
@@ -75,7 +74,7 @@ export function CreditDialog({
         Available:{" "}
         <strong>
           {d.available === null
-            ? "Unknown — refresh Credit Center for the external counter"
+            ? "Balance unavailable from Apollo API"
             : `${d.available.toLocaleString()} credits (cached)`}
         </strong>
       </p>
@@ -86,17 +85,11 @@ export function CreditDialog({
           full request.
         </p>
       )}
-      <p className="muted small">
-        {d.policy.note} Pricing reviewed {d.policy.reviewedAt}.{" "}
-        <a href={d.policy.source} target="_blank" rel="noreferrer">
-          Apollo pricing
-        </a>
-      </p>
-      <p className="muted small">
-        Up to 10 items per request, one request at a time. A confirmed operation
-        has a 30-minute review window. Closing this dialog pauses further
-        batches after the current request.
-      </p>
+      {d.items.length > 10 && (
+        <p className="muted small">
+          Processed in batches of 10. Closing pauses after the current batch.
+        </p>
+      )}
       {d.retryAt && d.retryAt > Date.now() && (
         <p role="status">
           Retry after {new Date(d.retryAt).toLocaleTimeString()}. No automatic

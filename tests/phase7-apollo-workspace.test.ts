@@ -789,3 +789,123 @@ test("completed phone observations are logged once and separated from overlappin
   assert.deepEqual(r.phoneObservations, [8]);
   assert.equal(r.observedCredits, 1);
 });
+
+test("Workers native fetch is called without a provider receiver", async () => {
+  const transport = async function (this: unknown) {
+    assert.equal(
+      this,
+      undefined,
+      "Workers fetch rejects a class instance as its receiver",
+    );
+    return Response.json({
+      organizations: [],
+      pagination: { total_entries: 0 },
+    });
+  } as typeof fetch;
+  const provider = new RealApollo("fictional", transport);
+  assert.equal(
+    (await provider.search(criteria("company"))).prospects.length,
+    0,
+  );
+});
+
+test("new search identities repeat freely after success or unknown charge; replay never spends twice", async () => {
+  const f = setup();
+  let calls = 0;
+  const provider = {
+    search: async (input: ReturnType<typeof criteria>) => {
+      calls++;
+      if (calls === 1)
+        throw new ApolloError(503, "Apollo unavailable", 0, true);
+      return {
+        prospects: [],
+        page: 1,
+        hasMore: false,
+        criteria: input,
+        source: "Apollo" as const,
+      };
+    },
+    enrich: async () => {
+      throw Error("Unexpected enrichment");
+    },
+  };
+  const create = (requestId: string) =>
+    ops.prepare(f.db, sales, {
+      company: "Petronik",
+      branch: "Main",
+      type: "search",
+      requestId,
+      criteria: criteria("company"),
+    });
+  const first = await create("first-search");
+  assert.equal(
+    (await ops.advance(f.db, sales, first.id, true, provider)).status,
+    "unknown",
+  );
+  await ops.advance(f.db, sales, first.id, true, provider);
+  assert.equal(calls, 1);
+  const second = await create("second-search");
+  assert.notEqual(first.id, second.id);
+  assert.equal(
+    (await ops.advance(f.db, sales, second.id, true, provider)).status,
+    "completed",
+  );
+  const third = await create("third-search");
+  assert.equal(
+    (await ops.advance(f.db, sales, third.id, true, provider)).status,
+    "completed",
+  );
+  await ops.advance(f.db, sales, third.id, true, provider);
+  assert.equal(calls, 3);
+  assert.equal(
+    f.sqlite.prepare("SELECT count(*) n FROM ApolloUsage").get()!.n,
+    3,
+  );
+  assert.equal(
+    f.sqlite.prepare("SELECT count(*) n FROM ApolloImport").get()!.n,
+    0,
+  );
+  f.sqlite.close();
+});
+
+test("search honors actual Retry-After across identities without imposing extra cooldown", async () => {
+  const f = setup();
+  let calls = 0;
+  const provider = {
+    search: async (input: ReturnType<typeof criteria>) => {
+      calls++;
+      if (calls === 1)
+        throw new ApolloError(429, "Apollo rate limit reached.", 2);
+      return {
+        prospects: [],
+        page: 1,
+        hasMore: false,
+        criteria: input,
+        source: "Apollo" as const,
+      };
+    },
+    enrich: async () => {
+      throw Error("Unexpected");
+    },
+  };
+  const make = (requestId: string) =>
+    ops.prepare(f.db, sales, {
+      company: "Petronik",
+      branch: "Main",
+      type: "search",
+      requestId,
+      criteria: criteria("company"),
+    });
+  const a = await make("rate-first");
+  await ops.advance(f.db, sales, a.id, true, provider);
+  const b = await make("rate-second");
+  await assert.rejects(
+    () => ops.advance(f.db, sales, b.id, true, provider),
+    /rate limit/,
+  );
+  assert.equal(calls, 1);
+  f.sqlite.exec("UPDATE ApolloGate SET until=0");
+  await ops.advance(f.db, sales, b.id, true, provider);
+  assert.equal(calls, 2);
+  f.sqlite.close();
+});

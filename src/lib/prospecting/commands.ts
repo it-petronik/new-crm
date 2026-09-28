@@ -33,6 +33,14 @@ const target = {
 export const command = z.discriminatedUnion("action", [
   z
     .object({
+      action: z.literal("search"),
+      ...scope,
+      requestId: id,
+      criteria: searchInput,
+    })
+    .strict(),
+  z
+    .object({
       action: z.literal("interpret"),
       ...scope,
       query: z.string().trim().min(3).max(800),

@@ -86,7 +86,7 @@ async function operation(db: Database, actor: Actor, id: string) {
   if (!row.data || row.expiresAt.getTime() <= Date.now())
     fail(
       410,
-      "This operation's 30-minute review window expired. Its spend receipt remains protected; it cannot run again.",
+      "This request has expired. Start a new search or review the enrichment again.",
     );
   return { ...row, data: row.data! };
 }
@@ -225,7 +225,8 @@ export async function refreshAccount(
     .from(accounts)
     .where(eq(accounts.id, "apollo"))
     .get();
-  if (prior && prior.updatedAt.getTime() > Date.now() - TEN) return prior.data;
+  if (prior && prior.updatedAt.getTime() > Date.now() - 60000)
+    return prior.data;
   if (!provider.account) fail(503, "Apollo usage access is unavailable.");
   const token = await gate(db);
   try {
@@ -321,24 +322,24 @@ export async function prepare(
       );
     return readOperation(db, actor, id);
   }
-  const duplicate = await db
-    .select()
-    .from(ops)
-    .where(
-      and(
-        eq(ops.actorId, actor.id),
-        eq(ops.company, c.company),
-        eq(ops.branch, c.branch),
-        eq(ops.fingerprint, fingerprint),
-        sql`${ops.status} != 'failed'`,
-        gt(
-          ops.createdAt,
-          new Date(Date.now() - (c.type === "search" ? TEN : THIRTY)),
-        ),
-        gt(ops.expiresAt, new Date()),
-      ),
-    )
-    .get();
+  const duplicate =
+    c.type === "enrich"
+      ? await db
+          .select()
+          .from(ops)
+          .where(
+            and(
+              eq(ops.actorId, actor.id),
+              eq(ops.company, c.company),
+              eq(ops.branch, c.branch),
+              eq(ops.fingerprint, fingerprint),
+              sql`${ops.status} != 'failed'`,
+              gt(ops.createdAt, new Date(Date.now() - THIRTY)),
+              gt(ops.expiresAt, new Date()),
+            ),
+          )
+          .get()
+      : undefined;
   if (duplicate) return readOperation(db, actor, duplicate.id);
   const items: OperationData["items"] = [];
   const sourceOperationIds = new Set<string>();
@@ -495,15 +496,30 @@ export async function advance(
       "Wait until Apollo's retry time before continuing.",
       Math.ceil((r.data.retryAt - Date.now()) / 1000),
     );
-  if (r.data.available === 0 && r.data.estimate > 0)
+  if (r.data.type === "enrich" && r.data.available === 0 && r.data.estimate > 0)
     fail(402, "Apollo credits exhausted. Normal CRM remains available.");
   const cache = await db
     .select()
     .from(accounts)
     .where(eq(accounts.id, "apollo"))
     .get();
-  let cooldown = 3;
-  if (cache && cache.updatedAt.getTime() > Date.now() - TEN) {
+  const isSearch = r.data.type === "search";
+  const searchGateId = `apollo-search:${r.data.kind}`;
+  if (isSearch) {
+    const limit = await db
+      .select()
+      .from(gates)
+      .where(eq(gates.id, searchGateId))
+      .get();
+    if (limit && limit.until > Date.now())
+      throw new ApolloError(
+        429,
+        "Apollo rate limit reached.",
+        Math.ceil((limit.until - Date.now()) / 1000),
+      );
+  }
+  let cooldown = isSearch ? 0 : 3;
+  if (!isSearch && cache && cache.updatedAt.getTime() > Date.now() - TEN) {
     const endpoint =
       r.data.type === "search"
         ? r.data.kind === "company"
@@ -535,7 +551,7 @@ export async function advance(
         cooldown = Math.max(cooldown, Math.ceil(period / limit.limit));
     }
   }
-  const token = await gate(db);
+  const token = isSearch ? null : await gate(db);
   try {
     const claimed = await db
       .update(ops)
@@ -700,7 +716,25 @@ export async function advance(
         !(e instanceof CommercialError) ||
         (e instanceof ApolloError && e.uncertain);
       const retryAfter = e instanceof ApolloError ? e.retryAfter : 0;
-      cooldown = Math.max(3, retryAfter);
+      cooldown = isSearch ? retryAfter : Math.max(3, retryAfter);
+      if (
+        isSearch &&
+        e instanceof ApolloError &&
+        e.status === 429 &&
+        retryAfter > 0
+      ) {
+        await db
+          .insert(gates)
+          .values({
+            id: searchGateId,
+            token: "",
+            until: Date.now() + retryAfter * 1000,
+          })
+          .onConflictDoUpdate({
+            target: gates.id,
+            set: { until: Date.now() + retryAfter * 1000 },
+          });
+      }
       const msg =
         e instanceof CommercialError
           ? e.message
@@ -711,7 +745,7 @@ export async function advance(
         item.message = msg;
       }
       data.message = msg;
-      data.retryAt = Date.now() + cooldown * 1000;
+      data.retryAt = cooldown > 0 ? Date.now() + cooldown * 1000 : undefined;
       data.actualComplete = false;
       if (data.type === "enrich") {
         const stageId = data.resultStageId || crypto.randomUUID();
@@ -760,7 +794,7 @@ export async function advance(
     }
     return readOperation(db, actor, id);
   } finally {
-    await release(db, token, cooldown);
+    if (token) await release(db, token, cooldown);
   }
 }
 export async function retryFailed(

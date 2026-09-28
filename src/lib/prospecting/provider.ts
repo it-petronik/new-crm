@@ -114,7 +114,9 @@ export class RealApollo implements ApolloProvider {
         method === "GET"
           ? `?${new URLSearchParams(Object.entries(body).map(([k, v]) => [k, String(v)]))}`
           : "";
-      const res = await this.transport(
+      // Native Workers fetch must not receive this provider as its receiver.
+      const transport = this.transport;
+      const res = await transport(
         `https://api.apollo.io/api/v1/${path}${query}`,
         {
           method,
@@ -145,16 +147,16 @@ export class RealApollo implements ApolloProvider {
         if (res.status === 429)
           throw new ApolloError(
             429,
-            "Apollo rate limit reached. No automatic retry.",
+            "Apollo rate limit reached.",
             Math.min(
               86400,
               Math.max(
-                1,
+                0,
                 Number(res.headers.get("Retry-After")) ||
                   (Date.parse(res.headers.get("Retry-After") || "") -
                     Date.now()) /
                     1000 ||
-                  60,
+                  0,
               ),
             ),
           );
