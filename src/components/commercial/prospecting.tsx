@@ -1135,8 +1135,13 @@ export default function Prospecting({
                     >
                       Previous page
                     </Button>
-                    <span>
-                      Page {page.page} · selection stays on this page only
+                    <span aria-live="polite" aria-atomic="true">
+                      Page {page.page}
+                      {!page.hasMore &&
+                        (page.page === 1
+                          ? ` of 1 · All ${page.prospects.length} results are on this page`
+                          : " · End of results")}
+                      {" · Selection stays on this page only"}
                     </span>
                     <Button
                       className="secondary"
@@ -1150,10 +1155,13 @@ export default function Prospecting({
                         )
                       }
                     >
-                      Next page ·{" "}
-                      {page.criteria.kind === "company"
-                        ? `${meta?.policy.companySearch ?? 1} credit`
-                        : "0 credits"}
+                      {page.hasMore
+                        ? `Next page · ${
+                            page.criteria.kind === "company"
+                              ? `${meta?.policy.companySearch ?? 1} credit`
+                              : "0 credits"
+                          }`
+                        : "No more results"}
                     </Button>
                   </div>
                 </>

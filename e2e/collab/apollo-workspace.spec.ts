@@ -165,6 +165,99 @@ for (const width of [320, 360, 390, 430, 768, 820, 1024, 1280, 1440])
     expect(errors).toEqual([]);
     await context.close();
   });
+test("pagination explains a single page without offering another paid search", async ({
+  browser,
+}, info) => {
+  const { context, page } = await open(browser, 320);
+  const actions: string[] = [];
+  page.on("request", (r) => {
+    if (r.url().includes("/api/prospecting") && r.method() === "POST")
+      actions.push(r.postDataJSON().action);
+  });
+  await page
+    .getByRole("textbox", { name: "Search for companies or decision-makers" })
+    .fill("Bitumen importing companies in Vietnam");
+  await page
+    .getByRole("button", { name: "Search Apollo", exact: true })
+    .click();
+  await expect(page.locator(".apollo-result-card")).toHaveCount(3);
+  await expect(page.locator(".apollo-pagination")).toContainText(
+    "Page 1 of 1 · All 3 results are on this page",
+  );
+  await expect(
+    page.getByRole("button", { name: "No more results", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Previous page", exact: true }),
+  ).toBeDisabled();
+  await expect(page.getByRole("button", { name: /^Next page/ })).toHaveCount(0);
+  expect(actions.filter((a) => a === "search")).toHaveLength(1);
+  await page.locator(".apollo-pagination").scrollIntoViewIfNeeded();
+  await fits(page);
+  await page.locator(".apollo-pagination").scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: info.outputPath("pagination.png"),
+    animations: "disabled",
+  });
+  await context.close();
+});
+test("pagination moves forward and back with the same filters and stops at the last page", async ({
+  browser,
+}, info) => {
+  const { context, page } = await open(browser, 1440);
+  const searches: Record<string, unknown>[] = [];
+  const actions: string[] = [];
+  page.on("request", (r) => {
+    if (r.url().includes("/api/prospecting") && r.method() === "POST") {
+      const body = r.postDataJSON();
+      actions.push(body.action);
+      if (body.action === "search") searches.push(body.criteria);
+    }
+  });
+  await manual(page, "pagination");
+  const first = page.getByRole("heading", {
+    name: "Fictional pagination Trading 1-0",
+    exact: true,
+  });
+  await expect(first).toBeVisible();
+  await page
+    .getByRole("button", { name: "Next page · 1 credit", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Fictional pagination Trading 2-0",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(first).toHaveCount(0);
+  await expect(page.locator(".apollo-pagination")).toContainText(
+    "Page 2 · End of results",
+  );
+  await expect(
+    page.getByRole("button", { name: "No more results", exact: true }),
+  ).toBeDisabled();
+  await page
+    .getByRole("button", { name: "Previous page", exact: true })
+    .click();
+  await expect(first).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Next page · 1 credit", exact: true }),
+  ).toBeEnabled();
+  expect(searches).toHaveLength(3);
+  expect(searches.map((s) => s.page)).toEqual([1, 2, 1]);
+  expect(searches[1]).toEqual({ ...searches[0], page: 2 });
+  expect(searches[2]).toEqual(searches[0]);
+  expect(actions.filter((a) => ["interpret", "advance"].includes(a))).toEqual(
+    [],
+  );
+  await fits(page);
+  await page.locator(".apollo-pagination").scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: info.outputPath("pagination.png"),
+    animations: "disabled",
+  });
+  await context.close();
+});
 test("repeat searches use new identities; double activation sends only one request", async ({
   browser,
 }) => {
