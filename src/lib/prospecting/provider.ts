@@ -146,12 +146,22 @@ export class RealApollo implements ApolloProvider {
           },
           body: method === "GET" ? undefined : JSON.stringify(body),
           signal: controller.signal,
-          redirect: "error",
+          redirect: "manual",
           cache: "no-store",
         },
       );
       diagnostic.upstreamStatus = res.status;
       phase = "response_read";
+      // Never follow a redirect or forward the Apollo credential elsewhere.
+      if (res.status >= 300 && res.status < 400) {
+        diagnostic.errorCategory = "redirect_rejected";
+        throw new ApolloError(
+          503,
+          "Apollo returned a redirect. It was not followed. Charge unknown; no automatic retry.",
+          0,
+          true,
+        );
+      }
       if (res.status === 404 && path.startsWith("webhook_result/")) {
         phase = "parse";
         const r = object(await res.json());
