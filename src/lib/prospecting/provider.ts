@@ -1,4 +1,11 @@
 import {
+  diagnosticEndpoint,
+  diagnosticException,
+  diagnosticErrorCode,
+  emitApolloDiagnostic,
+  type ApolloDiagnostic,
+} from "./diagnostics";
+import {
   searchInput,
   domainOf,
   type Prospect,
@@ -107,6 +114,18 @@ export class RealApollo implements ApolloProvider {
         503,
         "Apollo is not configured. CRM remains available.",
       );
+    const started = performance.now();
+    const diagnostic: ApolloDiagnostic = {
+      endpoint: diagnosticEndpoint(path),
+      upstreamStatus: null,
+      errorCategory: null,
+      errorCode: null,
+      durationMs: 0,
+      timeout: false,
+      responseParse: "not_attempted",
+      fetchException: null,
+    };
+    let phase: "fetch" | "response_read" | "parse" | "complete" = "fetch";
     const controller = new AbortController(),
       timer = setTimeout(() => controller.abort(), 12000);
     try {
@@ -131,8 +150,14 @@ export class RealApollo implements ApolloProvider {
           cache: "no-store",
         },
       );
+      diagnostic.upstreamStatus = res.status;
+      phase = "response_read";
       if (res.status === 404 && path.startsWith("webhook_result/")) {
+        phase = "parse";
         const r = object(await res.json());
+        diagnostic.responseParse = "success";
+        diagnostic.errorCode = diagnosticErrorCode(r.error_code);
+        phase = "complete";
         if (r.error_code === "result_pending")
           return {
             webhook_status: "in_progress",
@@ -144,6 +169,35 @@ export class RealApollo implements ApolloProvider {
         );
       }
       if (!res.ok) {
+        diagnostic.errorCategory = `upstream_http_${res.status}`;
+        // Bounded diagnostic-only read; never retain or log the raw body.
+        try {
+          const reader = res.body?.getReader();
+          let raw = "";
+          if (reader) {
+            const decoder = new TextDecoder();
+            while (raw.length <= 4096) {
+              const chunk = await reader.read();
+              if (chunk.done) break;
+              raw += decoder.decode(chunk.value.subarray(0, 4097), {
+                stream: true,
+              });
+            }
+            void reader.cancel().catch(() => {});
+          }
+          if (raw.length <= 4096) {
+            const errorBody = object(JSON.parse(raw));
+            diagnostic.responseParse = "success";
+            diagnostic.errorCode = diagnosticErrorCode(
+              errorBody.error_code ??
+                errorBody.code ??
+                object(errorBody.error).code,
+            );
+          }
+        } catch {
+          diagnostic.responseParse = "failure";
+        }
+        phase = "complete";
         if (res.status === 429)
           throw new ApolloError(
             429,
@@ -190,13 +244,30 @@ export class RealApollo implements ApolloProvider {
           0,
           true,
         );
-      return object(
+      phase = "parse";
+      const parsed = object(
         JSON.parse(
           raw.replace(/("request_id"\s*:\s*)(-?\d+)(?=\s*[,}])/g, '$1"$2"'),
         ),
       );
+      diagnostic.responseParse = "success";
+      phase = "complete";
+      return parsed;
     } catch (e) {
-      if (e instanceof CommercialError) throw e;
+      if (phase === "parse") diagnostic.responseParse = "failure";
+      if (e instanceof CommercialError) {
+        diagnostic.errorCategory ||= "provider_rejection";
+        throw e;
+      }
+      diagnostic.errorCategory = controller.signal.aborted
+        ? "timeout"
+        : phase === "parse"
+          ? "response_parse_failure"
+          : phase === "fetch"
+            ? "fetch_exception"
+            : "response_read_exception";
+      diagnostic.fetchException =
+        phase === "parse" ? null : diagnosticException(e);
       throw new ApolloError(
         503,
         controller.signal.aborted
@@ -207,6 +278,9 @@ export class RealApollo implements ApolloProvider {
       );
     } finally {
       clearTimeout(timer);
+      diagnostic.durationMs = Math.round(performance.now() - started);
+      diagnostic.timeout = controller.signal.aborted;
+      emitApolloDiagnostic(diagnostic);
     }
   }
   async search(raw: SearchInput): Promise<ProspectPage> {
