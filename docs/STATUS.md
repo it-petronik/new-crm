@@ -39,6 +39,12 @@ Nothing in `src/` imports them.
 
 ---
 
+## Phase 7 local candidate (28 September 2026)
+
+Prospecting, reviewed Apollo import/enrichment, supplier RFQs, immutable offer revisions and deterministic commercial scenarios extend the existing Customer/Contact/Lead/Deal/Quotation workflow. See [PHASE-7.md](PHASE-7.md) for authorization, money, provider and recovery contracts. Migration 0014 is local only. This entry does not record a release or change production status.
+
+---
+
 ## Superseded deployment history
 
 The entries below were written while the application targeted MySQL on cPanel,
@@ -463,3 +469,11 @@ Revision verification: 24 unit tests and the production build (including TypeScr
 - Verification: production build and all 31 tests passed; browser checks verified breadcrumb navigation, Quick Actions, desktop insights and a 388 CSS-pixel mobile layout without horizontal overflow. No browser errors were captured. No database writes, migrations, deployment or push performed.
 - Removed decorative footer/company-strip content. New screens use shared controls, spacing, themes and responsive layouts.
 - Verification: 23 unit tests, TypeScript, production build and diff whitespace checks passed. Browser checks covered company selection, profile, light/dark switching, notifications, permission editor and keyboard command selection. Profile and notifications had no horizontal overflow at an effective 388 CSS-pixel viewport. No browser console errors were captured in the final check. No live access changes or migrations were executed.
+
+### Phase 7 Apollo expansion — local release hold
+
+The Prospecting workspace now has documented company/person filters, confirmed single/bulk enrichment, durable spend reservations, cached credit information, usage metadata, reviewed bulk CRM import, saved searches, CSV/XLSX and deterministic printable reporting. Scope is limited to Apollo/Prospecting and its report/export integration. Migration 0015 was applied only to the fictional local review database. Existing sourcing/costing/quotation code and migration 0014 are retained. See `docs/PHASE-7-APOLLO.md` for contracts, retention, safety boundaries and the focused test commands. No commit, push, production migration, deployment, real enrichment, R2 or Phase 8 is authorized.
+
+### Phase 7 Apollo AI search UX — local release hold
+
+Natural-language interpretation now sits above the existing Apollo workspace. The employee reviews structured allowlisted criteria before the existing confirmed Apollo operation. Manual filters, staged permissions, paid idempotency, import, export and deterministic report paths remain authoritative. Workers AI receives only explicit query text with one model attempt; no passive model calls or Apollo execution. The original query travels with structured search metadata without a new migration. Fictional review providers only; no commit, push, production change, real credit use, R2 or Phase 8. See the search-first section of `docs/PHASE-7-APOLLO.md`.

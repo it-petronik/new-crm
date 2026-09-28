@@ -101,7 +101,7 @@ def split_export(text):
 
 
 def migrations(profile):
-    return [p for p in sorted((ROOT/'drizzle').glob('[0-9][0-9][0-9][0-9]_*.sql')) if profile == 'phase6' or int(p.name[:4]) < 13]
+    return [p for p in sorted((ROOT/'drizzle').glob('[0-9][0-9][0-9][0-9]_*.sql')) if int(p.name[:4]) <= {'pre-phase6': 12, 'phase6': 13, 'phase7': 14, 'phase7-apollo': 15}[profile]]
 
 
 def expected_schema(profile):
@@ -180,7 +180,7 @@ def validate(db, profile):
                 raise RecoveryError('Cyclic BusinessRecord ancestry')
             seen.add(current['id'])
             current = records.get(current.get('parentId'))
-    if profile == 'phase6':
+    if profile in ['phase6', 'phase7', 'phase7-apollo']:
         for table in ('Contact', 'SupplierProductCapability'):
             for (details,) in db.execute('SELECT details FROM ' + quote_name(table)):
                 obj = json_object(details)
@@ -204,11 +204,18 @@ def validate(db, profile):
         # Roll back the validation transaction even on success: no row changes.
         db.execute('SAVEPOINT validate_guards')
         try:
-            for table in ('Contact', 'Deal', 'SupplierProductCapability', 'BusinessRecord'):
+            for table in ('Contact', 'Deal', 'SupplierProductCapability', 'BusinessRecord') + (('DealSupplier', 'SupplierRFQ', 'SupplierOffer', 'CommercialScenario', 'ApolloImport') if profile in ['phase7', 'phase7-apollo'] else ()):
                 db.execute('UPDATE ' + quote_name(table) + ' SET id=id')
         finally:
             db.execute('ROLLBACK TO validate_guards')
             db.execute('RELEASE validate_guards')
+    if profile in ['phase7', 'phase7-apollo']:
+        for table in ('SupplierRFQ', 'SupplierOffer', 'CommercialScenario'):
+            for (details,) in db.execute('SELECT details FROM '+quote_name(table)):
+                json_object(details)
+        broken=db.execute("SELECT 1 FROM SupplierOffer o LEFT JOIN SupplierOffer p ON p.id=o.previousId WHERE (o.revision=1 AND (o.previousId IS NOT NULL OR o.seriesId!=o.id)) OR (o.revision>1 AND (p.id IS NULL OR p.revision!=o.revision-1 OR p.seriesId!=o.seriesId OR p.dealId!=o.dealId OR p.supplierId!=o.supplierId OR p.productId!=o.productId OR p.status!='Superseded')) LIMIT 1").fetchone()
+        if broken:
+            raise RecoveryError('Invalid Supplier Offer revision chain')
     return snapshot(db)
 
 
@@ -268,6 +275,8 @@ def plan(db):
             raise RecoveryError('Missing physical foreign-key table')
         visiting.add(t)
         for parent in sorted(deps[t]):
+            if parent == t and t == "SupplierOffer":
+                continue  # Phase 7 immutable revision chain is loaded oldest first.
             visit(parent)
         visiting.remove(t)
         ordered.append(t)
@@ -278,6 +287,9 @@ def plan(db):
         parts['tables'].append(db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (t,)).fetchone()[0] + ';')
         columns = ','.join(quote_name(r[1]) for r in db.execute('PRAGMA table_info(' + quote_name(t) + ')'))
         rows = sorted(db.execute('SELECT * FROM ' + quote_name(t)).fetchall(), key=repr)
+        if t == 'SupplierOffer':
+            revision_index = [r[1] for r in db.execute('PRAGMA table_info(' + quote_name(t) + ')')].index('revision')
+            rows.sort(key=lambda row: row[revision_index])
         parts['data'].extend('INSERT INTO ' + quote_name(t) + '(' + columns + ') VALUES(' + ','.join(literal(v) for v in row) + ');' for row in rows)
     # Preserve AUTOINCREMENT high-water marks when an export includes them.
     if db.execute("SELECT 1 FROM sqlite_master WHERE name='sqlite_sequence'").fetchone():
@@ -445,7 +457,7 @@ def main():
     for name in ['validate', 'restore']:
         p = sub.add_parser(name)
         p.add_argument('backup')
-        p.add_argument('--schema', choices=['phase6', 'pre-phase6'], default='phase6')
+        p.add_argument('--schema', choices=['phase7-apollo', 'phase7', 'phase6', 'pre-phase6'], default='phase6')
         p.add_argument('--report', required=True)
         if name == 'restore':
             mode = p.add_mutually_exclusive_group(required=True)

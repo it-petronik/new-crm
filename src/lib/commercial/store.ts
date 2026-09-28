@@ -237,6 +237,7 @@ export async function saveContact(
     version?: number;
     details: unknown;
     requestId?: string;
+    enrichmentAudit?: boolean;
   },
 ) {
   const { row, record } = await parent(
@@ -302,7 +303,7 @@ export async function saveContact(
           audit(
             actor,
             record,
-            existing ? "Contact updated" : "Contact created",
+            input.enrichmentAudit ? "Reviewed Apollo enrichment applied to Contact" : existing ? "Contact updated" : "Contact created",
           ),
         ),
     ]);

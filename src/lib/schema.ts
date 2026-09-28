@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { sqliteTable, text, integer, index, uniqueIndex, primaryKey, check } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, index, uniqueIndex, primaryKey, check } from "drizzle-orm/sqlite-core";
 
 /**
  * D1 (SQLite) equivalent of the original MySQL schema.
@@ -831,3 +831,64 @@ export const supplierCapabilities = sqliteTable("SupplierProductCapability", {
   active: integer("active", { mode: "boolean" }).notNull().default(true), version: integer("version").notNull().default(1),
   createdAt: integer("createdAt", { mode: "timestamp_ms" }).notNull(), updatedAt: integer("updatedAt", { mode: "timestamp_ms" }).notNull(),
 }, t => [index("Capability_supplier_idx").on(t.supplierId), index("Capability_product_active_idx").on(t.productId, t.active)]);
+
+// Phase 7: identities stay in BusinessRecord/Deal. Financial snapshots are private children.
+const executionColumns = () => ({
+  id: text("id").primaryKey(), dealId: text("dealId").notNull().references(() => deals.id, {onDelete:"restrict"}),
+  supplierId: text("supplierId").notNull().references(() => businessRecords.id, {onDelete:"restrict"}),
+  productId: text("productId").notNull().references(() => businessRecords.id, {onDelete:"restrict"}),
+  company: text("company").notNull(), branch: text("branch").notNull(), status: text("status").notNull(),
+  version: integer("version").notNull().default(1), createdBy: text("createdBy").notNull(),
+  createdAt: integer("createdAt", {mode:"timestamp_ms"}).notNull(), updatedAt: integer("updatedAt", {mode:"timestamp_ms"}).notNull(),
+});
+export const dealSuppliers = sqliteTable("DealSupplier", {
+  ...executionColumns(),
+}, t => [uniqueIndex("DealSupplier_pair").on(t.dealId,t.supplierId,t.productId)]);
+export const supplierRfqs = sqliteTable("SupplierRFQ", {
+  ...executionColumns(), details: text("details",{mode:"json"}).$type<import("./execution/model").RFQDetails>().notNull(),
+}, t => [index("SupplierRFQ_deal").on(t.dealId)]);
+export const supplierOffers = sqliteTable("SupplierOffer", {
+  ...executionColumns(), rfqId: text("rfqId").references(() => supplierRfqs.id,{onDelete:"restrict"}),
+  seriesId:text("seriesId").notNull(), revision:integer("revision").notNull(), previousId:text("previousId"),
+  details:text("details",{mode:"json"}).$type<import("./execution/model").OfferDetails>().notNull(),
+}, t => [uniqueIndex("SupplierOffer_revision").on(t.seriesId,t.revision),index("SupplierOffer_deal").on(t.dealId)]);
+export const commercialScenarios = sqliteTable("CommercialScenario", {
+  ...executionColumns(), offerId:text("offerId").notNull().references(() => supplierOffers.id,{onDelete:"restrict"}),
+  quotationId:text("quotationId").references(() => businessRecords.id,{onDelete:"restrict"}),
+  selectedBy:text("selectedBy"),selectedAt:integer("selectedAt",{mode:"timestamp_ms"}),
+  details:text("details",{mode:"json"}).$type<import("./execution/model").ScenarioDetails>().notNull(),
+}, t => [index("CommercialScenario_deal").on(t.dealId)]);
+export const apolloStages = sqliteTable("ApolloStage", {
+  id:text("id").primaryKey(), actorId:text("actorId").notNull(),company:text("company").notNull(),branch:text("branch").notNull(),
+  fingerprint:text("fingerprint").notNull(),expiresAt:integer("expiresAt",{mode:"timestamp_ms"}).notNull(),
+  data:text("data",{mode:"json"}).$type<import("./prospecting/model").ProspectPage>().notNull(),
+},t=>[index("ApolloStage_expiry").on(t.expiresAt),uniqueIndex("ApolloStage_cache").on(t.actorId,t.company,t.branch,t.fingerprint)]);
+export const apolloImports = sqliteTable("ApolloImport", {
+  id:text("id").primaryKey(),actorId:text("actorId").notNull(),company:text("company").notNull(),branch:text("branch").notNull(),
+  providerId:text("providerId").notNull(), providerKind:text("providerKind").notNull(),
+  customerId:text("customerId").notNull().references(()=>businessRecords.id,{onDelete:"restrict"}),
+  contactId:text("contactId").references(()=>contacts.id,{onDelete:"restrict"}),
+  leadId:text("leadId").references(()=>businessRecords.id,{onDelete:"restrict"}),
+  createdAt:integer("createdAt",{mode:"timestamp_ms"}).notNull(),
+},t=>[uniqueIndex("ApolloImport_source").on(t.company,t.branch,t.providerKind,t.providerId)]);
+
+// Apollo spend receipts outlive short-lived prospect snapshots. Never delete a request identity to retry it.
+export const apolloOperations = sqliteTable("ApolloOperation", {
+ id:text("id").primaryKey(),actorId:text("actorId").notNull(),company:text("company").notNull(),branch:text("branch").notNull(),
+ fingerprint:text("fingerprint").notNull(),status:text("status").notNull(),version:integer("version").notNull().default(1),
+ data:text("data",{mode:"json"}).$type<import("./prospecting/operations-model").OperationData | null>(),
+ createdAt:integer("createdAt",{mode:"timestamp_ms"}).notNull(),updatedAt:integer("updatedAt",{mode:"timestamp_ms"}).notNull(),expiresAt:integer("expiresAt",{mode:"timestamp_ms"}).notNull(),
+},t=>[index("ApolloOperation_actor").on(t.actorId,t.company,t.branch),index("ApolloOperation_expiry").on(t.expiresAt)]);
+export const apolloUsage = sqliteTable("ApolloUsage", {
+ id:text("id").primaryKey(),operationId:text("operationId").notNull(),actorId:text("actorId").notNull(),actorName:text("actorName").notNull(),company:text("company").notNull(),branch:text("branch").notNull(),
+ operation:text("operation").notNull(),count:integer("count").notNull(),estimatedCredits:real("estimatedCredits").notNull(),actualCredits:real("actualCredits"),status:text("status").notNull(),
+ createdAt:integer("createdAt",{mode:"timestamp_ms"}).notNull(),
+},t=>[index("ApolloUsage_scope").on(t.actorId,t.company,t.branch,t.createdAt)]);
+export const apolloSavedSearches=sqliteTable("ApolloSavedSearch",{
+ id:text("id").primaryKey(),actorId:text("actorId").notNull(),company:text("company").notNull(),branch:text("branch").notNull(),name:text("name").notNull(),
+ criteria:text("criteria",{mode:"json"}).$type<import("./prospecting/model").SearchInput>().notNull(),productId:text("productId"),market:text("market").notNull(),updatedAt:integer("updatedAt",{mode:"timestamp_ms"}).notNull(),
+},t=>[index("ApolloSaved_actor").on(t.actorId,t.company,t.branch)]);
+export const apolloAccountCache=sqliteTable("ApolloAccountCache",{
+ id:text("id").primaryKey(),data:text("data",{mode:"json"}).$type<import("./prospecting/operations-model").AccountUsage>().notNull(),updatedAt:integer("updatedAt",{mode:"timestamp_ms"}).notNull(),
+});
+export const apolloGate=sqliteTable("ApolloGate",{id:text("id").primaryKey(),token:text("token").notNull(),until:integer("until").notNull()});

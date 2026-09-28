@@ -2,6 +2,7 @@
 import app from "../worker";
 import type { D1Database } from "@cloudflare/workers-types";
 export { CollabHub, DOQueueHandler, DOShardedTagCache, BucketCachePurge } from "../worker";
+export { FakeApollo } from "./fake-apollo-worker";
 export { FakeAi } from "./fake-ai-worker";
 
 type TestEnv = Parameters<typeof app.fetch>[1] & { DB: D1Database; COLLAB_TEST_CONTROL?: string };

@@ -108,6 +108,8 @@ import { storedPreviewActor, previewActorKey } from "@/lib/fixtures";
 import { RECORDS_CHANGED } from "@/lib/proactive/client";
 import { Avatar } from "./avatar";
 import RecordForm from "./record-form";
+import { canProspect } from "@/lib/execution/model";
+import Prospecting from "./commercial/prospecting";
 import CommercialPanel from "./commercial/commercial-panel";
 import { recordProfiles, detailFields } from "@/lib/record-profiles";
 import UserAdmin from "./user-admin";
@@ -1148,6 +1150,7 @@ export default function Workspace({
               <span>Quick actions</span>
               <kbd>⌘ K</kbd>
             </Button>
+            {canProspect(actor) && <Button className="secondary compact" aria-label="Open prospecting" onClick={() => openView("prospecting")}>Prospecting</Button>}
             <ThemeToggle />
             <Button
               className="icon-button notification-button"
@@ -1209,6 +1212,7 @@ export default function Workspace({
                   onManageAccess={canManageUsers(actor) ? () => openView("access") : undefined}
                 />
               )}
+              {view === "prospecting" && <Prospecting actor={actor} preview={preview} />}
               {view === "ai" && <AiWorkspace actor={actor} preview={preview} />}
               {view === "actions" &&
                 (preview ? (
@@ -1826,7 +1830,7 @@ export default function Workspace({
                 run: () => go(m),
               })),
               ...Object.entries(viewLabels)
-                .filter(([v]) => (v !== "access" || canManageUsers(actor)) && (!["ai", "actions"].includes(v) || !preview))
+                .filter(([v]) => (v !== "prospecting" || canProspect(actor)) && (v !== "access" || canManageUsers(actor)) && (!["ai", "actions"].includes(v) || !preview))
                 .map(([v, label]) => ({
                   id: v,
                   label,

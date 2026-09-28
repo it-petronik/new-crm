@@ -1,3 +1,4 @@
+import { executionSignals } from "../execution/context";
 import { and, eq, gte, inArray, isNull } from "drizzle-orm";
 import type { Database } from "../d1";
 import { money, outstanding, stages, type Actor, type RecordItem } from "../domain";
@@ -55,7 +56,7 @@ async function meetingInputs(db: Database, actor: Actor): Promise<ProactiveMeeti
 /** Every signal for the actor in scope, before personal snooze/dismiss. */
 export async function signalsFor(db: Database, actor: Actor, scope: "mine" | "team") {
   const [records, meetings] = await Promise.all([readableRecords(db, actor), meetingInputs(db, actor)]);
-  const all = proactiveSignals({ actor, records, meetings, today: gstToday() });
+  const all = [...proactiveSignals({ actor, records, meetings, today: gstToday() }), ...await executionSignals(db,actor,records)];
   const effective = scope === "team" && hasTeamScope(actor) ? "team" : "mine";
   return { records, signals: effective === "team" ? all : all.filter((s) => isMine(s, actor.id)), scope: effective as "mine" | "team" };
 }

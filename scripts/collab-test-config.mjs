@@ -57,5 +57,5 @@ if (test.vars.APP_MODE !== "production") throw new Error("env.live must be produ
 // kept in the test D1 so the suite can check what reached the model.
 if (!live.ai || live.ai.binding !== "AI") throw new Error("env.live must bind Workers AI as AI");
 if (config.ai) throw new Error("preview (top level) must not bind Workers AI");
-test.services = [{ binding: "AI", service: test.name, entrypoint: "FakeAi" }];
+test.services = [{ binding: "AI", service: test.name, entrypoint: "FakeAi" }, {binding:"APOLLO_TEST",service:test.name,entrypoint:"FakeApollo"}];
 writeFileSync(out, JSON.stringify(test, null, 2));

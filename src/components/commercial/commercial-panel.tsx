@@ -1,4 +1,7 @@
 "use client";
+import ExecutionPanel, { ExecutionHistory } from "./execution-panel";
+import Prospecting from "./prospecting";
+import { canProspect } from "@/lib/execution/model";
 import { useEffect, useId, useState } from "react";
 import type { Actor, RecordItem } from "@/lib/domain";
 import { canWrite, money } from "@/lib/domain";
@@ -49,6 +52,7 @@ export default function CommercialPanel({
   const [loading, setLoading] = useState(false);
   const [revision, setRevision] = useState(0);
   const [room, setRoom] = useState(false);
+  const [prospecting, setProspecting] = useState(false);
   const [editor, setEditor] = useState<
     "contact" | "capability" | "links" | null
   >(null);
@@ -456,6 +460,9 @@ export default function CommercialPanel({
             </details>
           )}
           <p className="muted small">Showing up to 200 records you can access. Possible name matches are shown separately from confirmed links.</p>
+          {["products", "leads"].includes(record.kind) && canProspect(actor) && <Button className="secondary" onClick={() => setProspecting(true)}>Find prospects for this product</Button>}
+          {["products","suppliers"].includes(record.kind) && <ExecutionHistory recordId={record.id} />}
+          {room && view.deal && <ExecutionPanel dealId={view.deal.id} onChanged={onChanged} />}
           {room && view.deal && (
             <AiPanel
               feature="deal"
@@ -466,6 +473,7 @@ export default function CommercialPanel({
           )}
         </>
       )}
+      {prospecting && <Dialog title="Product prospecting" className="execution-editor" onClose={() => setProspecting(false)}><Prospecting actor={actor} initialCompany={record.company} initialBranch={record.branch} productId={record.kind === "products" ? record.id : record.productId || undefined} keywords={record.kind === "products" ? record.title : record.product} /></Dialog>}
       {editor === "links" && (
         <LinkEditor
           record={record}

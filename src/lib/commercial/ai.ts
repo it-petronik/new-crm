@@ -1,3 +1,4 @@
+import { addExecutionContext } from "../execution/context";
 import { eq } from "drizzle-orm";
 import type { Database } from "../d1";
 import type { Actor, RecordItem } from "../domain";
@@ -43,7 +44,7 @@ export async function addIdentityContext(
     .from(deals)
     .where(eq(deals.leadId, lead.id))
     .get();
-  if (room) ctx.fact("Deal Room", room.id);
+  if (room) {ctx.fact("Deal Room", room.id); await addExecutionContext(db,actor,room.id,ctx);}
 }
 export async function dealContext(db: Database, actor: Actor, id: string) {
   const view = await commercialView(db, actor, id, true);

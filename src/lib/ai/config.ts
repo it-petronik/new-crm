@@ -44,9 +44,10 @@ export const AI_LIMITS = {
   cacheSeconds: 1_800,
 } as const;
 
-export type AiFeature = "deal" | "lead" | "customer" | "ask" | "meeting" | "conversation" | "sales" | "proactive";
+export type AiFeature = "deal" | "lead" | "customer" | "ask" | "meeting" | "conversation" | "sales" | "proactive" | "prospecting";
 
 export const FEATURE_LABELS: Record<AiFeature, string> = {
+  prospecting: "Prospecting interpretation",
   deal: "Deal brief",
   lead: "Lead brief",
   customer: "Customer 360",

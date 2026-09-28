@@ -51,6 +51,6 @@ export default {
   async scheduled(controller: { cron?: string }, env: Env, ctx: Ctx) {
     if (controller.cron === REMINDER_CRON) ctx.waitUntil(runReminders(env));
     else if (controller.cron === MEETING_CRON) ctx.waitUntil(runMeetingSweep(env as never));
-    else ctx.waitUntil(Promise.all([purgeAttachments(env), purgeSignIns(env as never)]));
+    else ctx.waitUntil(Promise.all([purgeAttachments(env), purgeSignIns(env as never), env.DB?.prepare('DELETE FROM "ApolloStage" WHERE expiresAt < ?').bind(Date.now()).run(), env.DB?.prepare('UPDATE "ApolloOperation" SET data=NULL,status=\'expired\' WHERE expiresAt < ? AND data IS NOT NULL').bind(Date.now()).run(), env.DB?.prepare('DELETE FROM "ApolloUsage" WHERE createdAt < ?').bind(Date.now()-90*86400000).run()]));
   },
 };

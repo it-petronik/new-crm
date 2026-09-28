@@ -1,3 +1,4 @@
+import { fakeProspectingInterpretation } from "../tests/support/fake-prospecting-ai";
 /**
  * TEST ONLY — a stand-in for the Workers AI binding in the local
  * Collaboration/AI suites (never deployed, never bound to preview or live).
@@ -202,6 +203,11 @@ export class FakeAi extends WorkerEntrypoint<Env> {
 
     const usage = { prompt_tokens: Math.ceil((system.length + prompt.length) / 4), completion_tokens: 42 };
     const props = input.response_format?.json_schema?.properties ?? {};
+    if (system.includes("APOLLO_SEARCH_INTERPRETATION")) {
+      const query=JSON.parse(prompt).query;
+      if(query.includes("[[fake:unavailable]]")) throw new Error("Fictional AI unavailable");
+      return {response:fakeProspectingInterpretation(query),usage};
+    }
     if (isRoute) {
       const route = last(prompt, /\[\[route:([^\]]*)\]\]/g);
       const [tool = "none", company = "", kind = "", terms = ""] = (route ?? "none").split(",");

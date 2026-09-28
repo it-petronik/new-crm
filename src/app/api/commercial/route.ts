@@ -1,3 +1,4 @@
+import { searchExecution } from "@/lib/execution/context";
 import { z } from "zod";
 import { checkOrigin, currentActor } from "@/lib/auth";
 import { getDb, isPreview } from "@/lib/db";
@@ -96,14 +97,14 @@ export async function GET(request: Request) {
         .optional()
         .parse(p.get("kind") || undefined);
       return reply({
-        results: await searchCommercial(
+        results: [...await searchCommercial(
           db,
           actor,
           p.get("q")!,
           kind,
           p.get("company") || undefined,
           p.get("branch") || undefined,
-        ),
+        ), ...(!kind ? await searchExecution(db,actor,p.get("q")!) : [])],
       });
     }
     const recordId = id.parse(p.get("id"));

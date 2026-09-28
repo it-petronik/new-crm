@@ -112,6 +112,7 @@ export async function generateStructured<T>(options: {
   prepare?: (raw: unknown) => unknown;
   flagged?: number;
   tier?: AiTier;
+  singleAttempt?: boolean;
 }): Promise<{ data: T; model: string; cached: boolean; generatedAt: string; fingerprint: string }> {
   const ai = await aiBinding();
   if (!ai) throw new AiError(503, "Enercore AI isn't set up here yet.");
@@ -119,7 +120,7 @@ export async function generateStructured<T>(options: {
   const system = `${RULES}\n\nTask:\n${options.instructions}`;
   const promptChars = system.length + options.prompt.length;
   const fingerprint = await fingerprintOf(options.actor.id, tier, system, options.prompt, options.jsonSchema);
-  const cache = edgeCache();
+  const cache = options.singleAttempt ? null : edgeCache();
   if (cache) {
     try {
       const hit = await cache.match(cacheRequest(fingerprint));
@@ -142,7 +143,7 @@ export async function generateStructured<T>(options: {
     schema: options.schema,
     jsonSchema: options.jsonSchema,
     prepare: options.prepare,
-    models: TIER_MODELS[tier],
+    models: options.singleAttempt ? [TIER_MODELS[tier][0]] : TIER_MODELS[tier],
     onAttempt: (a) => logUsage(options.db, options.actor, { ...a, feature: options.feature, promptChars, flagged: options.flagged ?? 0 }),
   });
   const generatedAt = new Date().toISOString();
