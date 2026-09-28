@@ -1,5 +1,6 @@
+import { normalizedName } from "./commercial/model";
 import { recordProfiles, type FieldSpec } from "./record-profiles";
-import { stages, type Kind, type RecordItem, type Actor } from "./domain";
+import { canRead, stages, type Kind, type RecordItem, type Actor } from "./domain";
 import { parseCsv, readHeaders, CsvError, CSV_LIMITS } from "./csv";
 import { toCsv } from "./export";
 
@@ -68,6 +69,7 @@ export type ImportPlan = {
   errors: RowIssue[];
   duplicatesInFile: RowIssue[];
   duplicatesExisting: RowIssue[];
+  relationshipWarnings: RowIssue[];
 };
 
 /**
@@ -144,6 +146,7 @@ export function planImport(
   const errors: RowIssue[] = [];
   const duplicatesInFile: RowIssue[] = [];
   const duplicatesExisting: RowIssue[] = [];
+  const relationshipWarnings: RowIssue[] = [];
   const valid: PreparedRow[] = [];
 
   for (const key of missingRequired)
@@ -193,13 +196,17 @@ export function planImport(
     }
     if (key) seenInFile.add(key);
 
+    if (kind === "leads") {
+      const matches=existing.filter(r=>r.kind==="customers"&&!r.deletedAt&&r.company===context.company&&r.branch===context.branch&&canRead(context.actor,r)&&normalizedName(r.title)===normalizedName(values.title||""));
+      if(matches.length>1)relationshipWarnings.push({row:rowNumber,field:"customer",reason:"Ambiguous customer name. Imported unlinked; review the relationship later."});
+    }
     valid.push({ row: rowNumber, naturalKey: key, payload: toPayload(kind, values, context) });
   }
 
   return {
     kind, columns, unknownColumns,
     total: body.filter((r) => r.some((c) => c.trim())).length,
-    valid, errors, duplicatesInFile, duplicatesExisting,
+    valid, errors, duplicatesInFile, duplicatesExisting, relationshipWarnings,
   };
 }
 

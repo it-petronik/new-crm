@@ -1,444 +1,247 @@
-# Deployment — Cloudflare Workers + D1
+# Deployment and Phase 6 recovery
 
-Current architecture. Runs entirely on Cloudflare's free tier: no card, no VPS,
-no cPanel dependency.
+Enercore runs on Cloudflare Workers with D1. The checked-in `live` environment
+uses `APP_MODE=production`, `APP_URL=https://crm.enercore.ae`, and the live D1
+binding. The default Worker is a separate fictional-data preview. Verify actual
+account, Worker version and database identifiers before any remote operation;
+this document describes configuration, not a live infrastructure audit.
 
-```
-Browser -> crm.enercore.ae -> Cloudflare Worker -> Next.js 16
-                                    |
-                                    v
-                            Drizzle ORM -> D1 (SQLite)
-```
+**R2 and Phase 4 remain disabled.** Do not create a bucket, enable a binding,
+bootstrap users, seed production or backfill relationships as part of Phase 6.
+The commands below are a runbook, not authorization to release. Design approval
+alone does not authorize commit, push, remote migration or deployment.
 
-**Status: live.** `crm.enercore.ae` is served by the `enercore-crm-live`
-Worker with `APP_MODE=production`. The separate `enercore-crm` Worker on
-workers.dev stays `APP_MODE=preview`, where the app runs on fictional
-in-browser data and never touches D1. Both Workers share one D1 database, so a
-migration applied once covers both.
+## Local verification
 
-This is the only current deployment architecture. Anything describing MySQL,
-Prisma, cPanel or a Node host is historical — see *Previous architectures*.
+Use Node as specified in `package.json`, Python 3 with SQLite JSON support,
+installed Chrome, and the local LiveKit test binary. No production credentials
+are required. The suite uses fictional accounts and a local AI test double.
 
-## 1. Install
-
-```
-npm ci
-```
-
-## 2. Local development
-
-Two ways to run it:
-
-```
-npm run dev          # Next.js dev server, preview data, fastest feedback
-npm run cf:preview   # the real Workers runtime with a local D1 binding
-```
-
-`cf:preview` is the one that exercises D1. It reads `.dev.vars` (gitignored);
-copy `.dev.vars.example` to `.dev.vars` first.
-
-## 3. Tests
-
-```
-npm run typecheck
-npm test                                    # unit tests
-npx playwright test                         # browser tests
-npx playwright test e2e/d1-worker.spec.ts   # D1 integration, needs cf:preview running
-```
-
-The D1 spec skips itself when the Worker is not running on port 8788.
-
-## 4. Create the D1 database
-
-```
-npx wrangler login
-npx wrangler d1 create enercore-crm
-```
-
-Copy the printed `database_id` into `wrangler.jsonc`, replacing
-`REPLACE_WITH_D1_DATABASE_ID`. The id is not a secret, but it is account
-specific, which is why the repository ships a placeholder.
-
-## 5. Migrations
-
-Migrations live in `drizzle/` and are generated from `src/lib/schema.ts`.
-
-```
-npm run db:migrate            # local D1, for development
-npm run db:migrate:remote     # the real Cloudflare D1 database
-npm run db:check              # read-only; add -- --remote for the real one
-```
-
-Regenerate after a schema change with `npm run db:generate`.
-
-## 6. Secrets and variables
-
-Non-secret values live in `wrangler.jsonc` under `vars`: `APP_MODE`,
-`NODE_ENV`. Set `APP_URL` there too once the domain is attached.
-
-Secrets never go in `wrangler.jsonc`. Use:
-
-```
-npx wrangler secret put INTAKE_PETRONIK_SECRET
-npx wrangler secret put INTAKE_PETRONIK_OWNER_ID
-```
-
-There is no `DATABASE_URL` any more — D1 is a binding, not a connection string.
-
-## 7. Deploy the Worker
-
-```
+```sh
+export PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+node --import tsx --test tests/*.test.ts
+npx playwright test
 npm run cf:build
-npm run cf:deploy
+npm run typecheck
+npx playwright test -c playwright.d1.config.ts
+npx playwright test -c playwright.collab.config.ts --workers=2
+npx playwright test -c playwright.collab-nofiles.config.ts
+COLLAB_TEST_NO_R2=1 npx playwright test -c playwright.collab.config.ts commercial.spec.ts --workers=2
 ```
 
-This deploys to the generated `workers.dev` URL first, which is the safe place
-to verify before touching DNS.
+Run Worker suites sequentially: they provision a fresh local state and share
+port 8788. The collaboration launcher uses Wrangler’s Worker API with
+`dev.watch=false`. A test-only entrypoint exports the real app and the fake
+AI named self-service binding in one runtime, so D1 has a single owner and
+service discovery cannot substitute another preview. Test data inspection is
+read-only; the fixture snooze-expiry adjustment uses a per-run-token-protected
+route in the test-only entrypoint and the running D1 binding. Tests must not
+open the active SQLite file for writes. This route is absent from worker.ts
+and from production builds. This prevents development asset notifications from restarting the
+runtime and terminating sockets during regression. Production realtime behavior
+is unchanged. Do not rebuild `.next`/`.open-next`, edit runtime source, or run another
+Worker test server against that state during a suite. Main E2E uses port 3000;
+finish it before the build. Recovery E2E is included in the main suite and uses
+separate local bindings/configuration directories. It exercises the actual
+Wrangler migration, export and restore commands, including interruption.
+Its Playwright project depends on the browser project, so both run under the
+default command while recovery gets an uncontended CPU budget. The existing
+60-second test deadline and all recovery assertions remain unchanged.
 
-## 8. Create the administrator
+The dedicated D1 configuration provisions its own local Worker and accounts.
+It fails when prerequisites are unavailable; it does not silently skip. Unit
+verification includes every Python recovery case as a separate Node test.
+Standalone recovery tests: `python3 tests/recovery_test.py`.
 
-Once, against the deployed database:
+A release gate requires the complete final run to have zero failures, skips and
+retries, a successful isolated recovery rehearsal, a successful build/typecheck,
+and a reviewed source-only candidate/secret scan. An isolated pass does not
+clear an unexplained complete-suite failure.
 
+## Backup validation
+
+`scripts/backup-d1.sh` reads the existing live D1 only with `wrangler d1 export
+--remote --env live`. Run it only when production export is authorized. It never
+restores or writes to remote D1. Output contains metadata only; raw Wrangler
+output and signed download URLs are withheld even on failure. Files use private
+permissions. `.backup.env` remains optional and ignored; never commit it.
+
+After export, the script calls `scripts/d1-recovery.py validate`. It rehearses
+the dump in memory and verifies the migration-derived schema, all required
+columns, indexes (including expression/unique indexes), triggers, data
+constraints, relationship guards, foreign keys and SQLite integrity. The
+Phase 6 profile requires Contact, Deal and SupplierProductCapability and their
+guards. A missing Phase 6 table or guard cannot pass as an older backup.
+
+Before migration 0013, select the older profile explicitly:
+
+```sh
+BACKUP_SCHEMA_VERSION=pre-phase6 npm run db:backup
 ```
-BOOTSTRAP_EMAIL="you@yourcompany.com" \
-BOOTSTRAP_PASSWORD="at least fourteen characters" \
-BOOTSTRAP_CONFIRM=CREATE_INITIAL_ADMIN \
-npm run db:bootstrap -- --remote
-```
 
-It refuses without the confirmation value, refuses passwords under 14
-characters, and refuses to run if any user already exists. Remove the values
-from your shell afterwards.
+After migration 0013, the default is Phase 6:
 
-## 9. Connect crm.enercore.ae
-
-In the Cloudflare dashboard: Workers & Pages -> enercore-crm -> Settings ->
-Domains & Routes -> Add custom domain -> `crm.enercore.ae`.
-
-Cloudflare issues the certificate and routes the domain to the Worker. Then set
-`APP_URL` to `https://crm.enercore.ae` in `wrangler.jsonc` and redeploy, because
-authenticated writes are rejected when the origin does not match.
-
-## 10. Switch to production
-
-Only after the site loads on the custom domain, `db:check --remote` passes and
-login works:
-
-1. Set `"APP_MODE": "production"` in `wrangler.jsonc`
-2. `npm run cf:deploy`
-
-## 11. Backup and restore
-
-### Taking a backup
-
-```
+```sh
 npm run db:backup
 ```
 
-Read-only against production (`wrangler d1 export` only reads). Writes
-`backups/<db>-<UTC timestamp>.sql` and prints metadata only — filename,
-timestamp, size, database, result. Database contents are never printed or
-logged, and wrangler's own output (which includes a signed download URL) is
-captured rather than echoed.
+Do not use the older profile to bypass a Phase 6 validation failure. The old
+profile rejects Phase 6 tables. Migration history, when present, must match the
+selected profile exactly. Legacy rows with null/unset optional relationships
+remain valid; inactive historical Contacts are preserved.
 
-The run fails loudly if the export errors, produces nothing, produces an empty
-file, contains no `CREATE TABLE`, or is missing any of `User`, `Session`,
-`BusinessRecord`, `AuditEvent`. The file is written to `.partial` first and
-renamed only once validated, so a failed run can never leave behind something
-that looks like a good backup.
+A backup is promoted from `.partial` only after validation. Its
+`.sql.validation.json` companion records table counts/hashes and schema object
+names, never row contents. `BACKUP_DIR`, `D1_DATABASE`, `BACKUP_KEEP` (default 30)
+and optional `BACKUP_MIRROR_DIR` remain supported. Mirror both files; verify that
+an off-device copy actually completed. Local success is not evidence of cloud
+sync. Retention removes only this script's old backups and their sidecars.
 
-**Retention:** the newest 30 backups are kept. Deletion only ever touches
-regular files inside the backup directory whose names match this script's own
-pattern, never a symlink, and never the newest backup or the one just written.
+Standalone offline validation (use a new report path each time):
 
-**Configuration** (all optional, all environment variables; `.backup.env` in
-the repo root is loaded if present and is gitignored):
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `D1_DATABASE` | `enercore-crm` | database to export |
-| `BACKUP_DIR` | `<repo>/backups` | local destination |
-| `BACKUP_MIRROR_DIR` | none | off-device copy destination |
-| `BACKUP_KEEP` | `30` | successful backups retained |
-
-### Off-device copy
-
-A backup that exists only on this Mac protects against very little. Set
-`BACKUP_MIRROR_DIR` to any folder that syncs off the device — an iCloud Drive,
-Google Drive, Dropbox or OneDrive folder all work, because the sync client
-uploads it for you and no credentials ever enter this repo:
-
-```
-# ~/.../new-crm/.backup.env   (gitignored)
-BACKUP_MIRROR_DIR="$HOME/Library/CloudStorage/GoogleDrive-you@example.com/My Drive/enercore-backups"
+```sh
+python3 scripts/d1-recovery.py validate /protected/path/backup.sql \
+  --schema phase6 --report /protected/path/validation-new.json
 ```
 
-A mirror failure is reported but never aborts the run and never deletes the
-local backup. If the destination is missing the run still succeeds, and the
-output says `MIRROR SKIPPED` or `MIRROR FAILED`.
+Validation checks what is in the export. Protect/authenticate backup files and
+retain source-side operational evidence; a structurally valid SQL file alone
+cannot prove that an upstream exporter included every intended source row.
 
-Verify the copy actually left the device. A destination folder existing is not
-evidence that it syncs:
+## Restore architecture
 
-- **iCloud Drive**: `~/Library/Mobile Documents/com~apple~CloudDocs` exists and
-  is writable even when no iCloud account is signed in, and the `bird` daemon
-  runs regardless. Check that `~/Library/Preferences/MobileMeAccounts.plist`
-  contains an account rather than an empty dict; if it is empty, files written
-  there never leave the Mac. This is the state this machine was in when the
-  backup system was set up.
-- **Google Drive / OneDrive / Dropbox**: the folder appears under
-  `~/Library/CloudStorage/` only once the client is configured.
+`scripts/restore-d1.sh` delegates to `scripts/d1-recovery.py restore`.
+The old two-argument command with implicit remote mode is removed. There is no
+production override. Restore accepts only an **empty isolated recovery target**
+whose name begins `enercore-recovery-`; it refuses the checked-in live/default
+D1 names and IDs and refuses environment-overriding configurations.
 
-A paused client, or one out of quota, also keeps files local silently.
+1. Parse only supported export statements, using SQLite statement boundaries
+   so trigger bodies, escaped quotes, Unicode and multiline strings survive.
+2. Rehearse the entire backup in memory. Reject malformed/truncated SQL, invalid
+   JSON, schema drift, missing guards, bad relationships and duplicate Deals
+   before any target write. Verify the backup did not change during preflight.
+3. Confirm that the isolated target has no application tables. Create an
+   incomplete-restore journal and a private local receipt.
+4. Create all base tables; restore data in deterministic physical-FK dependency
+   order; create indexes; install integrity triggers last. Logical cycles such
+   as Customer → primary Contact → Customer and Lead → Deal → Lead do not
+   constrain the load order. These stages share one ordered import file with
+   a journal update at each boundary, avoiding repeated CLI startup. Invalid
+   ancestry cycles are rejected. Unsupported
+   physical FK cycles fail before target writes rather than being guessed at.
+5. Run D1 `foreign_key_check` and `quick_check`. D1 rejects `integrity_check` at
+   its API boundary. For a **local** target, identify its SQLite file by the
+   unique recovery journal ID and run full `integrity_check` read-only.
+6. Export the target and validate that export in SQLite, including full
+   `integrity_check`, all guards and exact schema/row hashes for **every** table.
+   BusinessRecord payload strings, Contact/Deal/capability rows, audit, meeting,
+   AI usage and migration metadata must match exactly. Historical inactive
+   Contacts are checked as unchanged references, not new selections.
+7. Only after every check passes, remove the temporary journal and write a
+   `validated` receipt. Only then print `RESTORE VALIDATED`.
 
-### Scheduling a daily backup (macOS)
+No guard is disabled on a running application. No backup editing is required.
+No constraint failure is ignored. The target must not serve an application
+until its restore is validated and separately approved for use.
 
-```
-scripts/launchd/install-backup-schedule.sh install     # daily at 02:30
-scripts/launchd/install-backup-schedule.sh status      # state + recent log
-scripts/launchd/install-backup-schedule.sh run         # trigger once now
-scripts/launchd/install-backup-schedule.sh uninstall   # remove (keeps backups)
-```
+## Isolated local rehearsal
 
-The installer fills absolute paths into the plist template, validates it with
-`plutil -lint`, and loads it with `launchctl bootstrap`. Logs go to
-`~/Library/Logs/enercore-backup.log` and hold operational metadata only. The
-job does not need a terminal, but the Mac must be awake — launchd runs a missed
-job after wake.
+Use a new directory and a standalone JSON configuration with a newly generated
+local database UUID. No Cloudflare resource is created by local D1 commands.
+The repository test `tests/recovery_rehearsal.py` creates these automatically.
 
-**Unattended authentication.** launchd runs as you and reads your existing
-wrangler OAuth login. This was verified end to end: the installed job ran and
-exited 0 without an API token, so no token is needed today. That login can
-still expire, and it cannot be refreshed non-interactively — a scheduled run
-then fails and the error log says so. Check
-`scripts/launchd/install-backup-schedule.sh status` periodically, or after any
-run of backups stops appearing. For a schedule you do not want to babysit, put a Cloudflare
-API token in `.backup.env`:
-
-```
-CLOUDFLARE_API_TOKEN=...
-CLOUDFLARE_ACCOUNT_ID=...
-```
-
-Minimum permissions: **Account → D1 → Edit** (D1 exposes no read-only scope;
-`export` is still read-only in what it does). Scope the token to this account
-only and nothing else. Create it yourself in the Cloudflare dashboard — never
-paste a token into the repo or a commit. `.backup.env` is gitignored. Manual
-`npm run db:backup` keeps working from your interactive login regardless.
-
-### Restoring — destructive, deliberate, never routine
-
-```
-scripts/restore-d1.sh <target-database> backups/<file>.sql
+```sh
+python3 tests/recovery_rehearsal.py --work work/recovery-rehearsal-NEW
 ```
 
-The script refuses to target the production database unless
-`I_UNDERSTAND_THIS_DESTROYS_PRODUCTION=yes` is set, because a restore replaces
-data and cannot be undone. **Take a fresh backup before any restore**, so the
-state you are leaving is itself recoverable.
+For a separate manual restore, supply the isolated config and target binding:
 
-It applies the whole schema first, then inserts data parent-tables-first using
-the foreign keys declared in the schema. Both steps are necessary: a D1 export
-interleaves each table's `CREATE` with its `INSERT`s and emits tables
-alphabetically, so `Session` appears before the `User` rows its foreign key
-points at. Replaying the file directly with `wrangler d1 execute --file` fails —
-first with `no such table: main.User`, then with a `FOREIGN KEY constraint
-failed`. This is not theoretical; it is what happened when the procedure was
-first rehearsed.
-
-Rehearse into a scratch database, never production:
-
-```
-npx wrangler d1 create enercore-crm-restore-test
-scripts/restore-d1.sh enercore-crm-restore-test backups/<newest>.sql
-# compare counts against production, then:
-npx wrangler d1 delete enercore-crm-restore-test --skip-confirmation
+```sh
+bash scripts/restore-d1.sh /protected/path/backup.sql \
+  --local --config /isolated/recovery/wrangler.json --database RECOVERY \
+  --persist-to /isolated/recovery/.wrangler/state \
+  --report /isolated/recovery/receipt-NEW.json
 ```
 
-Always confirm the scratch database's id differs from production's before
-restoring into it or deleting it.
+The config needs `d1_databases` with binding `RECOVERY`, a unique
+`database_name` beginning `enercore-recovery-`, and a new `database_id` distinct
+from live. Local `--persist-to` must be the config directory's `.wrangler/state`:
+the installed Wrangler exporter does not support a custom persistence flag.
+This check prevents exporting a different empty database by accident.
 
-After any restore, check `npx wrangler d1 migrations list <db> --remote`: the
-restored `d1_migrations` ledger decides what counts as applied.
+The automated fixture starts before Phase 6, creates a legacy unlinked Lead,
+applies 0013, then records same-name Customers, a primary Contact, an inactive
+historical Contact, a Supplier Contact, a linked Lead/Deal/quotation/downstream
+chain, renamed Customer/Supplier/Product, active/inactive capabilities, audit,
+meeting notes/reports and AI usage metadata. No real business records or usable
+credentials are used.
 
----
+## Interruption and failures
 
-## Disaster recovery runbook
+Any failure returns nonzero and never prints validation success. After target
+writes begin, the journal and receipt retain an `incomplete` phase. A hard kill
+also leaves the last incomplete journal in place. A partially populated target
+is refused on the next attempt. Never resume by manually deleting selected rows
+or installing only the missing guards.
 
-Three different things are commonly confused. Pick by what actually broke.
+Discard/recreate the **isolated** target, or use a new isolated config/state
+location and preserve the incomplete target for diagnosis. Verify no process
+uses it before cleanup. The script performs no automatic target deletion.
+The local-only `--rehearsal-stop-after data` switch deliberately fails after
+loading data; it is rejected in remote mode and is used by automated tests.
 
-| Failure | Tool | Affects | Reversible |
-|---|---|---|---|
-| Bad deploy, code broken | **Worker rollback** | code only | yes |
-| Recent bad data change | **D1 Time Travel** | data only | within retention |
-| Database lost or corrupt | **SQL restore** | data only | only via a newer backup |
+A report path must be new and distinct from the backup, preventing an old
+validated receipt from being mistaken for the current failed attempt.
 
-A Worker rollback changes no data. Time Travel changes no code. Neither is a
-substitute for the other.
+## Isolated remote recovery (requires separate authorization)
 
-### A. Worker deployment failure
+Provision an isolated recovery D1 through the authorized infrastructure process;
+never reuse the production ID. Supply its standalone config and exact name:
 
-```
-npx wrangler deployments list --name enercore-crm-live
-npx wrangler rollback --name enercore-crm-live [version-id]
-```
-
-Roll back the Worker you deployed — production is `enercore-crm-live`, not
-`enercore-crm`. Schema is untouched; both migrations so far are additive, so an
-older Worker runs unchanged against the newer schema. Prefer rolling back code
-and leaving the schema alone.
-
-### B. Recent accidental data modification
-
-Time Travel restores the whole database to a point in time, roughly 30 days
-back. It is the right tool for "someone deleted the wrong thing an hour ago".
-
-```
-npx wrangler d1 time-travel info enercore-crm
-npx wrangler d1 time-travel restore enercore-crm --bookmark=<bookmark>
-```
-
-Destructive: everything after that bookmark is lost, including good changes.
-Take a backup first so you can move forward again if you overshoot.
-
-### C. Database corruption or loss
-
-Restore the newest validated SQL backup into a **scratch** database, verify row
-counts, and only then consider production. See *Restoring* above.
-
-### D. Cloudflare account access problem
-
-Time Travel and the D1 database both live inside the Cloudflare account, so
-neither is reachable if the account is locked, suspended or lapsed. The only
-thing that survives is an off-device backup. This is the entire reason for
-`BACKUP_MIRROR_DIR` — set it.
-
-### E. This Mac is lost or damaged
-
-Local backups in `backups/` go with it. Recovery depends on the off-device
-copy plus git (`origin/main` holds the application and migrations). Without a
-mirror, the position is the same as D above.
-
-### F. Complete environment rebuild
-
-1. `git clone` the repository, `npm ci`
-2. `npx wrangler login`
-3. `npx wrangler d1 create enercore-crm` — note the new `database_id`
-4. Update both `database_id` entries in `wrangler.jsonc` (top level and `env.live`)
-5. `npm run db:migrate:remote`
-6. Restore data: `scripts/restore-d1.sh enercore-crm backups/<newest>.sql`
-   (requires the explicit production override; the database is empty, so this
-   is a rebuild rather than an overwrite)
-7. `npm run cf:deploy:live`
-8. Re-point `crm.enercore.ae` — the custom domain binds to the Worker, so
-   confirm the route in `wrangler.jsonc` and that no conflicting DNS record
-   exists
-9. Verify: `/login` loads, sign in works, row counts match the backup
-
-Step 6 needs a backup. Steps 1–5 and 7–8 need only the account and git.
-
-## 12. Rollback## 12. Rollback
-
-Deployments are versioned, so the fastest rollback is:
-
-```
-npx wrangler deployments list
-npx wrangler rollback [deployment-id]
+```sh
+bash scripts/restore-d1.sh /protected/path/backup.sql \
+  --remote --config /isolated/staging/wrangler.json --database RECOVERY \
+  --confirm-isolated enercore-recovery-APPROVED-TARGET \
+  --report /protected/path/remote-receipt-NEW.json
 ```
 
-Note the two Workers are separate scripts, so roll back the one you deployed
-(`enercore-crm-live` for production).
+This path is not a production restore or deployment command. Remote D1 exposes
+`quick_check`; physical SQLite-file inspection is local-only. Remote validation
+still compares the complete target export and runs SQLite integrity/guard checks
+on it. Local rehearsal does not claim remote execution has been verified.
+Never switch application bindings to a recovered database without explicit
+infrastructure approval and reconciliation of activity since the backup.
 
-The previous MySQL/Prisma implementation lives in git history only. Prisma,
-`@prisma/client`, `bcryptjs` and the `prisma/` directory were removed once
-production was verified on D1; recover them from history if ever needed.
+## Authorized Phase 6 release sequence
 
-A schema rollback is separate from a code rollback. Drizzle generates no down
-migrations, and both migrations so far are additive (new table, new nullable
-columns, new indexes), so an older Worker runs unchanged against the newer
-schema. Prefer rolling back the Worker and leaving the schema alone.
+1. Review the blocker-resolution report. Confirm all gates passed and obtain
+   explicit authorization for the intended commit/push and production actions.
+2. Reconcile the candidate with the current release baseline and confirm 0013
+   is the only intended pending migration. Review changed source only; exclude
+   all secrets, exports, `.wrangler`, `.dev.vars`, generated files and test state.
+3. Rehearse recovery on an isolated target and verify the actual live Worker/D1
+   identities, deployed version, domain, variables and absence of R2. Record a
+   tested compatible rollback/write-freeze mechanism.
+4. Take and validate an authorized pre-migration backup with the pre-phase6
+   profile, including the off-device copy. Pause commercial writes for rollout.
+5. Apply only the reviewed live migration:
+   `npx wrangler d1 migrations apply enercore-crm --remote --env live`.
+   Check migration history, all new schema objects and foreign keys. Do not seed
+   or backfill. Take a Phase 6-profile backup after the validated migration.
+6. Build the reviewed revision with `npm run cf:build`. Deploy specifically with
+   `npm run cf:deploy:live`. Never use generic default-environment deployment for
+   production. Keep the default preview Worker in preview mode.
+7. Verify sessions, server permissions, legacy records, stable relationships,
+   Deal idempotency, quotation/downstream flow, meetings and explicit AI before
+   resuming writes. Confirm passive pages make zero AI calls. Any write-based
+   production smoke test needs an agreed controlled scope.
 
-## Free-tier limits that matter here
+## Rollback
 
-| Limit | Free plan | Relevance |
-|---|---|---|
-| Worker CPU per request | 10 ms | Drove the password hashing choice, below |
-| Requests | 100,000/day | Ample for an internal CRM |
-| D1 databases | 10 | One needed |
-| D1 storage | 500 MB per database, 5 GB total | Records are small JSON payloads |
-| D1 queries per invocation | 50 | Current pages use far fewer |
-| Rows read/written | Daily free quota applies | Monitor in the dashboard as usage grows |
-
-## Behaviour differences introduced by D1
-
-- **Password hashing changed from bcrypt to Argon2id** (`@noble/hashes`,
-  m=4 MiB, t=1, p=1). bcrypt cost 12 needs roughly 250 ms of CPU and the free
-  plan allows 10 ms; this Argon2id configuration measures about 7.9 ms. PBKDF2
-  fits the same budget but is not memory-hard, so it parallelises far better on
-  a GPU — Argon2id was chosen for that reason. Each hash stores its own
-  parameters in PHC format, so the cost can be raised later without
-  invalidating existing accounts; `verifyPassword` bounds those parameters on
-  read. 4 MiB is below OWASP's 19 MiB recommendation, which is a deliberate
-  trade-off forced by the free plan's CPU ceiling — raise `MEMORY_KIB` to 19456
-  and `TIME_COST` to 2 on a paid plan. **Do not lower these to buy CPU
-  headroom.** A pure-JS implementation is used because Workers accepts only
-  statically imported WebAssembly.
-- **No interactive transactions.** D1 has no BEGIN/COMMIT that application code
-  can branch inside. Each former transaction now reads, decides in application
-  code, then commits with `batch()`. Specifically:
-  - Login rate limiting became a single atomic `INSERT … ON CONFLICT … RETURNING`,
-    which is stronger than before: the old read-then-write could double count.
-  - Record updates keep the optimistic version check. The guarded update runs
-    first and only a winning update is followed by its linked inserts and audit
-    entry, committed together. A stale write still changes nothing.
-  - The narrow remaining difference: if the follow-up batch fails after a
-    successful update, the record can be updated without its audit row. The
-    error surfaces to the caller. MySQL rolled both back.
-- **JSON, dates and booleans** are stored as TEXT, INTEGER epoch milliseconds
-  and INTEGER 0/1 respectively; Drizzle converts them so callers see the same
-  types as before.
-- **Case sensitivity**: SQLite `=` on TEXT is case sensitive, where MySQL's
-  default collation was not. Email is normalised to lower case on both write
-  and lookup, preserving the previous behaviour.
-
-## Previous architectures — historical only
-
-Nothing in this section is in use. It is retained to explain why the current
-architecture was chosen.
-
-The cPanel MySQL and Node-host instructions were removed when this migration
-landed. See `HOSTING-AUDIT.md` for why Workers plus external MySQL was not
-viable, and git history for the previous deployment guide.
-
-
-## Sessions and "Keep me signed in" (migration 0008)
-
-- **Active session:** 8 hours, in the `enercore_session` cookie; every request
-  checks it.
-- **Keep me signed in:** ticked by default on the login form. It adds a
-  refresh credential in the `enercore_refresh` cookie.
-  - The cookie is HttpOnly, Secure, `SameSite=Lax` and `Path=/`.
-  - D1 stores only the SHA-256 of the refresh value, in `RefreshToken`.
-  - It lasts 30 days from the last use. A device is capped at 90 days
-    however active it is, then signs in again.
-- **Renewal:** when the active session has lapsed, the browser calls
-  `POST /api/auth/refresh`. It accepts only that cookie, checks that the
-  person is still active, marks the token used, issues a new session and a
-  new refresh token in the same family, and returns no secret.
-  - In the browser this happens once at a time: a shared promise per tab and
-    a Web Lock across tabs.
-  - A 401 from the API triggers it and the request is retried once.
-  - The login page tries it before showing the form ("Signing you back in…").
-  - A realtime socket closed with 4401 renews and reconnects.
-- **Reuse:** a used refresh token presented again after a 30-second grace
-  period (two tabs racing) revokes that device's whole family.
-- **Unticked:** the 8-hour session only; there is nothing to renew.
-- **Sign out** ends this device (its session and refresh family). **Sign out
-  everywhere** (Profile), a password reset, deactivation or an access change
-  ends every device.
-- **Cleanup:** expired sessions and refresh tokens are purged by the daily
-  cron at 02:23.
-- **Preview:** preview never signs anyone in. `/api/auth/refresh` returns 503
-  there.
-- **Rollback:** `RefreshToken` is additive. Dropping it only signs devices
-  out; Session is unchanged.
+0013 is additive, but an older Worker can discard optional relationship keys
+when editing. Do not assume deploying the old Worker is a safe writable rollback.
+Freeze commercial writes or use a tested compatibility patch. Preserve Phase 6
+tables and records. Never automatically restore an old backup over new activity.
+A disaster recovery decision must reconcile changes since the backup and receive
+explicit authorization; the isolated restore tool never writes over production.

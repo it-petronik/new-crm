@@ -1,3 +1,4 @@
+import { addIdentityContext } from "../../commercial/ai";
 import type { Database } from "../../d1";
 import { allowedModules, canWrite, money, stages, type Actor, type RecordItem } from "../../domain";
 import { businessStamp } from "../../gst";
@@ -156,6 +157,7 @@ async function leadBundle(db: Database, actor: Actor, id: unknown) {
   }
 
   const recorded = [...recordedValues(lead, quotes, { lead: leadRef, quotation: (q) => quoteRefs.get(q.id) }), ...noteValues];
+  await addIdentityContext(db, actor, lead, ctx);
   return { lead, quotes, meetings, signals, ctx, leadRef, quoteRefs, meetingRefs, sources, recorded, today };
 }
 type LeadBundle = Awaited<ReturnType<typeof leadBundle>>;
@@ -484,7 +486,7 @@ export async function customerBrief(db: Database, actor: Actor, id: unknown, mod
     actor,
     feature: "sales",
     tier: "primary",
-    instructions: `${mode === "precall" ? "Prepare the employee for a call with this customer — readable in under a minute." : "Give a 360° view of this customer for the account team."} Quote FACTS exactly (money stays per currency). Related records are linked by NAME ONLY (see "Relationship basis") — never present them as a confirmed or complete history.
+    instructions: `${mode === "precall" ? "Prepare the employee for a call with this customer — readable in under a minute." : "Give a 360° view of this customer for the account team."} Quote FACTS exactly (money stays per currency). Related records use authoritative customerId links and independent access checks; legacy matches are excluded. Never claim complete coverage.
 Sections: ${keys.map((k) => `"${k}"`).join(", ")}.${mode === "precall" ? ` "questions": up to 6 useful questions to ask, about things CONTEXT does not answer.` : ""}
 
 ${salesFormat(keys, { questions: mode === "precall", nextAction: false, suggestions: false })}`,

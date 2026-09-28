@@ -17,3 +17,7 @@ backups/
 # Optional local backup configuration (may hold CLOUDFLARE_API_TOKEN).
 .backup.env
 
+
+# Python recovery tooling caches.
+__pycache__/
+*.py[cod]

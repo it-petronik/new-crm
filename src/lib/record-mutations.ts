@@ -12,7 +12,7 @@ export const correctionFields = ["contact", "email", "phone", "destination", "du
 export function deletionReason(r: RecordItem, records: RecordItem[]): string {
   if (isCashEntry(r)) return "Cashbook entries are retained for audit. Use Cancelled status to reverse their effect on totals.";
   if (commercialLocked(r) || r.payments?.length) return "Financial and approved commercial records must be cancelled through their workflow, not deleted.";
-  if (r.parentId || records.some(child => child.parentId === r.id)) return "This record is linked to other records and cannot be deleted.";
+  if (r.parentId || records.some(child => child.parentId === r.id || child.customerId === r.id || child.productId === r.id)) return "This record is linked to other records and cannot be deleted.";
   return "";
 }
 export function mutateRecord(workspace: Workspace, actor: Actor, id: string, expectedUpdatedAt: string, values?: Partial<RecordItem>): Workspace {

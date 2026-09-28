@@ -33,6 +33,13 @@ const person = (key: string, name: string, companies: string[], branches: string
 const range = (n: number) => Array.from({ length: n }, (_, i) => i + 1);
 
 export const people: TestPerson[] = [
+  person("cmmd", "Commercial Director", ["Petronik"], [], "MD"),
+  person("cmsales", "Commercial Seller", ["Petronik"], ["Main"], "Sales Executive"),
+  person("cmsales2", "Other Commercial Seller", ["Petronik"], ["Main"], "Sales Executive"),
+  person("cmother", "Other Company", ["Afrilube"], [], "MD"),
+  person("cmbranch", "Other Branch", ["Petronik"], ["Dubai"], "Branch Manager"),
+  person("cmhr", "Commercial HR", ["Petronik"], [], "HR Manager"),
+  person("cmit", "Commercial IT", ["Petronik"], [], "IT Administrator"),
   person("admin", "Collab Admin", ["Petronik", "Afrilube"], [], "MD"),
   // Petronik, group-wide.
   ...range(40).map((i) => person(`pg${i}`, `Petra Group${i}`, ["Petronik"], [])),

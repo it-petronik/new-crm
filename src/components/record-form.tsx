@@ -1,4 +1,5 @@
 "use client";
+import { CustomerSelection } from "./commercial/relationship-picker";
 import { companyName } from "@/lib/company-name";
 import { specError } from "@/lib/validation";
 import { commercialLocked, correctionFields } from "@/lib/record-mutations";
@@ -48,6 +49,7 @@ const CREATE_LABELS: Record<Kind, string> = {
 
 export default function RecordForm({
   initial,
+  live = false,
   kind,
   actor,
   company,
@@ -59,6 +61,7 @@ export default function RecordForm({
   saveError,
 }: {
   initial: RecordItem | null;
+  live?: boolean;
   editing?: boolean;
   saveError?: string;
   kind: Kind;
@@ -99,7 +102,8 @@ export default function RecordForm({
     initial?.currency || "USD",
   );
   const [quoteUnit, setQuoteUnit] = useState(initial?.unit || "MT");
-  const [customerId, setCustomerId] = useState("manual");
+  const [customerId, setCustomerId] = useState(initial?.customerId || "manual");
+  const [linkedContactId, setLinkedContactId] = useState(initial?.contactId || null);
   const [contactDraft, setContactDraft] = useState<Record<string, string>>({
     title: initial?.title || "",
     contact: initial?.contact || "",
@@ -241,6 +245,7 @@ export default function RecordForm({
           }
           void onSave({
             kind,
+            ...(live && ["leads", "quotations"].includes(kind) ? {customerId: customerId === "manual" ? null : customerId, contactId: linkedContactId, productId: initial?.productId || null, dealId: initial?.dealId || null} : {}),
             company: entity,
             branch,
             title: str("title"),
@@ -276,6 +281,7 @@ export default function RecordForm({
         }}
       >
         <div className="form-grid">
+          {live && !editing && ["leads", "quotations"].includes(kind) && <div className={"field-wide" + hiddenField("customer")}><CustomerSelection company={entity} branch={branch} customerId={customerId === "manual" ? null : customerId} customerName={contactDraft.title} contactId={linkedContactId} onChange={(id, contact, title) => {setCustomerId(id || "manual");setLinkedContactId(contact);if(title)setContactDraft(prev=>({...prev,title}));}} /></div>}
           <Field className={"field-wide" + hiddenField("title")} error={fieldErrors.title}>
             {profile.nameLabel}
             <Input
@@ -286,7 +292,7 @@ export default function RecordForm({
               readOnly={locked}
               maxLength={160}
               onInput={() => clearFieldError("title")}
-              {...(kind === "quotations"
+              {...(["quotations", "leads"].includes(kind)
                 ? {
                     value: contactDraft.title,
                     onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -325,7 +331,7 @@ export default function RecordForm({
             </Select>
           </Field>
           <input type="hidden" name="branch" value={branch} />
-          {kind === "quotations" && !initial && (
+          {!live && kind === "quotations" && !initial && (
             <Field className={hiddenField("customer")}>
               Use saved customer details
               <Select

@@ -1,3 +1,4 @@
+import { resolveLinks, inheritLeadLinks, hasCommercialHistory, existingDealForQuote, resolveSnapshotEdit } from "@/lib/commercial/store";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getDb, isPreview } from "@/lib/db";
@@ -82,6 +83,10 @@ const input = z.object({
     )
     .max(100)
     .optional(),
+  customerId: z.string().max(100).nullable().optional(),
+  contactId: z.string().max(100).nullable().optional(),
+  productId: z.string().max(100).nullable().optional(),
+  dealId: z.string().max(100).nullable().optional(),
   parentId: z.string().max(100).optional(),
   email: z.union([z.email(), z.literal("")]).optional(),
   phone: z.string().max(50).optional(),
@@ -222,7 +227,7 @@ export async function POST(request: Request) {
     }
     // Both keys are transport metadata, not part of the record.
     const { requestId: _requestId, importBatch, ...fields } = body;
-    const record: RecordItem = {
+    let record: RecordItem = {
       ...fields,
       id,
       status: isCashEntry(body) ? "Recorded" : stages[body.kind][0],
@@ -233,6 +238,8 @@ export async function POST(request: Request) {
     };
     if (!canWrite(actor, record))
       return NextResponse.json({ error: "Access denied." }, { status: 403 });
+    record = await inheritLeadLinks(db, actor, record);
+    record = await resolveLinks(db, actor, record);
     if (record.lines?.length) record.amount = totalCents(record.lines) / 100;
     if (record.parentId) {
       const parent = await findRecord(db, record.parentId);
@@ -362,6 +369,13 @@ export async function PATCH(request: Request) {
     // Quick Complete never touches a quotation, order, shipment or invoice.
     if (c.action === "complete" && !["leads", "customers", "suppliers"].includes(record.kind))
       throw new Error("Only missing lead, customer or supplier details can be completed here.");
+    if (c.action === "edit") {
+      for (const key of ["customerId", "contactId", "productId", "dealId"] as const)
+        if (c.values[key] !== undefined && c.values[key] !== (record[key] ?? null)) throw new Error("Use Review relationships to change a stable link.");
+    }
+    if (c.action === "delete" && await hasCommercialHistory(db, id)) throw new Error("Commercial history is linked. Set the record inactive instead of deleting it.");
+    if (c.action === "status" && c.status === "Accepted" && record.kind === "quotations" && !record.dealId)
+      record.dealId = await existingDealForQuote(db, actor, record);
     const before = { records: [record], audit: [] };
     if (c.action === "delete") {
       const peers = await listRecordsForCompany(db, record.company);
@@ -386,7 +400,8 @@ export async function PATCH(request: Request) {
             ? addNote(before, actor, id, c.text, c.due)
             : recordPayment(before, actor, id, c.amountCents, c.reference);
     if (result.audit.length) {
-      const changed = result.records.find((r) => r.id === id)!;
+      let changed = result.records.find((r) => r.id === id)!;
+      if (["edit", "complete"].includes(c.action) && (changed.customerId || changed.contactId || changed.productId)) changed = await resolveSnapshotEdit(db, actor, changed, record);
       const created: NewRecord[] = result.records
         .filter((r) => !before.records.some((old) => old.id === r.id))
         .map((r) => ({

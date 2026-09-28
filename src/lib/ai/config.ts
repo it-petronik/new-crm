@@ -44,9 +44,10 @@ export const AI_LIMITS = {
   cacheSeconds: 1_800,
 } as const;
 
-export type AiFeature = "lead" | "customer" | "ask" | "meeting" | "conversation" | "sales" | "proactive";
+export type AiFeature = "deal" | "lead" | "customer" | "ask" | "meeting" | "conversation" | "sales" | "proactive";
 
 export const FEATURE_LABELS: Record<AiFeature, string> = {
+  deal: "Deal brief",
   lead: "Lead brief",
   customer: "Customer 360",
   ask: "Ask Enercore AI",

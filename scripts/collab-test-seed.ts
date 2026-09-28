@@ -16,6 +16,18 @@ async function main() {
   const hash = await hashPassword(PASSWORD);
   const now = Date.now();
   const lines: string[] = [];
+  if (process.env.D1_REGRESSION === "1") {
+    for (const [id,email,name,role,password] of [
+      ["admin-1","admin@example.test","Local Admin","MD","AdminLocalPassword2026"],
+      ["user-1","staff@example.test","Local Staff","Sales Executive","StaffLocalPassword2026"],
+    ]) {
+      const fixtureHash=await hashPassword(password);
+      lines.push(`INSERT INTO "User" (id,email,name,passwordHash,role,companies,branches,moduleAccess,active,createdAt) VALUES (${[q(id),q(email),q(name),q(fixtureHash),q(role),q(JSON.stringify(["Petronik","Afrilube","Petronex","Istanegry"])),q("[]"),q("{}"),1,now].join(",")});`);
+    }
+    process.stdout.write(lines.join("\n")+"\n");
+    return;
+  }
+
   for (const p of people)
     lines.push(
       `INSERT INTO "User" ("id","email","name","passwordHash","role","companies","branches","moduleAccess","active","createdAt") VALUES (` +
@@ -50,7 +62,7 @@ async function main() {
         `);`,
     );
   // Enercore AI: fictional CRM records (company Istanegry / Afrilube).
-  for (const r of [...aiRecords(now), ...proactiveRecords(now)])
+  for (const r of [...aiRecords(now), ...proactiveRecords(now)].sort((a,b)=>Number(!!a.customerId)-Number(!!b.customerId)))
     lines.push(
       `INSERT INTO "BusinessRecord" ("id","kind","company","branch","ownerId","status","payload","version","createdAt","updatedAt") VALUES (` +
         [q(r.id), q(r.kind), q(r.company), q(r.branch), q(r.ownerId), q(r.status), q(JSON.stringify(r)), 1, Date.parse(r.createdAt), Date.parse(r.updatedAt)].join(",") +

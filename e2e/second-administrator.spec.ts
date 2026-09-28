@@ -32,20 +32,11 @@ const SECOND = {
  * preferable to serialising the suite or loosening what the test asserts.
  */
 function d1(command: string) {
-  let last: unknown;
-  for (let attempt = 0; attempt < 4; attempt++) {
-    try {
-      return execFileSync(
+  return execFileSync(
         "npx",
-        ["wrangler", "d1", "execute", "enercore-crm", "--local", "--json", "--command", command],
+        ["wrangler", "d1", "execute", "enercore-crm", "--local", "--config", process.env.D1_TEST_CONFIG || "wrangler.jsonc", "--persist-to", process.env.D1_TEST_PERSIST || ".wrangler/state", "--json", "--command", command],
         { encoding: "utf8" },
       );
-    } catch (error) {
-      last = error;
-      execFileSync("sleep", [String(0.4 * (attempt + 1))]);
-    }
-  }
-  throw last;
 }
 /**
  * Removes this spec's throwaway administrator and only its own rate-limit
@@ -79,7 +70,7 @@ test.afterAll(() => {
   if (available) cleanUp();
 });
 test.beforeEach(() => {
-  test.skip(!available, "Local Worker not running on :8788 (npm run cf:preview)");
+  expect(available, "Local Worker not running on :8788 (npm run cf:preview)").toBeTruthy();
 });
 
 async function sessionFor(request: APIRequestContext, email: string, password: string) {
@@ -113,7 +104,7 @@ async function createSecondAdmin(request: APIRequestContext, session: string, br
 test("an MD can create a second MD, stored with Argon2id and recorded in the audit history", async ({ request }) => {
   cleanUp();
   const admin = await sessionFor(request, ADMIN.email, ADMIN.password);
-  test.skip(!admin, "admin fixture not present in local D1");
+  expect(admin, "admin fixture not present in local D1").toBeTruthy();
 
   const created = await createSecondAdmin(request, admin, []);
   expect(created.status, JSON.stringify(created.body)).toBe(201);
@@ -150,7 +141,7 @@ test("an MD can create a second MD, stored with Argon2id and recorded in the aud
 test("the two administrators can reset each other but never themselves", async ({ request }) => {
   cleanUp();
   const admin = await sessionFor(request, ADMIN.email, ADMIN.password);
-  test.skip(!admin, "admin fixture not present in local D1");
+  expect(admin, "admin fixture not present in local D1").toBeTruthy();
   const created = await createSecondAdmin(request, admin, []);
   expect(created.status, JSON.stringify(created.body)).toBe(201);
   const secondId = created.body.user.id;
@@ -192,7 +183,7 @@ test("the two administrators can reset each other but never themselves", async (
 test("a branch-scoped second MD cannot administer the unscoped first MD", async ({ request }) => {
   cleanUp();
   const admin = await sessionFor(request, ADMIN.email, ADMIN.password);
-  test.skip(!admin, "admin fixture not present in local D1");
+  expect(admin, "admin fixture not present in local D1").toBeTruthy();
 
   // The first administrator is group-wide (branches: []). Giving the second a
   // branch list makes it a subordinate, not a peer: scope checks compare the

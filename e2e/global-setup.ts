@@ -31,6 +31,8 @@ const ROUTES = [
  * module, so a plain GET is enough whatever it answers.
  */
 const API = [
+  "/api/commercial",
+  "/api/ai/deal",
   "/api/records",
   "/api/records/assignees",
   "/api/notifications",

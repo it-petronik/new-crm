@@ -318,47 +318,21 @@ export async function updateRecordWithAudit(
   alsoCreate: NewRecord[] = [],
 ): Promise<boolean> {
   const now = new Date();
-  // Step one is the optimistic update on its own. Only the caller holding the
-  // expected version matches, so a stale writer changes nothing and no
-  // accompanying rows are written.
-  await db
-    .update(businessRecords)
-    .set({
-      status: changed.status,
-      payload: changed.payload,
-      // Kept in step with the payload so owner-scoped queries see a reassignment.
-      ...(changed.ownerId ? { ownerId: changed.ownerId } : {}),
-      version: sql`${businessRecords.version} + 1`,
-      updatedAt: now,
-    })
-    .where(and(eq(businessRecords.id, id), eq(businessRecords.version, expectedVersion)))
-    .run();
-
-  const after = await findRecord(db, id);
-  if (after?.version !== expectedVersion + 1) return false;
-
-  // Step two commits everything that accompanies a successful update as one
-  // atomic batch: any linked records, then the audit entry.
-  //
-  // D1 has no interactive transaction spanning both steps, so if this batch
-  // fails the record is already changed and its audit entry is missing. That
-  // gap cannot be closed with the primitives available, but it must never pass
-  // unnoticed, so it is recorded with a stable event name. The identifiers
-  // below are record ids, never payloads or credentials.
-  const follow = [...alsoCreate.map((record) => insertRecord(db, record, now)), insertAudit(db, event)];
-  type Batchable = Parameters<Database["batch"]>[0][number];
+  // A failed version guard deliberately violates NOT NULL, rolling back the
+  // ENTIRE D1 batch. Audit and downstream records cannot survive a stale write.
   try {
-    await db.batch(follow as unknown as [Batchable, ...Batchable[]]);
+    await db.batch([
+      db.update(businessRecords).set({
+        status: changed.status, payload: changed.payload,
+        ...(changed.ownerId ? { ownerId: changed.ownerId } : {}),
+        version: sql`CASE WHEN ${businessRecords.version} = ${expectedVersion} THEN ${businessRecords.version} + 1 ELSE NULL END`,
+        updatedAt: now,
+      }).where(eq(businessRecords.id, id)),
+      ...alsoCreate.map(record => insertRecord(db, record, now)),
+      insertAudit(db, event),
+    ]);
   } catch (cause) {
-    console.error(
-      JSON.stringify({
-        event: "record_update_audit_failed",
-        recordId: id,
-        auditId: event.id,
-        linkedRecords: alsoCreate.length,
-        detail: cause instanceof Error ? `${cause.name}: ${cause.message}`.slice(0, 200) : "Unknown error",
-      }),
-    );
+    if (/NOT NULL constraint failed: BusinessRecord.version/.test(String(cause))) return false;
     throw cause;
   }
   return true;

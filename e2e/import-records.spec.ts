@@ -11,20 +11,11 @@ const H = { Origin: WORKER, "Content-Type": "application/json" };
 const ADMIN = { email: "admin@example.test", password: "AdminLocalPassword2026" };
 
 function d1(command: string) {
-  let last: unknown;
-  for (let attempt = 0; attempt < 4; attempt++) {
-    try {
-      return execFileSync(
+  return execFileSync(
         "npx",
-        ["wrangler", "d1", "execute", "enercore-crm", "--local", "--json", "--command", command],
+        ["wrangler", "d1", "execute", "enercore-crm", "--local", "--config", process.env.D1_TEST_CONFIG || "wrangler.jsonc", "--persist-to", process.env.D1_TEST_PERSIST || ".wrangler/state", "--json", "--command", command],
         { encoding: "utf8" },
       );
-    } catch (error) {
-      last = error;
-      execFileSync("sleep", [String(0.4 * (attempt + 1))]);
-    }
-  }
-  throw last;
 }
 
 let available = false;
@@ -35,7 +26,7 @@ test.beforeAll(async () => {
     await probe.dispose();
   } catch { available = false; }
 });
-test.beforeEach(() => test.skip(!available, "Local Worker not running on :8788"));
+test.beforeEach(() => expect(available, "Local Worker not running on :8788").toBeTruthy());
 
 async function sessionFor(request: APIRequestContext) {
   const response = await request.post(`${WORKER}/api/auth`, { headers: H, data: ADMIN });
@@ -51,7 +42,7 @@ const row = (batch: string, n: number) => ({
 
 test("an import is authorised, audited and cannot duplicate its rows", async ({ request }) => {
   const session = await sessionFor(request);
-  test.skip(!session, "admin fixture not present in local D1");
+  expect(session, "admin fixture not present in local D1").toBeTruthy();
   const auth = { ...H, Cookie: `enercore_session=${session}` };
   const batch = `imp${Date.now().toString(36)}`;
 
@@ -97,7 +88,7 @@ test("an import is authorised, audited and cannot duplicate its rows", async ({ 
 
 test("a row that fails validation is refused and writes nothing", async ({ request }) => {
   const session = await sessionFor(request);
-  test.skip(!session, "admin fixture not present in local D1");
+  expect(session, "admin fixture not present in local D1").toBeTruthy();
   const auth = { ...H, Cookie: `enercore_session=${session}` };
   const before = Number(d1(`SELECT count(*) AS n FROM "BusinessRecord"`).match(/"n":\s*(\d+)/)?.[1] ?? 0);
 

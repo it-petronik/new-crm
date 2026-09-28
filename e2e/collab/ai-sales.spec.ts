@@ -300,12 +300,12 @@ test("quotation preparation: never a price; a conflict blocks the draft; known v
 
 /* ------------------------------------------ customer brief, meeting prep */
 
-test("customer brief and 360: related by name (disclosed), timeline and products from Enercore", async () => {
+test("customer brief and 360: related by stable customerId, timeline and products from Enercore", async () => {
   const seller = await login("aisales");
   const before = lastCallId();
   const r = await run(seller, "customer-brief", { id: "AIT-CP1" });
   expect(r.status, JSON.stringify(r.body)).toBe(200);
-  expect(r.body.scope).toBe("Related records are matched by exact customer name (not a recorded link), so this history may be incomplete.");
+  expect(r.body.scope).toBe("Only independently authorized customerId-linked records are included. Possible legacy name matches require separate review.");
   const [call] = callsSince(before, "AIT-CP1");
   expect(recordIdsIn(call.prompt)).toEqual(["AIT-CP1", "AIT-P1"]);
   const facts = factsOf(call.prompt);

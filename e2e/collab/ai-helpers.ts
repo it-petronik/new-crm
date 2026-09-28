@@ -1,8 +1,9 @@
 import { DatabaseSync } from "node:sqlite";
-import { readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { addCalendarYears } from "../../src/lib/ai/context";
 import type { Client } from "./client";
+import { WORKER } from "./people";
 
 /**
  * Enercore AI suite helpers. The fake Workers AI (scripts/fake-ai-worker.ts)
@@ -12,10 +13,10 @@ import type { Client } from "./client";
 
 const D1_DIR = resolve(".wrangler/collab-test/state/v3/d1/miniflare-D1DatabaseObject");
 
-export function testDb(readOnly = true) {
+function testDb() {
   const file = readdirSync(D1_DIR).find((n) => n.endsWith(".sqlite") && n !== "metadata.sqlite");
   if (!file) throw new Error("The local test D1 file was not found.");
-  const db = new DatabaseSync(join(D1_DIR, file), { readOnly });
+  const db = new DatabaseSync(join(D1_DIR, file), { readOnly: true });
   db.exec("PRAGMA busy_timeout = 5000");
   return db;
 }
@@ -53,13 +54,15 @@ export function query<T = Record<string, unknown>>(sql: string, ...params: (stri
   }
 }
 
-export function execute(sql: string, ...params: (string | number)[]) {
-  const db = testDb(false);
-  try {
-    db.prepare(sql).run(...params);
-  } finally {
-    db.close();
-  }
+/** Expire this fictional snooze through D1, never a second SQLite writer. */
+export async function expireSnooze(userId: string, signalKey: string) {
+  const response = await fetch(`${WORKER}/__test/expire-snooze`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Test-Control": readFileSync(resolve(".wrangler/collab-test/control-token"), "utf8") },
+    body: JSON.stringify({ userId, signalKey }),
+  });
+  if (!response.ok) throw new Error(`Fixture expiry failed: ${response.status}`);
+  await response.json();
 }
 
 /** Today in Gulf Standard Time (YYYY-MM-DD). */

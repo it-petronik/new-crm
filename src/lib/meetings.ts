@@ -233,7 +233,7 @@ export type RoomSession = {
   scheduledAt?: string | null;
 };
 
-export const RELATED_KINDS = ["leads", "customers", "quotations", "orders"] as const;
+export const RELATED_KINDS = ["leads", "customers", "suppliers", "quotations", "orders"] as const;
 export type RelatedKind = (typeof RELATED_KINDS)[number];
 export type RelatedRecord = { id: string; kind: RelatedKind; title: string };
-export const RELATED_NOUN: Record<RelatedKind, string> = { leads: "Lead", customers: "Customer", quotations: "Quotation", orders: "Order" };
+export const RELATED_NOUN: Record<RelatedKind, string> = { leads: "Lead", customers: "Customer", suppliers: "Supplier", quotations: "Quotation", orders: "Order" };

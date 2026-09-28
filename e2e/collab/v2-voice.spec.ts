@@ -30,10 +30,12 @@ test("record → preview → send; discard; the note plays with a duration", asy
   // Record ~2 s, stop, preview, send.
   await page.getByRole("button", { name: "Record voice message" }).click();
   await expect(page.getByRole("group", { name: "Voice message" })).toContainText("Recording 0:0");
-  await page.waitForTimeout(2200);
+  await expect(page.getByRole("group", { name: "Voice message" })).toContainText("Recording 0:02");
   await page.getByRole("button", { name: "Stop recording" }).click();
   await expect(page.getByRole("button", { name: "Play voice message" })).toBeVisible();
+  const stored = page.waitForResponse(r => r.request().method() === "POST" && r.url().includes(`/conversations/${room.id}/messages`));
   await page.getByRole("button", { name: "Send voice message" }).click();
+  expect((await stored).status()).toBe(201);
 
   const note = page.locator(".collab-msg .collab-voice");
   await expect(note).toBeVisible();

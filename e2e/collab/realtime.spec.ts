@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
-import { Client, openSocket, type Socket } from "./client";
+import { Client, openSocket, upgradeStatus, type Socket } from "./client";
+import { WORKER } from "./people";
 
 /**
  * Realtime delivery through the real gateway and CollabHub Durable Object.
@@ -105,26 +106,49 @@ test("the socket carries no client-originated mutations", async () => {
   ws.ws.close();
 });
 
-test("signing out ends live delivery on the next event after revalidation", async () => {
+test("signing out ends live delivery on the next event after revalidation", async ({ browser }, testInfo) => {
   test.setTimeout(150_000);
   const [owner, member] = await Promise.all(["pg28", "pg29"].map(Client.login));
   const room = await owner.createRoom({ members: ["pg29"] });
-  const ws = await openSocket(member.cookie);
-  // A real client pings every 45 s; keep this one alive the same way, so it
-  // is ended by session revalidation (4401), not pruned as a dead tab.
-  const alive = setInterval(() => {
-    try {
-      ws.ws.send("ping");
-    } catch {}
-  }, 1000);
-  // Sign out: the session row is deleted, the socket is still open.
-  expect((await member.request("DELETE", "/api/auth")).status).toBe(200);
-  // Within the revalidation window the hub has not re-checked yet; the
-  // audience still includes this active member, whose other sessions are
-  // legitimately live. After the window, the socket is closed, not fed.
-  await new Promise((r) => setTimeout(r, 62_000));
-  await owner.send(room.id, "after sign-out");
-  expect(await ws.closed).toBe(4401);
-  clearInterval(alive);
-  expect(ws.events.some((e) => e.type === "message.created" && e.message.body === "after sign-out")).toBe(false);
+  const context = await browser.newContext();
+  await member.signInBrowser(context);
+  const page = await context.newPage();
+  // Use the real browser WebSocket transport. A static same-origin document
+  // establishes Origin/cookies without opening the app's additional sockets.
+  await page.goto("http://localhost:8788/icon.svg");
+  await page.evaluate(() => new Promise<void>((resolve, reject) => {
+    const state = { code: null as number | null, events: [] as any[], timer: 0, reason: "", clean: false, pings: 0, pongs: 0, openedAt: Date.now(), closedAt: 0 };
+    (window as any).__revocationSocket = state;
+    const socket = new WebSocket("ws://localhost:8788/api/collab/socket");
+    socket.onerror = () => reject(new Error("Browser socket failed to open"));
+    socket.onclose = event => { state.code = event.code; state.reason = event.reason; state.clean = event.wasClean; state.closedAt = Date.now(); clearInterval(state.timer); };
+    socket.onmessage = message => {
+      const event = message.data === "pong" ? { type: "pong" } : JSON.parse(message.data);
+      state.events.push(event);
+      if (event.type === "pong") state.pongs++;
+      if (event.type === "ready") {
+        state.timer = window.setInterval(() => { if (socket.readyState === WebSocket.OPEN) { state.pings++; socket.send("ping"); } }, 1000);
+        resolve();
+      }
+    };
+  }));
+  try {
+    expect((await member.request("DELETE", "/api/auth")).status).toBe(200);
+    // The stale cookie and an unauthenticated client are both refused now.
+    expect(await upgradeStatus({ Cookie: member.cookie, Origin: WORKER })).toBe(401);
+    expect(await upgradeStatus({ Origin: WORKER })).toBe(401);
+    // The production revalidation window is unchanged: after one minute,
+    // delivery must close this session with 4401 instead of sending the event.
+    await page.waitForTimeout(62_000);
+    expect((await owner.send(room.id, "after sign-out")).status).toBe(201);
+    await expect.poll(() => page.evaluate(() => (window as any).__revocationSocket.code)).toBe(4401);
+    expect(await page.evaluate(() => (window as any).__revocationSocket.events.some((e: any) => e.type === "message.created" && e.message.body === "after sign-out"))).toBe(false);
+  } finally {
+    // Metadata only, retained on failures too; never log cookies or content.
+    await testInfo.attach("session-revocation", { contentType: "application/json", body: JSON.stringify(await page.evaluate(() => {
+      const state = (window as any).__revocationSocket;
+      return { code: state.code, reason: state.reason, clean: state.clean, pings: state.pings, pongs: state.pongs, openedAt: state.openedAt, closedAt: state.closedAt, protectedMessageReceived: state.events.some((e: any) => e.type === "message.created" && e.message.body === "after sign-out") };
+    })) });
+    await context.close();
+  }
 });

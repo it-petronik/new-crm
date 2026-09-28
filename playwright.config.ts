@@ -1,4 +1,5 @@
 import { defineConfig } from "@playwright/test";
+const workerSuites = ["collab/**", "collab-no-files/**", "d1-worker.spec.ts", "import-records.spec.ts", "password-reset.spec.ts", "second-administrator.spec.ts"];
 export default defineConfig({
   testDir: "./e2e",
   // The Collaboration Hub suite needs the built Worker in live mode with its
@@ -6,7 +7,14 @@ export default defineConfig({
   // server rather than being skipped here.
   // The no-file-storage variant has its own config too
   // (playwright.collab-nofiles.config.ts).
-  testIgnore: ["collab/**", "collab-no-files/**"],
+  testIgnore: workerSuites,
+  // The recovery rehearsal starts many local Wrangler runtimes. Run it after
+  // browser work so on-demand UI compilation cannot consume its deadline.
+  // Both projects remain in the default command; no timeout or check changes.
+  projects: [
+    { name: "browser", testIgnore: [...workerSuites, "recovery.spec.ts"] },
+    { name: "recovery", testMatch: "recovery.spec.ts", dependencies: ["browser"] },
+  ],
   /**
    * The suite runs against `next dev`, which compiles routes on demand. With
    * several workers requesting different routes at once a first hit can take

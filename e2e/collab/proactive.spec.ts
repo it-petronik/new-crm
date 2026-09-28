@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { Client } from "./client";
-import { callsSince, execute, gstToday, lastCallId, query } from "./ai-helpers";
+import { callsSince, expireSnooze, gstToday, lastCallId, query } from "./ai-helpers";
 import { byKey } from "./people";
 
 /**
@@ -144,7 +144,7 @@ test("snooze and dismiss are personal UI state, limited by type — business dat
   // An expired snooze: back, because the condition still exists.
   expect((await state(seller, { key: "FOLLOW_UP_OVERDUE:PX-L1", action: "snooze", until: tomorrow() })).status).toBe(200);
   expect(px((await center(seller)).body)).not.toContain("FOLLOW_UP_OVERDUE:PX-L1");
-  execute(`UPDATE "ProactiveState" SET "snoozedUntil" = ? WHERE "userId" = ? AND "signalKey" = 'FOLLOW_UP_OVERDUE:PX-L1'`, Date.now() - 1000, byKey("pxse1").id);
+  await expireSnooze(byKey("pxse1").id, "FOLLOW_UP_OVERDUE:PX-L1");
   expect(px((await center(seller)).body)).toContain("FOLLOW_UP_OVERDUE:PX-L1");
 
   // A dismissal covers the condition as it was: a materially different one

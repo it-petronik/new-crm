@@ -31,8 +31,6 @@ async function signedIn(browser: Browser, key: string, viewport = { width: 1440,
   return { client, context, page };
 }
 const noOverflow = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
-const openRecord = (page: Page, kind: string, id: string) =>
-  page.evaluate(([kind, id]) => window.dispatchEvent(new CustomEvent("enercore:open-record", { detail: { kind, id } })), [kind, id]);
 /** Counts AI requests the page makes to one endpoint. */
 function countRequests(page: Page, path: string) {
   const seen: string[] = [];
@@ -122,7 +120,8 @@ test("Lead AI: one request per click, suggestions change nothing until reviewed 
   await note(client, "AIT-U3", "Spoke to buyer. [[fake:suggest]]");
   const briefs = countRequests(page, "/api/ai/sales/lead-brief");
   await page.goto("/workspace/all-companies/sales-pipeline");
-  await openRecord(page, "leads", "AIT-U3");
+  // The record card exists only after hydration and data loading.
+  await page.locator(".lead-card").filter({ has: page.getByRole("heading", { name: "Screen Test Lead 3", exact: true }) }).click();
   const dialog = page.getByRole("dialog", { name: "Screen Test Lead 3" });
   await expect(dialog).toBeVisible();
   const panel = dialog.getByRole("region", { name: "Enercore AI" });
@@ -160,12 +159,13 @@ test("Lead AI: one request per click, suggestions change nothing until reviewed 
 test("Customer 360, meeting report and conversation summaries in place", async ({ browser }) => {
   const { client, page, context } = await signedIn(browser, "aiui4");
 
-  // Customer 360 says its relationships are name-based.
+  // Customer 360 explains the scope of its recorded relationships.
   await page.goto("/workspace/all-companies/customers");
-  await openRecord(page, "customers", "AIT-UC4");
+  await page.getByPlaceholder(/^Search records/).fill("Screen Test Lead 4");
+  await page.locator(".collection-card").filter({ has: page.getByRole("heading", { name: "Screen Test Lead 4", exact: true }) }).click();
   const customer = page.getByRole("dialog", { name: "Screen Test Lead 4" }).getByRole("region", { name: "Enercore AI" });
   await customer.getByRole("button", { name: "Customer 360" }).click();
-  await expect(customer.locator(".ai-scope")).toHaveText("Related records are matched by exact customer name (not a recorded link), so this history may be incomplete.");
+  await expect(customer.locator(".ai-scope")).toHaveText("Only independently authorized customerId-linked records are included. Possible legacy name matches require separate review.");
   await page.getByRole("button", { name: "Close dialog" }).click();
 
   // Meeting report: AI notes on request, saying there is no transcript.

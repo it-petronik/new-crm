@@ -25,6 +25,7 @@ export function GET(request: Request) {
         available: !!(await aiBinding()),
         model: AI_MODELS.primary,
         features: {
+          deal: allowedModules(actor).includes("leads"),
           lead: allowedModules(actor).includes("leads"),
           customer: allowedModules(actor).includes("customers"),
           ask: tools.length > 0,

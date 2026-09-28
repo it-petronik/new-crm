@@ -488,7 +488,7 @@ export const meetings = sqliteTable(
     // meeting never lets anyone read the record, and reading the record never
     // lets anyone into a private meeting.
     relatedRecordId: text("relatedRecordId"),
-    relatedRecordKind: text("relatedRecordKind").$type<"leads" | "customers" | "quotations" | "orders">(),
+    relatedRecordKind: text("relatedRecordKind").$type<"leads" | "customers" | "suppliers" | "quotations" | "orders">(),
   },
   (table) => [
     index("Meeting_conversationId_createdAt_idx").on(table.conversationId, table.createdAt),
@@ -809,3 +809,25 @@ export const proactiveStates = sqliteTable(
   },
   (table) => [primaryKey({ columns: [table.userId, table.signalKey] })],
 );
+
+
+// Phase 6: stable commercial children; masters and workflow remain BusinessRecord.
+export const contacts = sqliteTable("Contact", {
+  id: text("id").primaryKey(), parentId: text("parentId").notNull().references(() => businessRecords.id, { onDelete: "restrict" }),
+  company: text("company").notNull(), branch: text("branch").notNull(),
+  details: text("details", { mode: "json" }).$type<import("./commercial/model").ContactDetails>().notNull(),
+  active: integer("active", { mode: "boolean" }).notNull().default(true), version: integer("version").notNull().default(1),
+  createdAt: integer("createdAt", { mode: "timestamp_ms" }).notNull(), updatedAt: integer("updatedAt", { mode: "timestamp_ms" }).notNull(),
+}, t => [index("Contact_parent_idx").on(t.parentId), index("Contact_scope_idx").on(t.company, t.branch)]);
+export const deals = sqliteTable("Deal", {
+  id: text("id").primaryKey(), leadId: text("leadId").notNull().references(() => businessRecords.id, { onDelete: "restrict" }),
+  company: text("company").notNull(), branch: text("branch").notNull(), createdAt: integer("createdAt", { mode: "timestamp_ms" }).notNull(),
+}, t => [uniqueIndex("Deal_lead_idx").on(t.leadId), index("Deal_scope_idx").on(t.company, t.branch)]);
+export const supplierCapabilities = sqliteTable("SupplierProductCapability", {
+  id: text("id").primaryKey(), supplierId: text("supplierId").notNull().references(() => businessRecords.id, { onDelete: "restrict" }),
+  productId: text("productId").notNull().references(() => businessRecords.id, { onDelete: "restrict" }),
+  company: text("company").notNull(), branch: text("branch").notNull(),
+  details: text("details", { mode: "json" }).$type<import("./commercial/model").CapabilityDetails>().notNull(),
+  active: integer("active", { mode: "boolean" }).notNull().default(true), version: integer("version").notNull().default(1),
+  createdAt: integer("createdAt", { mode: "timestamp_ms" }).notNull(), updatedAt: integer("updatedAt", { mode: "timestamp_ms" }).notNull(),
+}, t => [index("Capability_supplier_idx").on(t.supplierId), index("Capability_product_active_idx").on(t.productId, t.active)]);

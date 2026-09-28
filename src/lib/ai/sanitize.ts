@@ -74,6 +74,8 @@ export function clip(text: string, max: number) {
  * the model is told it's data.
  */
 const INJECTION = [
+  /(?:^|\n)\s*(?:system|developer)\s*:/i,
+  /\bignore (?:all )?permissions\b/i,
   /ignore (?:all |any )?(?:the )?(?:previous|prior|above|earlier) (?:instructions|messages|prompts)/i,
   /disregard (?:the |all )?(?:previous|prior|above|system)/i,
   /\b(?:system|developer) (?:prompt|message|instruction)s?\b/i,

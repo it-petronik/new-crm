@@ -108,6 +108,7 @@ import { storedPreviewActor, previewActorKey } from "@/lib/fixtures";
 import { RECORDS_CHANGED } from "@/lib/proactive/client";
 import { Avatar } from "./avatar";
 import RecordForm from "./record-form";
+import CommercialPanel from "./commercial/commercial-panel";
 import { recordProfiles, detailFields } from "@/lib/record-profiles";
 import UserAdmin from "./user-admin";
 import {
@@ -1707,6 +1708,7 @@ export default function Workspace({
       <DialogPresence>
         {form && (
           <RecordForm
+            live={!preview}
             records={scoped.records}
             initial={editing || (form === "quotations" ? quoteSource : null)}
             editing={Boolean(editing)}
@@ -1727,6 +1729,7 @@ export default function Workspace({
       <DialogPresence>
         {commandOpen && (
           <CommandMenu
+            live={!preview}
             onClose={() => { setCommandOpen(false); setCommandView(null); }}
             items={[
               // What this person pinned, then what they last opened. Both are
@@ -1997,7 +2000,7 @@ type RecordActionsProps = {
 /** Kinds where "I contacted them" is a real event. */
 const LOGGABLE = ["leads", "customers", "suppliers", "quotations", "orders"];
 /** Records a meeting can be about (see meeting-related.ts). */
-const MEETING_KINDS = ["leads", "customers", "quotations", "orders"];
+const MEETING_KINDS = ["leads", "customers", "suppliers", "quotations", "orders"];
 /** The next action, with its date kept as secondary detail. */
 function NextActionCell({ record }: { record: RecordItem }) {
   const action = nextAction(record);
@@ -2088,7 +2091,7 @@ function RecordCards({
             r.kind === "hr"
               ? r.contact
               : r.kind === "customers"
-                ? r.contact
+                ? [r.contact, r.attributes?.country, `Ref ${r.id.slice(-8)}`].filter(Boolean).join(" · ")
                 : r.kind === "marketing"
                   ? r.product
                   : r.product || r.detail;
@@ -2990,6 +2993,7 @@ function Detail({
           )}
         </>
       )}
+      {showMeetings && ["leads", "customers", "suppliers", "products"].includes(r.kind) && <CommercialPanel key={`commercial-${r.id}`} record={r} actor={actor} onChanged={onAiChanged} onQuote={onQuote} onLog={onLog} />}
       {showMeetings && r.kind === "leads" && (
         <LeadCopilot key={r.id} recordId={r.id} onLog={LOGGABLE.includes(r.kind) && writable ? onLog : undefined} auto={autoAi === "brief" || autoAi === "draft" ? autoAi : undefined} onApply={onAiApply} onChanged={onAiChanged} />
       )}

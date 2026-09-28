@@ -31,13 +31,28 @@ export type CommandItem = {
 export default function CommandMenu({
   items,
   onClose,
+  live = false,
 }: {
   items: CommandItem[];
+  live?: boolean;
   onClose: () => void;
 }) {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
+  const [remote,setRemote]=useState<CommandItem[]>([]);
+  useEffect(()=>{
+    const controller=new AbortController();setRemote([]);
+    if(!live||query.trim().length<2)return()=>controller.abort();
+    fetch(`/api/commercial?q=${encodeURIComponent(query)}`,{signal:controller.signal,cache:"no-store"}).then(r=>r.json()).then(data=>{
+      setRemote((data.results||[]).map((r:{id:string;parentId:string;kind:string;targetKind?:string;label:string;detail:string})=>({
+        id:`commercial-${r.id}`,label:r.label,detail:r.kind === "customers" ? `${r.detail} · Ref ${r.id.slice(-8)}` : r.detail,record:true,group:"Commercial records",
+        run:()=>window.dispatchEvent(new CustomEvent("enercore:open-record",{detail:{id:r.parentId,kind:r.targetKind||r.kind}})),
+      })));
+    }).catch(()=>{});
+    return()=>controller.abort();
+  },[query,live]);
+
 
   const groupOf = (i: CommandItem) =>
     i.group ??
@@ -61,8 +76,8 @@ export default function CommandMenu({
             i.group === "Records" ||
             !i.record,
         );
-    return matched.slice(0, 40);
-  }, [items, query]);
+    return [...remote, ...matched].slice(0, 40);
+  }, [items, query, remote]);
 
   // A changed result set must not leave the highlight pointing at nothing.
   useEffect(() => setActive(0), [query]);

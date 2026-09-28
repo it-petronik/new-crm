@@ -10,8 +10,8 @@ import { createHash } from "node:crypto";
  *   npm run cf:preview -- --port 8788      (APP_MODE must NOT be "preview")
  *   npx playwright test e2e/password-reset.spec.ts
  *
- * Skips itself when that Worker is not running, so the default suite stays
- * green without it. Uses local fixture accounts only; never remote D1.
+ * Run with playwright.d1.config.ts against its isolated local Worker.
+ * Missing prerequisites fail explicitly instead of skipping coverage. Uses local fixture accounts only; never remote D1.
  */
 const WORKER = "http://localhost:8788";
 const H = { Origin: WORKER, "Content-Type": "application/json" };
@@ -35,7 +35,7 @@ function resetLocalRateLimits() {
     execFileSync(
       "npx",
       [
-        "wrangler", "d1", "execute", "enercore-crm", "--local", "--command",
+        "wrangler", "d1", "execute", "enercore-crm", "--local", "--config", process.env.D1_TEST_CONFIG || "wrangler.jsonc", "--persist-to", process.env.D1_TEST_PERSIST || ".wrangler/state", "--command",
         `DELETE FROM "LoginAttempt" WHERE "key" LIKE 'reset-%' OR "key" IN (${keys.join(",")})`,
       ],
       { stdio: "ignore" },
@@ -57,7 +57,7 @@ test.beforeAll(async () => {
   if (available) resetLocalRateLimits();
 });
 test.beforeEach(() => {
-  test.skip(!available, "Local Worker not running on :8788 (npm run cf:preview)");
+  expect(available, "Local Worker not running on :8788 (npm run cf:preview)").toBeTruthy();
 });
 
 async function sessionFor(request: APIRequestContext, email: string, password: string) {
@@ -74,7 +74,7 @@ test("only an authorised administrator can issue a reset link", async ({ request
   expect(anonymous.status()).toBe(401);
 
   const admin = await sessionFor(request, ADMIN.email, ADMIN.password);
-  test.skip(!admin, "admin fixture not present in local D1");
+  expect(admin, "admin fixture not present in local D1").toBeTruthy();
 
   // An administrator may not reset their own account; that is what a second
   // administrator is for.
@@ -87,7 +87,7 @@ test("only an authorised administrator can issue a reset link", async ({ request
 
 test("a reset link is issued once and reveals no password material", async ({ request }) => {
   const admin = await sessionFor(request, ADMIN.email, ADMIN.password);
-  test.skip(!admin, "admin fixture not present in local D1");
+  expect(admin, "admin fixture not present in local D1").toBeTruthy();
   const response = await request.post(`${WORKER}/api/users/reset-link`, {
     headers: { ...H, Cookie: `enercore_session=${admin}` },
     data: { userId: "user-1" },
@@ -104,7 +104,7 @@ test("a reset link is issued once and reveals no password material", async ({ re
 
 test("issuing a new link invalidates the previous one", async ({ request }) => {
   const admin = await sessionFor(request, ADMIN.email, ADMIN.password);
-  test.skip(!admin, "admin fixture not present in local D1");
+  expect(admin, "admin fixture not present in local D1").toBeTruthy();
   const headers = { ...H, Cookie: `enercore_session=${admin}` };
   const first = await (await request.post(`${WORKER}/api/users/reset-link`, { headers, data: { userId: "user-1" } })).json();
   await request.post(`${WORKER}/api/users/reset-link`, { headers, data: { userId: "user-1" } });
@@ -159,7 +159,7 @@ async function resetStaffTo(request: APIRequestContext, adminSession: string, pa
 test("a token works exactly once and cannot be replayed", async ({ request }) => {
   resetLocalRateLimits();
   const admin = await sessionFor(request, ADMIN.email, ADMIN.password);
-  test.skip(!admin, "admin fixture not present in local D1");
+  expect(admin, "admin fixture not present in local D1").toBeTruthy();
   // Self-contained: this test sets the password it then signs in with, so it
   // does not depend on any other test having run first.
   const password = `ReplayOnce${Date.now()}Ab`;
@@ -182,7 +182,7 @@ test("a token works exactly once and cannot be replayed", async ({ request }) =>
 test("a completed reset ends every session for that user", async ({ request }) => {
   resetLocalRateLimits();
   const admin = await sessionFor(request, ADMIN.email, ADMIN.password);
-  test.skip(!admin, "admin fixture not present in local D1");
+  expect(admin, "admin fixture not present in local D1").toBeTruthy();
 
   // Establish a known password, then sign in so there is a session to kill.
   const first = `SessionAlive${Date.now()}Ab`;
@@ -211,7 +211,7 @@ test("a completed reset ends every session for that user", async ({ request }) =
 test("only one of several simultaneous redemptions can succeed", async ({ request }) => {
   resetLocalRateLimits();
   const admin = await sessionFor(request, ADMIN.email, ADMIN.password);
-  test.skip(!admin, "admin fixture not present in local D1");
+  expect(admin, "admin fixture not present in local D1").toBeTruthy();
 
   const issued = await (
     await request.post(`${WORKER}/api/users/reset-link`, {
@@ -275,20 +275,11 @@ test("only one of several simultaneous redemptions can succeed", async ({ reques
  * preferable to serialising the suite or loosening what the test asserts.
  */
 function d1(command: string) {
-  let last: unknown;
-  for (let attempt = 0; attempt < 4; attempt++) {
-    try {
-      return execFileSync(
+  return execFileSync(
         "npx",
-        ["wrangler", "d1", "execute", "enercore-crm", "--local", "--json", "--command", command],
+        ["wrangler", "d1", "execute", "enercore-crm", "--local", "--config", process.env.D1_TEST_CONFIG || "wrangler.jsonc", "--persist-to", process.env.D1_TEST_PERSIST || ".wrangler/state", "--json", "--command", command],
         { encoding: "utf8" },
       );
-    } catch (error) {
-      last = error;
-      execFileSync("sleep", [String(0.4 * (attempt + 1))]);
-    }
-  }
-  throw last;
 }
 
 /**

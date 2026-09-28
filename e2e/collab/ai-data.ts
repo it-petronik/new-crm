@@ -43,6 +43,7 @@ export function aiRecords(now = Date.now()): RecordItem[] {
     updatedAt: iso(-30),
     ...who(owner),
     ...extra,
+    ...(({"AIT-L1":"AIT-C1","AIT-L2":"AIT-C1","AIT-Q1":"AIT-C1","AIT-INV1":"AIT-C1","AIT-INV2":"AIT-C1","AIT-L4":"AIT-C2","AIT-P1":"AIT-CP1"} as Record<string,string>)[id] ? {customerId:({"AIT-L1":"AIT-C1","AIT-L2":"AIT-C1","AIT-Q1":"AIT-C1","AIT-INV1":"AIT-C1","AIT-INV2":"AIT-C1","AIT-L4":"AIT-C2","AIT-P1":"AIT-CP1"} as Record<string,string>)[id]} : {}),
   });
   return [
     base("AIT-L1", "leads", "Zephyr Lubricants", "aise1", {

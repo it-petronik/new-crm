@@ -67,6 +67,11 @@ export type Payment = {
 };
 export type Note = { id: string; text: string; at: string; actor: string };
 export type RecordItem = {
+  customerId?: string | null;
+  contactId?: string | null;
+  productId?: string | null;
+  dealId?: string | null;
+  primaryContactId?: string | null;
   deletedAt?: string;
   id: string;
   kind: Kind;

@@ -1,6 +1,4 @@
-import { and, eq } from "drizzle-orm";
 import type { Database } from "../d1";
-import { businessRecords } from "../schema";
 import { RECORD_PAGE_LIMIT, findRecord, listRecordsForActor } from "../data";
 import { canRead, money, type Actor, type Kind, type RecordItem } from "../domain";
 import { AiError } from "./gateway";
@@ -61,17 +59,3 @@ export const CLOSED: Record<string, string[]> = {
   accounts: ["Paid", "Cancelled"],
 };
 export const isOpen = (r: RecordItem) => !(CLOSED[r.kind] ?? []).includes(r.status);
-
-/**
- * How many OTHER customer records in this company have exactly the same
- * normalised name — across the whole company, not only what this person can
- * see, so an invisible namesake still stops two histories being merged. Only
- * the count leaves this function.
- */
-export async function customerNamesakes(db: Database, customer: RecordItem) {
-  const rows = await db
-    .select({ id: businessRecords.id, payload: businessRecords.payload })
-    .from(businessRecords)
-    .where(and(eq(businessRecords.kind, "customers"), eq(businessRecords.company, customer.company)));
-  return rows.filter((r) => r.id !== customer.id && !(r.payload as RecordItem).deletedAt && sameName((r.payload as RecordItem).title, customer.title)).length;
-}

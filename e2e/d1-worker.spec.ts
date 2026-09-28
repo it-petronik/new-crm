@@ -8,8 +8,8 @@ import { test, expect, request as playwrightRequest } from "@playwright/test";
  *   npm run cf:preview -- --port 8788
  *   npx playwright test e2e/d1-worker.spec.ts
  *
- * Skipped automatically when that Worker is not running, so the default suite
- * stays green without it.
+ * Run with playwright.d1.config.ts: it provisions an isolated local Worker.
+ * Missing prerequisites fail explicitly; these checks are never skipped.
  */
 const WORKER = "http://localhost:8788";
 const ORIGIN = { Origin: WORKER, "Content-Type": "application/json" };
@@ -25,7 +25,7 @@ test.beforeAll(async () => {
   }
 });
 test.beforeEach(() => {
-  test.skip(!available, "Local Worker not running on :8788 (npm run cf:preview)");
+  expect(available, "Local Worker not running on :8788 (npm run cf:preview)").toBeTruthy();
 });
 
 test("the Worker serves pages and static assets from D1-backed Next.js", async ({ request }) => {

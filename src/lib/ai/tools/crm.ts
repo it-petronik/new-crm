@@ -1,8 +1,12 @@
+import { addIdentityContext } from "../../commercial/ai";
+import { readRecords, listContacts } from "../../commercial/store";
+import { businessRecords } from "../../schema";
+import { sql } from "drizzle-orm";
 import type { Database } from "../../d1";
 import { canWrite, money, outstanding, stages, type Actor, type RecordItem } from "../../domain";
 import { visibleMeetings } from "../../meeting-data";
 import { AiContext, daysBetween, gstToday } from "../context";
-import { CLOSED, customerNamesakes, formatTotals, isOpen, mayBeTruncated, readableRecord, readableRecords, sameName, sumByCurrency } from "../records";
+import { CLOSED, formatTotals, isOpen, mayBeTruncated, readableRecord, readableRecords, sumByCurrency } from "../records";
 
 /**
  * CRM tools: Lead AI and Customer 360. Each builds the context for ONE
@@ -73,6 +77,7 @@ export async function leadContext(db: Database, actor: Actor, id: unknown) {
 
   if (canWrite(actor, lead)) ctx.allowSuggestionsFor(ref, "leads", lead.id);
   addNotes(ctx, lead, ref, 12);
+  await addIdentityContext(db, actor, lead, ctx);
   return {
     record: lead,
     context: ctx,
@@ -90,21 +95,11 @@ export async function customerContext(db: Database, actor: Actor, id: unknown) {
   const ctx = new AiContext(`Customer ${customer.title}`);
   const ref = describe(ctx, customer);
   ctx.fact("Account status", customer.status, ref);
+  for (const contact of await listContacts(db,actor,customer.id)) ctx.fact("Recorded contact", `${contact.name} · ${contact.role || "Contact"} · ${contact.active ? "Active" : "Inactive"} · version ${contact.version}`, ref);
 
-  // Enercore has no customerId link on sales records yet, so the history is a
-  // HEURISTIC: records in the same company whose customer name is EXACTLY the
-  // same (after normalising case, spacing and punctuation — never fuzzy),
-  // plus anything raised from those (quotation → order → shipment/invoice).
-  // If another customer record in the company has the same name, the
-  // histories can't be told apart, so none is attributed to either.
-  const all = await readableRecords(db, actor, ["leads", "quotations", "orders", "logistics", "accounts"]);
-  const namesakes = await customerNamesakes(db, customer);
-  const related = new Map<string, RecordItem>();
-  if (!namesakes) {
-    for (const r of all) if (r.company === customer.company && sameName(r.title, customer.title)) related.set(r.id, r);
-    for (let pass = 0; pass < 3; pass++) for (const r of all) if (r.parentId && related.has(r.parentId)) related.set(r.id, r);
-  }
-  const list = [...related.values()];
+  const all = await readRecords(db, actor, sql`json_extract(${businessRecords.payload}, '$.customerId') = ${customer.id}`);
+  const list = all.filter(r => r.company === customer.company && r.branch === customer.branch);
+  // Legacy candidates never contribute account history, counts, money or AI actions.
   const of = (kind: string) => list.filter((r) => r.kind === kind);
 
   const leads = of("leads");
@@ -126,16 +121,14 @@ export async function customerContext(db: Database, actor: Actor, id: unknown) {
   ctx.fact("Last activity", last ? `${gstToday(new Date(last))} (${daysBetween(last, today)} day(s) ago)` : "none recorded");
   ctx.fact(
     "Relationship basis",
-    namesakes
-      ? `NOT ATTRIBUTED — ${namesakes + 1} customer records share this name, so their histories can't be separated safely; no related records are included`
-      : "HEURISTIC, not a recorded link — records whose customer name (record title) exactly matches this customer's name, plus records raised from them. It may miss records filed under a different spelling, and is not guaranteed complete.",
+    "Authoritative stable customerId relationships only. Possible legacy matches are kept separate for employee review and never attributed to this account",
     ref,
   );
-  if (mayBeTruncated(all.length)) ctx.fact("Coverage", "only the most recent 1,000 records you can see were checked");
+  ctx.fact("Coverage", "Up to 200 authorized linked records; legacy matches are excluded.");
 
   // The records themselves (most recent first), overdue invoices first.
   for (const r of [...overdue, ...list.sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""))].filter((r, i, a) => a.indexOf(r) === i).slice(0, 25)) {
-    const rref = describe(ctx, r, "heuristic (name match)");
+    const rref = describe(ctx, r, "authoritative customerId");
     if (r.kind === "leads" && isOpen(r) && canWrite(actor, r)) ctx.allowSuggestionsFor(rref, "leads", r.id);
   }
   if (canWrite(actor, customer)) ctx.allowSuggestionsFor(ref, "customers", customer.id);
@@ -147,12 +140,9 @@ export async function customerContext(db: Database, actor: Actor, id: unknown) {
     /** The related records (heuristic, readable only) and the customer's own reference. */
     related: list,
     customerRef: ref,
-    namesakes,
-    scope: namesakes
-      ? `Related records aren't shown: ${namesakes + 1} customers share this name, so their histories can't be separated.`
-      : "Related records are matched by exact customer name (not a recorded link), so this history may be incomplete.",
+    scope: "Only independently authorized customerId-linked records are included. Possible legacy name matches require separate review.",
     instructions: `Give a 360° view of this customer for the account team: relationship health, pipeline, orders, receivables and anything overdue — quoting the FACTS exactly. Then risks and the best next actions.
-The related records are linked by NAME ONLY (see "Relationship basis"): say so briefly in the summary (e.g. "based on records filed under this customer's name"), never present them as a confirmed or complete account history, and list "a recorded customer link" under "missing". If the basis says NOT ATTRIBUTED, say the history can't be shown because several customers share the name.
+The related records have authoritative customerId links. Do not merge same-name customers. Legacy name matches are not attributed history. Coverage is bounded and permission-filtered, never guaranteed complete.
 If useful, draft a short message to the customer (kind "email") the employee can review and send themselves.
 Suggest at most 3 CRM changes, only for references that are records in CONTEXT and only when clearly supported: "add_note", "set_follow_up" (value YYYY-MM-DD), or "change_status" for an open lead (value one of: ${stages.leads.join(", ")}).`,
   };

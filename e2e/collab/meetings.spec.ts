@@ -242,7 +242,9 @@ test.describe("with cameras and microphones", () => {
     // A deliberate confirmation: everyone, guests included, is disconnected.
     const confirmEnd = a.page.getByRole("dialog", { name: "End meeting?" });
     await expect(confirmEnd).toContainText("Everyone will be disconnected and the meeting will be marked as ended.");
+    const endedResponse = a.page.waitForResponse(response => response.request().method() === "POST" && /\/meetings\/[^/]+\/end$/.test(response.url()));
     await confirmEnd.getByRole("button", { name: "End meeting" }).click();
+    expect((await endedResponse).status()).toBe(200);
     await expect(a.page.getByRole("heading", { name: "The meeting has ended" })).toBeVisible({ timeout: 20_000 });
     await expect.poll(async () => (await a.client.get(`/conversations/${room.id}/meetings`)).body.meetings[0]?.status).toBe("ended");
     // History records both people, and the report keeps the meeting's chat.
@@ -260,6 +262,8 @@ test.describe("with cameras and microphones", () => {
     const b = await meetingBrowser(browser, "mt3");
     const dm = (await a.client.openDirect("mt3")).body.conversation;
     await b.page.goto("/");
+    // Wait for the recipient realtime subscription before sending the call.
+    await expect.poll(async () => (await a.client.get(`/presence?ids=${b.client.id}`)).body.presence[b.client.id]?.status).toBe("online");
     await a.page.goto(`${HUB}?c=${dm.id}`);
     // The header offers both kinds of call.
     await expect(a.page.getByRole("button", { name: "Video call" })).toBeVisible();

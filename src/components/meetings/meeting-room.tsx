@@ -107,6 +107,11 @@ export default function MeetingRoom({
 }) {
   const [current, setCurrent] = useState(session);
   const [ending, setEnding] = useState<Ending | null>(null);
+  const endingRef = useRef<Ending | null>(null);
+  const showEnding = useCallback((value: Ending | null) => {
+    endingRef.current = value;
+    setEnding(value);
+  }, []);
   const [notice, setNotice] = useState("");
   const [rejoining, setRejoining] = useState(false);
   // Adaptive stream + dynacast + simulcast, at this device's chosen quality —
@@ -115,29 +120,32 @@ export default function MeetingRoom({
 
   // Employees hear the meeting end or their access go through Collaboration.
   useCollabEvents(!current.guest, (event) => {
-    if (event.type === "meeting.ended" && event.meeting.id === current.meetingId) setEnding({ title: "The meeting has ended", detail: "Everyone has been disconnected." });
+    if (event.type === "meeting.ended" && event.meeting.id === current.meetingId) showEnding({ title: "The meeting has ended", detail: "Everyone has been disconnected." });
     if (event.type === "conversation.removed" && current.conversationId && event.conversationId === current.conversationId)
-      setEnding({ title: "You no longer have access", detail: "You were removed from this conversation, so you have left its meeting." });
+      showEnding({ title: "You no longer have access", detail: "You were removed from this conversation, so you have left its meeting." });
   });
 
   const onDisconnected = (reason?: DisconnectReason) => {
+    // Unmounting LiveKitRoom after an ended/removed event emits a client
+    // disconnect too. That cleanup must not dismiss the terminal screen.
+    if (endingRef.current) return;
     if (reason === DisconnectReason.CLIENT_INITIATED) return onLeave();
     if (reason === DisconnectReason.ROOM_DELETED || reason === DisconnectReason.ROOM_CLOSED)
-      setEnding({ title: "The meeting has ended", detail: "Everyone has been disconnected." });
+      showEnding({ title: "The meeting has ended", detail: "Everyone has been disconnected." });
     else if (reason === DisconnectReason.PARTICIPANT_REMOVED)
-      setEnding({ title: "You were removed from the meeting", detail: current.guest ? "The host removed you from this meeting." : "The organiser removed you, or your access to this meeting changed." });
+      showEnding({ title: "You were removed from the meeting", detail: current.guest ? "The host removed you from this meeting." : "The organiser removed you, or your access to this meeting changed." });
     else if (reason === DisconnectReason.DUPLICATE_IDENTITY)
-      setEnding({ title: "You joined somewhere else", detail: "This meeting is now open in another tab or on another device." });
-    else setEnding({ title: "Connection lost", detail: "The connection to the meeting dropped and could not be restored.", rejoin: true });
+      showEnding({ title: "You joined somewhere else", detail: "This meeting is now open in another tab or on another device." });
+    else showEnding({ title: "Connection lost", detail: "The connection to the meeting dropped and could not be restored.", rejoin: true });
   };
 
   async function rejoin() {
     setRejoining(true);
     const result = await onRejoin();
     setRejoining(false);
-    if ("error" in result) setEnding({ title: result.final ? "You can't rejoin" : "Couldn't rejoin", detail: result.error, rejoin: !result.final });
+    if ("error" in result) showEnding({ title: result.final ? "You can't rejoin" : "Couldn't rejoin", detail: result.error, rejoin: !result.final });
     else {
-      setEnding(null);
+      showEnding(null);
       setCurrent(result);
     }
   }
@@ -181,14 +189,14 @@ export default function MeetingRoom({
       aria-label={current.title}
     >
       <RoomAudioRenderer />
-      <Stage session={current} choices={current === session ? choices : { ...choices, media: undefined }} notice={notice} setNotice={setNotice} />
+      <Stage session={current} choices={current === session ? choices : { ...choices, media: undefined }} onEnded={() => showEnding({ title: "The meeting has ended", detail: "Everyone has been disconnected." })} notice={notice} setNotice={setNotice} />
     </LiveKitRoom>
   );
 }
 
 /* --------------------------------------------------------------- inside */
 
-function Stage({ session, choices, notice, setNotice }: { session: RoomSession; choices: JoinChoices; notice: string; setNotice: (s: string) => void }) {
+function Stage({ session, choices, notice, setNotice, onEnded }: { session: RoomSession; choices: JoinChoices; notice: string; setNotice: (s: string) => void; onEnded: () => void }) {
   const room = useRoomContext();
   const state = useConnectionState();
   const media = useLocalMedia({ guest: session.guest, media: choices.media, wantAudio: choices.audio, wantVideo: choices.video });
@@ -680,7 +688,7 @@ function Stage({ session, choices, notice, setNotice }: { session: RoomSession; 
             <DialogActions
               cancel="Keep meeting"
               onCancel={() => setConfirm(null)}
-              primary={{ label: "End meeting", pendingLabel: "Ending…", tone: "danger", pending: busy, onClick: () => void hostCall(() => endMeetingForAll(session.meetingId), "Couldn't end the meeting.") }}
+              primary={{ label: "End meeting", pendingLabel: "Ending…", tone: "danger", pending: busy, onClick: () => void hostCall(async () => { await endMeetingForAll(session.meetingId); onEnded(); }, "Couldn't end the meeting.") }}
             />
           </Dialog>
         )}

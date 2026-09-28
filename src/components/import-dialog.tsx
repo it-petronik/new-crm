@@ -152,6 +152,7 @@ export default function ImportDialog({
             </p>
           )}
 
+          {plan.relationshipWarnings.length > 0 && <ul className="import-issues">{plan.relationshipWarnings.map(w=><li key={w.row}>Row {w.row} — {w.reason}</li>)}</ul>}
           {plan.valid.length > 0 && (
             <table className="import-table">
               <thead><tr><th>Row</th><th>Name</th><th>Contact</th><th>Product</th></tr></thead>

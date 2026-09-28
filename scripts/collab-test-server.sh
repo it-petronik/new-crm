@@ -31,8 +31,6 @@ livekit-server --config scripts/livekit-dev.yaml > "$PERSIST/livekit.log" 2>&1 &
 LIVEKIT_PID=$!
 trap 'kill $LIVEKIT_PID 2>/dev/null' EXIT INT TERM
 
-# The app Worker first (served on the port), then the fake Workers AI it is
-# bound to (test only; see scripts/fake-ai-worker.ts).
-npx wrangler dev --local --port 8788 --config "$CONFIG" --config "${CONFIG%.json}.fake-ai.json" \
-  --persist-to "$PERSIST/state" \
-  --show-interactive-dev-session=false
+# Start one runtime without file watching. The real app and fake AI named
+# entrypoint share this suite's isolated D1 state.
+node scripts/collab-test-worker.mjs "$CONFIG" "$PERSIST/state"

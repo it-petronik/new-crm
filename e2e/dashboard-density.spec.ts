@@ -62,7 +62,7 @@ test("attention rows are compact and hide their presets behind one control", asy
 
 test("the header clock shows Gulf time wherever the reader is", async ({ browser }) => {
   // A device deliberately far from Dubai must not change what is displayed.
-  const context = await browser.newContext({ timezoneId: "America/Los_Angeles" });
+  const context = await browser.newContext({ timezoneId: "America/Los_Angeles", viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
   await signIn(page);
 
@@ -79,6 +79,16 @@ test("the header clock shows Gulf time wherever the reader is", async ({ browser
 
   // Seconds are not displayed.
   expect(shown).not.toMatch(/:\d{2}:\d{2}/);
+  // The approved compact header reserves this space for reachable actions.
+  for (const width of [1280, 1024, 820, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    // The existing sidebar animates its margin when crossing into phone layout.
+    if (width <= 720) await expect(page.locator(".main-shell")).toHaveCSS("margin-left", "0px");
+    await expect(clock).toBeHidden();
+    await expect(page.getByRole("button", { name: "Quick actions", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "My profile", exact: true })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `page fits ${width}px`).toBe(true);
+  }
   await context.close();
 });
 

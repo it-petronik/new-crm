@@ -303,7 +303,7 @@ export function AiPanel({
   onApply,
   autoRun = false,
 }: {
-  feature: "lead" | "customer" | "meeting" | "conversation";
+  feature: "deal" | "lead" | "customer" | "meeting" | "conversation";
   id: string;
   label: string;
   loadingLabel?: string;

@@ -33,8 +33,6 @@ function posts(page: Page, path: string) {
   });
   return seen;
 }
-const openRecord = (page: Page, kind: string, id: string) =>
-  page.evaluate(([kind, id]) => window.dispatchEvent(new CustomEvent("enercore:open-record", { detail: { kind, id } })), [kind, id]);
 
 test("Sales Copilot home: greeting, Enercore's priorities, AI explanation on request, drafts", async ({ browser }) => {
   const { page, context } = await signedIn(browser, "aisui");
@@ -80,7 +78,8 @@ test("lead panel: next action first, one brief per click, sources, and a quotati
   const { client, page, context } = await signedIn(browser, "aisui");
   const briefs = posts(page, "/api/ai/sales/lead-brief");
   await page.goto("/workspace/all-companies/sales-pipeline");
-  await openRecord(page, "leads", "AIT-UP1");
+  // The record card exists only after hydration and data loading.
+  await page.locator(".lead-card").filter({ has: page.getByRole("heading", { name: "Screen Copilot Oils", exact: true }) }).click();
   const dialog = page.getByRole("dialog", { name: "Screen Copilot Oils" });
   const panel = dialog.getByRole("region", { name: "Enercore AI" });
   // Deterministic, before any AI.
@@ -191,7 +190,8 @@ test("on a 390px phone: single-column cards, reachable Copy, no sideways scrolli
   await dialog.getByRole("button", { name: "Close dialog" }).click();
 
   await page.goto("/workspace/all-companies/sales-pipeline");
-  await openRecord(page, "leads", "AIT-UM1");
+  // The record card exists only after hydration and data loading.
+  await page.locator(".lead-card").filter({ has: page.getByRole("heading", { name: "Mobile Copilot Oils", exact: true }) }).click();
   const panel = page.getByRole("dialog", { name: "Mobile Copilot Oils" }).getByRole("region", { name: "Enercore AI" });
   await panel.getByRole("button", { name: "Brief me" }).click();
   await expect(panel.locator(".copilot-profile")).toBeVisible();

@@ -5,7 +5,8 @@
 // developer's .dev.vars is not loaded, and the real wrangler.jsonc is never
 // modified.
 import { readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { resolve, dirname } from "node:path";
+import { randomUUID } from "node:crypto";
 
 const root = resolve(import.meta.dirname, "..");
 const out = process.argv[2];
@@ -13,11 +14,13 @@ const source = readFileSync(resolve(root, "wrangler.jsonc"), "utf8")
   .split("\n")
   .filter((line) => !/^\s*\/\//.test(line))
   .join("\n");
+const control = randomUUID();
+writeFileSync(resolve(dirname(out), "control-token"), control, { mode: 0o600 });
 const config = JSON.parse(source);
 const live = config.env.live;
 const test = {
   name: "enercore-crm-collab-test",
-  main: resolve(root, config.main),
+  main: resolve(root, "scripts/collab-test-entry.ts"),
   compatibility_date: config.compatibility_date,
   compatibility_flags: config.compatibility_flags,
   assets: { ...config.assets, directory: resolve(root, config.assets.directory) },
@@ -33,6 +36,7 @@ const test = {
   vars: {
     ...live.vars,
     APP_URL: "http://localhost:8788",
+    COLLAB_TEST_CONTROL: control,
     // Presence expiry in seconds rather than minutes, so the suite can watch
     // a dead tab expire. Production uses the defaults in collab-hub.ts.
     COLLAB_PRESENCE_HEARTBEAT_MS: "1500",
@@ -48,24 +52,10 @@ const test = {
 };
 if (test.vars.APP_MODE !== "production") throw new Error("env.live must be production mode");
 // Live binds Workers AI as `AI`. Tests bind the same name to a local fake
-// (scripts/fake-ai-worker.ts) — no inference, no quota, and every prompt is
+// named entrypoint (scripts/fake-ai-worker.ts) in this same test-only Worker.
+// One runtime owns D1 — no inference, no quota, and every prompt is
 // kept in the test D1 so the suite can check what reached the model.
 if (!live.ai || live.ai.binding !== "AI") throw new Error("env.live must bind Workers AI as AI");
 if (config.ai) throw new Error("preview (top level) must not bind Workers AI");
-test.services = [{ binding: "AI", service: "enercore-fake-ai", entrypoint: "FakeAi" }];
+test.services = [{ binding: "AI", service: test.name, entrypoint: "FakeAi" }];
 writeFileSync(out, JSON.stringify(test, null, 2));
-writeFileSync(
-  out.replace(/\.json$/, ".fake-ai.json"),
-  JSON.stringify(
-    {
-      name: "enercore-fake-ai",
-      main: resolve(root, "scripts/fake-ai-worker.ts"),
-      compatibility_date: config.compatibility_date,
-      compatibility_flags: config.compatibility_flags,
-      alias: { "@opennextjs/cloudflare": resolve(root, "scripts/fake-ai-opennext-stub.mjs") },
-      d1_databases: test.d1_databases,
-    },
-    null,
-    2,
-  ),
-);
