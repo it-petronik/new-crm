@@ -1,5 +1,7 @@
 import {test,expect} from "@playwright/test";
 test("friendly URLs reload, users open profiles and charts respond",async({page})=>{
+  // Business analysis is collapsed by default; open it as a person would.
+  await page.addInitScript(() => localStorage.setItem("enercore-dashboard-analysis", "open"));
   await page.goto("/?view=access&company=All%20companies");
   await expect(page).toHaveURL(/\/workspace\/all-companies\/access-control$/);
   await page.reload();

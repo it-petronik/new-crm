@@ -1,5 +1,12 @@
 import { test, expect } from "@playwright/test";
 import { makePreview } from "../src/lib/fixtures";
+import type { Page } from "@playwright/test";
+
+// A record is a page; Delete waits behind its More actions menu.
+const startDelete = async (page: Page) => {
+  await page.locator(".rw-actions").getByRole("button", { name: /^More actions for / }).click();
+  await page.locator(".row-overflow-item.is-destructive", { hasText: "Delete record" }).click();
+};
 test("edit existing customer, cancel deletion and confirm deletion", async ({ page }, info) => {
   await page.goto("/?module=customers");
   await page.getByRole("button", { name: /Gulf Industrial Trading/ }).first().click();
@@ -8,14 +15,14 @@ test("edit existing customer, cancel deletion and confirm deletion", async ({ pa
   await expect(name).toHaveValue("Gulf Industrial Trading");
   await name.fill("Edited customer QA");
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
-  await expect(page.getByRole("dialog")).toHaveAttribute("aria-labelledby", /.+/);
-  await expect(page.getByRole("heading", { name: "Edited customer QA", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(page.getByRole("dialog")).toBeHidden();
+  await expect(page.getByRole("heading", { level: 1, name: "Edited customer QA", exact: true })).toBeVisible();
+  await startDelete(page);
   await expect(page.getByRole("heading", { name: "Delete record?", exact: true })).toBeVisible();
   await page.screenshot({ path: info.outputPath("delete-confirmation.png"), animations: "disabled" });
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Edited customer QA", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await startDelete(page);
   await page.getByRole("button", { name: "Delete record", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeHidden();
   await expect(page.getByRole("button", { name: /Edited customer QA/ })).toHaveCount(0);
@@ -34,7 +41,7 @@ test("order editor protects commercial values and explains blocked deletion", as
   await page.screenshot({ path: info.outputPath("edit-order-mobile.png"), animations: "disabled" });
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await expect(page.getByRole("heading", { name: order.title, exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await startDelete(page);
   await expect(page.getByText(/must be cancelled through their workflow/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Delete record", exact: true })).toHaveCount(0);
 });

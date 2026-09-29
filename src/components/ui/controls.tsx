@@ -590,11 +590,21 @@ export function Dialog({
   onClose,
   className,
   dismissOnOutside = true,
+  variant = "dialog",
+  description,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   className?: string;
+  /**
+   * "drawer" presents the same modal as a side sheet on desktop and a full
+   * screen on phones — for editing something that belongs to the page behind
+   * it (an RFQ on a Deal) without covering that page's context.
+   */
+  variant?: "dialog" | "drawer";
+  /** One quiet line under the title, e.g. what the drawer edits. */
+  description?: ReactNode;
   /**
    * Whether a click outside closes the dialog. Pass false while a submission
    * is pending or unsaved input would be lost; Escape, the X and Cancel
@@ -626,7 +636,7 @@ export function Dialog({
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="ui-dialog-overlay" />
         <DialogPrimitive.Content
-          className={cx("modal ui-dialog", className)}
+          className={cx("modal ui-dialog", variant === "drawer" && "ui-drawer", className)}
           aria-describedby={undefined}
           onInteractOutside={(event) => {
             if (!dismissOnOutside) event.preventDefault();
@@ -639,7 +649,10 @@ export function Dialog({
           }}
         >
           <div className="dialog-heading">
-            <DialogPrimitive.Title>{title}</DialogPrimitive.Title>
+            <div className="dialog-heading-text">
+              <DialogPrimitive.Title>{title}</DialogPrimitive.Title>
+              {description && <p className="dialog-heading-description">{description}</p>}
+            </div>
             <Button
               type="button"
               className="icon-button"

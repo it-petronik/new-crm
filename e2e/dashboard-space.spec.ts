@@ -1,5 +1,7 @@
 import { test, expect } from "@playwright/test";
 test("dashboard gives rankings wider independent columns without row gaps", async ({page}, info) => {
+  // Business analysis is collapsed by default; open it as a person would.
+  await page.addInitScript(() => localStorage.setItem("enercore-dashboard-analysis", "open"));
   await page.setViewportSize({width:1600,height:1000});
   await page.goto("/?module=overview");
   const stacks = page.locator(".insight-stack");

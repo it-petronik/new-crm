@@ -76,16 +76,20 @@ test("a record opened once is offered again as recent, and can be pinned", async
   await expect(row).toBeVisible();
   await row.click();
 
-  const dialog = page.getByRole("dialog");
-  await expect(dialog).toBeVisible();
+  // The record opens as a page.
+  const record = page.locator(".record-workspace");
+  await expect(record).toBeVisible();
   // Read the name from the opened record: a row's text begins with the
   // avatar's initials, which is not what the palette lists.
-  const name = (await dialog.getByRole("heading").first().innerText()).trim();
+  const name = (await record.getByRole("heading", { level: 1 }).innerText()).trim();
   expect(name.length).toBeGreaterThan(2);
-  await dialog.getByRole("button", { name: /^Pin / }).click();
+  // Pinning lives in the record's More menu.
+  await record.getByRole("button", { name: /^More actions for / }).click();
+  await page.getByRole("button", { name: "Pin for quick access" }).click();
   await expect(page.locator(".toast")).toContainText("Pinned");
+  // Escape returns from the record to the list.
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(record).toHaveCount(0);
 
   await openPalette(page);
   await expect(page.locator(".command-section-title", { hasText: "Pinned" })).toBeVisible();

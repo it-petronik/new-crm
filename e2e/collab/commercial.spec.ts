@@ -211,6 +211,8 @@ for (const [width, height] of [
     if (width === 1440) {
       await page.goto(`${WORKER}/workspace/all-companies/customers`);
       await page.getByPlaceholder(/^Search records/).fill(f.tag);
+      // Lists open as a table; the card layout is one click away.
+      await page.getByRole("button", { name: "Card view", exact: true }).click();
       await expect(page.locator(".collection-card")).toHaveCount(2);
       await expect(page.locator(".collection-card").filter({ hasText: f.a.id.slice(-8) })).toHaveCount(1);
       await expect(page.locator(".collection-card").filter({ hasText: f.b.id.slice(-8) })).toHaveCount(1);
@@ -239,19 +241,21 @@ for (const [width, height] of [
         () => document.documentElement.scrollWidth > innerWidth + 1,
       );
       expect(overflow).toBe(false);
-      const clippedActions = await page.locator(".record-detail-dialog .ui-dialog-actions-end").evaluate(el => {
-        const frame = el.getBoundingClientRect();
-        return [...el.querySelectorAll("button")].some(button => {
+      // The record is a page; its header actions must all be fully visible.
+      const clippedActions = await page.locator(".record-workspace .rw-actions").evaluate(el => {
+        return [...el.querySelectorAll("button")].filter(button => button.getClientRects().length > 0).some(button => {
           const bounds = button.getBoundingClientRect();
-          return bounds.left < frame.left - 1 || bounds.right > frame.right + 1 || button.scrollWidth > button.clientWidth + 1;
+          return bounds.left < -1 || bounds.right > innerWidth + 1 || button.scrollWidth > button.clientWidth + 1;
         });
       });
       expect(clippedActions, "record actions must remain fully visible").toBe(false);
-      const clippedStatus = await page.locator(".record-detail-dialog .ui-inline-field").evaluate(el => el.scrollWidth > el.clientWidth + 1);
-      expect(clippedStatus, "status selector must fit the narrow footer").toBe(false);
+      const clippedStatus = await page.locator(".record-workspace .rw-status").evaluate(el => el.scrollWidth > el.clientWidth + 1 || el.getBoundingClientRect().right > innerWidth + 1);
+      expect(clippedStatus, "status selector must fit the record header").toBe(false);
       if (record.kind !== "leads") await expect(panel.getByRole("button", { name: "Review relationships", exact: true })).toHaveCount(0);
       if (record.kind === "products") await expect(panel.getByRole("heading", { name: "Contacts", exact: true })).toHaveCount(0);
       if (record === f.a) {
+        // Contacts have their own tab in Customer 360.
+        await panel.getByRole("tab", { name: /^Contacts/ }).click();
         await panel
           .getByRole("button", { name: "Add contact", exact: true })
           .click();

@@ -635,6 +635,9 @@ export default function Thread({
                   )}
                   <li
                     id={`msg-${m.id}`}
+                    // Tapping a message on a touch screen focuses it, which
+                    // reveals its actions (see collaboration CSS).
+                    tabIndex={-1}
                     className={[
                       "collab-msg",
                       grouped ? "is-grouped" : "",

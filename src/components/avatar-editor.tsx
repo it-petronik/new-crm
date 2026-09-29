@@ -131,7 +131,7 @@ export function AvatarEditor({
   return (
     <div className="avatar-editor">
       <span className="avatar-editor-photo">
-        <Avatar name={name} image={current} size={size} />
+        <Avatar name={name} image={current} avatarId={id} size={size} />
         <input
           ref={file}
           type="file"

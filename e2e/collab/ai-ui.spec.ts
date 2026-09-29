@@ -70,12 +70,13 @@ test("AI workspace on desktop: role prompts, loading, answer, figures, reference
   await expect(turn.locator(".ai-fineprint").last()).toContainText("Figures are calculated by Enercore, not the AI");
   expect(asks).toHaveLength(1);
 
-  // A reference opens the record through the normal detail view.
+  // A reference opens the record through the normal record page.
   await turn.locator(".ai-sources summary").click();
   const ref = turn.locator(".ai-sources .ai-ref").first();
   await ref.click();
-  await expect(page.getByRole("dialog")).toBeVisible();
-  await page.getByRole("button", { name: "Close dialog" }).click();
+  await expect(page.locator(".record-workspace")).toBeVisible();
+  await page.getByRole("button", { name: /^Back to / }).click();
+  await expect(page.locator(".record-workspace")).toHaveCount(0);
   // Still on Enercore AI, answers kept.
   await expect(page).toHaveURL(/\/enercore-ai$/);
   await expect(page.locator(".ai-turn")).toHaveCount(1);
@@ -122,7 +123,8 @@ test("Lead AI: one request per click, suggestions change nothing until reviewed 
   await page.goto("/workspace/all-companies/sales-pipeline");
   // The record card exists only after hydration and data loading.
   await page.locator(".lead-card").filter({ has: page.getByRole("heading", { name: "Screen Test Lead 3", exact: true }) }).click();
-  const dialog = page.getByRole("dialog", { name: "Screen Test Lead 3" });
+  // The record opens as a page.
+  const dialog = page.getByRole("article", { name: "Screen Test Lead 3" });
   await expect(dialog).toBeVisible();
   const panel = dialog.getByRole("region", { name: "Enercore AI" });
   await panel.getByRole("button", { name: "Brief me" }).dblclick();
@@ -162,11 +164,13 @@ test("Customer 360, meeting report and conversation summaries in place", async (
   // Customer 360 explains the scope of its recorded relationships.
   await page.goto("/workspace/all-companies/customers");
   await page.getByPlaceholder(/^Search records/).fill("Screen Test Lead 4");
+  // Lists open as a table; the card layout is one click away.
+  await page.getByRole("button", { name: "Card view", exact: true }).click();
   await page.locator(".collection-card").filter({ has: page.getByRole("heading", { name: "Screen Test Lead 4", exact: true }) }).click();
-  const customer = page.getByRole("dialog", { name: "Screen Test Lead 4" }).getByRole("region", { name: "Enercore AI" });
+  const customer = page.getByRole("article", { name: "Screen Test Lead 4" }).getByRole("region", { name: "Enercore AI" });
   await customer.getByRole("button", { name: "Customer 360" }).click();
   await expect(customer.locator(".ai-scope")).toHaveText("Only independently authorized customerId-linked records are included. Possible legacy name matches require separate review.");
-  await page.getByRole("button", { name: "Close dialog" }).click();
+  await page.getByRole("button", { name: /^Back to / }).click();
 
   // Meeting report: AI notes on request, saying there is no transcript.
   const meeting = (await client.post("/meetings", { mode: "now", media: "video", title: "Screen meeting", inviteeIds: [], guestAccess: "off" })).body.meeting;

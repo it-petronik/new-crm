@@ -1,10 +1,11 @@
 "use client";
-import ExecutionPanel, { ExecutionHistory } from "./execution-panel";
 import Prospecting from "./prospecting";
 import { canProspect } from "@/lib/execution/model";
-import { useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import type { Actor, RecordItem } from "@/lib/domain";
 import { canWrite, money } from "@/lib/domain";
+import { recordProfiles } from "@/lib/record-profiles";
+import { StatusBadge } from "../ui/status-badge";
 import type { CommercialView } from "@/lib/commercial/store";
 import {
   contactRoles,
@@ -26,44 +27,44 @@ import {
   RecordPicker,
   commercialCall,
 } from "./relationship-picker";
-import { AiPanel } from "../ai/ai-answer";
 import { openReference } from "@/lib/ai/client";
-const open = (r: RecordItem) =>
+import { EmptyState, Section } from "../ui/layout";
+
+/* ---------------------------------------------------------------------------
+   Customer, Supplier, Product and Lead relationships — data and sections.
+
+   `useCommercial` loads the record's commercial view once and owns the
+   relationship editors (contact, capability, links), which open as drawers
+   beside the record rather than as a dialog over it. The sections are
+   placed into the record workspace's tabs by commercial-workspace.tsx.
+   ------------------------------------------------------------------------ */
+
+export const openRecord = (r: { id: string; kind: string; title: string }) =>
   openReference({
     id: "",
     label: r.title,
     target: { type: "record", kind: r.kind, id: r.id },
   });
-export default function CommercialPanel({
-  record,
-  actor,
-  onChanged,
-  onQuote,
-  onLog,
-}: {
-  record: RecordItem;
-  actor: Actor;
-  onChanged: () => void;
-  onQuote: () => void;
-  onLog: () => void;
-}) {
+const noun = (kind: string) =>
+  recordProfiles[kind as keyof typeof recordProfiles]?.noun ?? kind;
+
+export type Commercial = ReturnType<typeof useCommercial>;
+
+export function useCommercial(record: RecordItem, actor: Actor, onChanged: () => void) {
   const [view, setView] = useState<CommercialView | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [revision, setRevision] = useState(0);
-  const [room, setRoom] = useState(false);
-  const [prospecting, setProspecting] = useState(false);
-  const [editor, setEditor] = useState<
-    "contact" | "capability" | "links" | null
-  >(null);
+  const [editor, setEditor] = useState<"contact" | "capability" | "links" | null>(null);
   const [contact, setContact] = useState<Contact | null>(null);
   const [cap, setCap] = useState<Capability | null>(null);
+  const [prospecting, setProspecting] = useState(false);
   const [busy, setBusy] = useState(false);
   const writable = canWrite(actor, record);
-  const refresh = () => {
+  const refresh = useCallback(() => {
     setRevision((n) => n + 1);
     onChanged();
-  };
+  }, [onChanged]);
   useEffect(() => {
     const c = new AbortController();
     setLoading(true);
@@ -77,10 +78,7 @@ export default function CommercialPanel({
         if (!r.ok) throw new Error(d.error);
         return d;
       })
-      .then((d) => {
-        setView(d);
-        if (d.deal) setRoom(true);
-      })
+      .then(setView)
       .catch((e) => {
         if (e.name !== "AbortError") setError(e.message);
       })
@@ -89,12 +87,11 @@ export default function CommercialPanel({
       });
     return () => c.abort();
   }, [record.id, record.updatedAt, revision]);
-  async function deal() {
+  async function openDeal() {
     setBusy(true);
     setError("");
     try {
       await commercialCall({ action: "deal", leadId: record.id });
-      setRoom(true);
       refresh();
     } catch (e) {
       setError((e as Error).message);
@@ -102,415 +99,391 @@ export default function CommercialPanel({
       setBusy(false);
     }
   }
-  const title =
-    record.kind === "leads"
-      ? room
-        ? "Deal Room"
-        : "Commercial relationships"
-      : record.kind === "products"
-        ? "Product activity within Enercore"
-        : record.kind === "suppliers"
-          ? "Supplier 360"
-          : "Customer 360";
-  return (
-    <section className="commercial-panel" aria-label={title} aria-busy={loading}>
-      <header className="commercial-head">
-        <h3>{title}</h3>
-        {record.kind === "leads" && !room && (
-          <Button
-            className="secondary"
-            disabled={busy || (!writable && !view?.deal)}
-            onClick={() => void deal()}
-          >
-            Open Deal Room
-          </Button>
-        )}
-        {writable && ["leads", "quotations"].includes(record.kind) && (
-          <Button
-            className="secondary compact"
-            onClick={() => setEditor("links")}
-          >
-            Review relationships
-          </Button>
-        )}
-      </header>
-      {loading && !view && (
-        <div
-          className="commercial-skeleton"
-          role="status"
-          aria-label="Loading commercial relationships"
-        >
-          <span />
-          <span />
-          <span />
-        </div>
+  const makePrimary = (c: Contact) =>
+    void commercialCall({
+      action: "links",
+      id: record.id,
+      expectedUpdatedAt: record.updatedAt,
+      primaryContactId: c.id,
+    })
+      .then(refresh)
+      .catch((e) => setError(e.message));
+  const linkToCustomer = (r: RecordItem) =>
+    void commercialCall({
+      action: "links",
+      id: r.id,
+      expectedUpdatedAt: r.updatedAt,
+      customerId: record.id,
+    })
+      .then(refresh)
+      .catch((e) => setError(e.message));
+  const editContact = (c: Contact | null) => {
+    setContact(c);
+    setEditor("contact");
+  };
+  const editCapability = (c: Capability | null) => {
+    setCap(c);
+    setEditor("capability");
+  };
+  const done = () => {
+    setEditor(null);
+    refresh();
+  };
+  const editorsNode = (
+    <>
+      {prospecting && (
+        <Dialog variant="drawer" title="Product prospecting" className="execution-editor prospecting-drawer" onClose={() => setProspecting(false)}>
+          <Prospecting
+            actor={actor}
+            initialCompany={record.company}
+            initialBranch={record.branch}
+            productId={record.kind === "products" ? record.id : record.productId || undefined}
+            keywords={record.kind === "products" ? record.title : record.product}
+          />
+        </Dialog>
       )}
-      {error && (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      )}
-      {view && (
-        <>
-          {record.kind === "leads" && (
-            <>
-              <div className="detail-grid">
-                <div>
-                  <span>Customer</span>
-                  <strong>
-                    {view.customer?.title || "Not linked to a customer"}
-                  </strong>
-                </div>
-                <div>
-                  <span>Requirement</span>
-                  <strong>
-                    {record.product || "Add a product and quantity using Edit record"}{" "}
-                    {record.quantity ? `${record.quantity.toLocaleString()} ${record.unit}` : ""}
-                  </strong>
-                </div>
-                <div>
-                  <span>Stage · Owner</span>
-                  <strong>
-                    {record.status} · {record.owner}
-                  </strong>
-                </div>
-                <div>
-                  <span>Next action</span>
-                  <strong>{record.due || "Set a follow-up"}</strong>
-                </div>
-              </div>
-              {room && (
-                <div className="commercial-actions">
-                  <Button className="secondary" onClick={onLog}>
-                    Log activity / set follow-up
-                  </Button>
-                  <Button className="secondary" onClick={onQuote}>
-                    Prepare quotation
-                  </Button>
-                  <p className="muted small">
-                    Schedule meetings using this Lead’s Meetings section below.
-                  </p>
-                </div>
-              )}
-            </>
-          )}
-          {record.kind !== "products" && <section>
-            <header className="commercial-head">
-              <h4>Contacts</h4>
-              {writable && ["customers", "suppliers"].includes(record.kind) && (
-                <Button
-                  className="secondary compact"
-                  onClick={() => {
-                    setContact(null);
-                    setEditor("contact");
-                  }}
-                >
-                  Add contact
-                </Button>
-              )}
-            </header>
-            {!view.contacts.length ? (
-              <p className="muted">
-                {record.kind === "leads" ? "No contacts yet. Review relationships to select a customer and contact." : "No contacts yet. Add the people you work with at this company."}
-              </p>
-            ) : (
-              <ul className="commercial-list">
-                {view.contacts.map((c) => (
-                  <li key={c.id}>
-                    <div>
-                      <strong>{c.name}</strong>
-                      <p>
-                        {c.role || "Contact"}
-                        {record.contactId === c.id ? " · Selected for this lead" : ""}
-                        {!c.active ? " · Inactive" : ""}
-                        {record.primaryContactId === c.id ? " · Primary" : ""}
-                      </p>
-                      <p className="muted small">
-                        {[c.email, c.phone].filter(Boolean).join(" · ")}
-                      </p>
-                    </div>
-                    {writable &&
-                      ["customers", "suppliers"].includes(record.kind) && (
-                        <div className="commercial-actions">
-                          <Button
-                            className="secondary compact"
-                            onClick={() => {
-                              setContact(c);
-                              setEditor("contact");
-                            }}
-                          >
-                            Edit contact
-                          </Button>
-                          {c.active && record.primaryContactId !== c.id && (
-                            <Button
-                              className="secondary compact"
-                              onClick={() => {
-                                void commercialCall({
-                                  action: "links",
-                                  id: record.id,
-                                  expectedUpdatedAt: record.updatedAt,
-                                  primaryContactId: c.id,
-                                })
-                                  .then(refresh)
-                                  .catch((e) => setError(e.message));
-                              }}
-                            >
-                              Make primary
-                            </Button>
-                          )}
-                        </div>
-                      )}
-                  </li>
-                ))}
-              </ul>
-            )}
-            {view.contacts.length > 0 &&
-              ["customers", "suppliers"].includes(record.kind) && (
-                <a
-                  href={`/api/commercial?view=export-contacts&id=${encodeURIComponent(record.id)}`}
-                >
-                  Export contacts
-                </a>
-              )}
-          </section>}
-          {(["suppliers", "products"].includes(record.kind) || room) && (
-            <section>
-              <header className="commercial-head">
-                <h4>
-                  {record.kind === "leads"
-                    ? "Potential suppliers"
-                    : "Recorded supplier capabilities"}
-                </h4>
-                {writable && record.kind === "suppliers" && (
-                  <Button
-                    className="secondary compact"
-                    onClick={() => {
-                      setCap(null);
-                      setEditor("capability");
-                    }}
-                  >
-                    Add capability
-                  </Button>
-                )}
-              </header>
-              <p className="muted small">
-                Recorded capability does not establish current stock,
-                availability, price or an offer.
-              </p>
-              {!view.capabilities.length ? (
-                <p className="muted">
-                  No{" "}
-                  {record.kind === "leads"
-                    ? "candidate suppliers"
-                    : "supplier capabilities"}{" "}
-                  yet. Add recorded products to the supplier’s capabilities.
-                </p>
-              ) : (
-                <ul className="commercial-list">
-                  {view.capabilities.map((c) => (
-                    <li key={c.id}>
-                      <div>
-                        <strong>
-                          {c.supplier} · {c.product}
-                        </strong>
-                        <p>
-                          {[
-                            c.grade,
-                            c.originCountry,
-                            c.packaging,
-                            c.leadTime,
-                            c.active ? "Active" : "Inactive",
-                          ]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </p>
-                        {c.moq !== null && (
-                          <p>
-                            MOQ {c.moq} {c.moqUnit}
-                          </p>
-                        )}
-                        {c.notes && <p className="muted">{c.notes}</p>}
-                      </div>
-                      {writable && record.kind === "suppliers" && (
-                        <Button
-                          className="secondary compact"
-                          onClick={() => {
-                            setCap(c);
-                            setEditor("capability");
-                          }}
-                        >
-                          Edit capability
-                        </Button>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          )}
-          <section>
-            <h4>
-              {record.kind === "products"
-                ? "Enercore commercial activity"
-                : "Linked commercial records"}
-            </h4>
-            {!view.linked.length ? (
-              <p className="muted">{record.kind === "leads" ? "No quotation yet. Use Prepare quotation to start one." : "No linked commercial records yet. Link this company or product when recording an enquiry."}</p>
-            ) : (
-              <ul className="commercial-list">
-                {view.linked.map((r) => (
-                  <li key={r.id}>
-                    <Button className="record-link" onClick={() => open(r)}>
-                      {r.title} · {r.kind}
-                    </Button>
-                    <span>
-                      {r.status}
-                      {r.amount ? ` · ${money(r.amount, r.currency)}` : ""}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-          {!!view.deals.length && record.kind !== "leads" && (
-            <section>
-              <h4>Deals</h4>
-              <ul className="commercial-list">
-                {view.deals.map((d) => (
-                  <li key={d.id}>
-                    <Button
-                      className="record-link"
-                      onClick={() =>
-                        openReference({
-                          id: "",
-                          label: "Deal",
-                          target: {
-                            type: "record",
-                            kind: "leads",
-                            id: d.leadId,
-                          },
-                        })
-                      }
-                    >
-                      Open Deal Room · {d.id.slice(-8)}
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-          <section>
-            <h4>Meetings</h4>
-            {view.meetings.length ? (
-              <ul className="commercial-list">
-                {view.meetings.map((m) => (
-                  <li key={m.id}>
-                    <Button
-                      className="record-link"
-                      onClick={() =>
-                        openReference({
-                          id: "",
-                          label: m.title,
-                          target: { type: "meeting", id: m.id },
-                        })
-                      }
-                    >
-                      {m.title}
-                    </Button>
-                    <span>{m.status}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="muted">No linked meetings yet. Use Schedule meeting below to arrange one.</p>
-            )}
-          </section>
-          {record.kind === "customers" && (
-            <details>
-              <summary>Possible name matches · review separately</summary>
-              <p className="muted">
-                Name matches are suggestions, not confirmed history.
-              </p>
-              {view.legacy.map((r) => (
-                <div key={r.id}>
-                  <Button className="record-link" onClick={() => open(r)}>
-                    {r.title} · {r.kind}
-                  </Button>
-                  {canWrite(actor, r) &&
-                    ["leads", "quotations"].includes(r.kind) && (
-                      <Button
-                        className="secondary compact"
-                        onClick={() =>
-                          void commercialCall({
-                            action: "links",
-                            id: r.id,
-                            expectedUpdatedAt: r.updatedAt,
-                            customerId: record.id,
-                          })
-                            .then(refresh)
-                            .catch((e) => setError(e.message))
-                        }
-                      >
-                        Link to this customer
-                      </Button>
-                    )}
-                </div>
-              ))}
-              {!view.legacy.length && <p>No unlinked records with a matching name.</p>}
-            </details>
-          )}
-          <p className="muted small">Showing up to 200 records you can access. Possible name matches are shown separately from confirmed links.</p>
-          {["products", "leads"].includes(record.kind) && canProspect(actor) && <Button className="secondary" onClick={() => setProspecting(true)}>Find prospects for this product</Button>}
-          {["products","suppliers"].includes(record.kind) && <ExecutionHistory recordId={record.id} />}
-          {room && view.deal && <ExecutionPanel dealId={view.deal.id} onChanged={onChanged} />}
-          {room && view.deal && (
-            <AiPanel
-              feature="deal"
-              id={view.deal.id}
-              label="Brief this deal"
-              loadingLabel="Preparing deal brief"
-            />
-          )}
-        </>
-      )}
-      {prospecting && <Dialog title="Product prospecting" className="execution-editor" onClose={() => setProspecting(false)}><Prospecting actor={actor} initialCompany={record.company} initialBranch={record.branch} productId={record.kind === "products" ? record.id : record.productId || undefined} keywords={record.kind === "products" ? record.title : record.product} /></Dialog>}
-      {editor === "links" && (
-        <LinkEditor
-          record={record}
-          onClose={() => setEditor(null)}
-          onSaved={() => {
-            setEditor(null);
-            refresh();
-          }}
-        />
-      )}
+      {editor === "links" && <LinkEditor record={record} onClose={() => setEditor(null)} onSaved={done} />}
       {editor === "contact" && (
-        <ContactEditor
-          record={record}
-          contact={contact}
-          people={view?.contacts || []}
-          onClose={() => setEditor(null)}
-          onSaved={() => {
-            setEditor(null);
-            refresh();
-          }}
-        />
+        <ContactEditor record={record} contact={contact} people={view?.contacts || []} onClose={() => setEditor(null)} onSaved={done} />
       )}
-      {editor === "capability" && (
-        <CapabilityEditor
-          record={record}
-          capability={cap}
-          onClose={() => setEditor(null)}
-          onSaved={() => {
-            setEditor(null);
-            refresh();
-          }}
+      {editor === "capability" && <CapabilityEditor record={record} capability={cap} onClose={() => setEditor(null)} onSaved={done} />}
+    </>
+  );
+  return {
+    record,
+    actor,
+    view,
+    error,
+    loading,
+    busy,
+    writable,
+    refresh,
+    openDeal,
+    makePrimary,
+    linkToCustomer,
+    editContact,
+    editCapability,
+    reviewLinks: () => setEditor("links"),
+    canFindProspects: ["products", "leads"].includes(record.kind) && canProspect(actor),
+    findProspects: () => setProspecting(true),
+    editorsNode,
+  };
+}
+
+const companyKinds = ["customers", "suppliers"];
+
+/** Everyone the company works with, with the primary and the Lead's contact marked. */
+export function ContactsSection({ c, title = "Contacts", limit }: { c: Commercial; title?: string; limit?: number }) {
+  const { view, record, writable } = c;
+  if (!view) return null;
+  const company = companyKinds.includes(record.kind);
+  const contacts = [...view.contacts].sort(
+    (a, b) => Number(b.id === record.primaryContactId) - Number(a.id === record.primaryContactId),
+  );
+  const shown = limit ? contacts.slice(0, limit) : contacts;
+  return (
+    <Section
+      title={title}
+      actions={
+        writable && company ? (
+          <Button className="secondary compact" onClick={() => c.editContact(null)}>
+            Add contact
+          </Button>
+        ) : undefined
+      }
+    >
+      {!contacts.length ? (
+        <EmptyState
+          title="No contacts yet."
+          detail={
+            record.kind === "leads"
+              ? "Review relationships to select a customer and contact."
+              : "Add the people you work with at this company."
+          }
         />
+      ) : (
+        <ul className="exec-rows contact-rows">
+          {shown.map((p) => (
+            <li className="exec-row" key={p.id}>
+              <div className="exec-row-main">
+                <h4>
+                  {p.name}
+                  {record.primaryContactId === p.id && <span className="exec-tag is-accent">Primary</span>}
+                  {record.contactId === p.id && <span className="exec-tag is-accent">Selected for this lead</span>}
+                  {!p.active && <span className="exec-tag">Inactive</span>}
+                </h4>
+                <p className="exec-meta">{[p.jobTitle, p.role || "Contact"].filter(Boolean).join(" · ")}</p>
+                {(p.email || p.phone) && (
+                  <p className="exec-meta exec-contact-lines">
+                    {p.email && <a href={`mailto:${p.email}`}>{p.email}</a>}
+                    {p.phone && <a href={`tel:${p.phone.replace(/\s+/g, "")}`}>{p.phone}</a>}
+                  </p>
+                )}
+              </div>
+              {writable && company && (
+                <div className="exec-row-actions">
+                  <Button className="ghost compact" onClick={() => c.editContact(p)}>
+                    Edit contact
+                  </Button>
+                  {p.active && record.primaryContactId !== p.id && (
+                    <Button className="ghost compact" onClick={() => c.makePrimary(p)}>
+                      Make primary
+                    </Button>
+                  )}
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
       )}
-    </section>
+      {contacts.length > 0 && company && !limit && (
+        <a className="commercial-link" href={`/api/commercial?view=export-contacts&id=${encodeURIComponent(record.id)}`}>
+          Export contacts
+        </a>
+      )}
+    </Section>
   );
 }
-function LinkEditor({
+
+/** The one person to call, for a company summary. */
+export function PrimaryContact({ c }: { c: Commercial }) {
+  const { view, record } = c;
+  if (!view) return null;
+  const p =
+    view.contacts.find((x) => x.id === record.primaryContactId) ||
+    view.contacts.find((x) => x.id === record.contactId) ||
+    view.contacts.find((x) => x.active);
+  if (!p) return <p className="exec-empty">No contact yet.</p>;
+  return (
+    <div className="primary-contact">
+      <p className="primary-contact-name">
+        {p.name}
+        {record.primaryContactId === p.id ? <span className="exec-tag is-accent">Primary</span> : null}
+      </p>
+      <p className="exec-meta">{[p.jobTitle, p.role].filter(Boolean).join(" · ")}</p>
+      <p className="exec-meta exec-contact-lines">
+        {p.email && <a href={`mailto:${p.email}`}>{p.email}</a>}
+        {p.phone && <a href={`tel:${p.phone.replace(/\s+/g, "")}`}>{p.phone}</a>}
+      </p>
+    </div>
+  );
+}
+
+/** What a supplier can potentially supply — never an offer. */
+export function CapabilitiesSection({ c, collapsed = false }: { c: Commercial; collapsed?: boolean }) {
+  const { view, record, writable } = c;
+  if (!view) return null;
+  const rows = (
+    <ul className="exec-rows">
+      {view.capabilities.map((x) => (
+        <li className="exec-row" key={x.id}>
+          <div className="exec-row-main">
+            <h4>
+              {record.kind === "suppliers" ? x.product : record.kind === "products" ? x.supplier : `${x.supplier} · ${x.product}`}
+              {!x.active && <span className="exec-tag">Inactive</span>}
+            </h4>
+            <p className="exec-meta">
+              {[x.grade, x.originCountry, x.packaging, x.leadTime, x.moq !== null ? `MOQ ${x.moq} ${x.moqUnit}`.trim() : ""]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+            {x.notes && <p className="exec-note">{x.notes}</p>}
+          </div>
+          {writable && record.kind === "suppliers" && (
+            <div className="exec-row-actions">
+              <Button className="ghost compact" onClick={() => c.editCapability(x)}>
+                Edit capability
+              </Button>
+            </div>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+  if (collapsed)
+    return view.capabilities.length ? (
+      <details className="exec-disclosure">
+        <summary>Recorded supplier capabilities ({view.capabilities.length})</summary>
+        <p className="exec-caption">Recorded capability does not establish current stock, availability, price or an offer.</p>
+        {rows}
+      </details>
+    ) : null;
+  return (
+    <Section
+      title="Capabilities"
+      description="What a supplier can potentially supply. A capability is not stock, availability, a price or an offer."
+      actions={
+        writable && record.kind === "suppliers" ? (
+          <Button className="secondary compact" onClick={() => c.editCapability(null)}>
+            Add capability
+          </Button>
+        ) : undefined
+      }
+    >
+      {!view.capabilities.length ? (
+        <EmptyState
+          title={record.kind === "suppliers" ? "No capabilities recorded." : "No supplier has recorded this product yet."}
+          detail={record.kind === "suppliers" ? "Add the products this supplier can supply." : "Add the product to a supplier's capabilities on the Supplier record."}
+        />
+      ) : (
+        rows
+      )}
+    </Section>
+  );
+}
+
+const CLOSED = ["Won", "Lost", "Accepted", "Rejected", "Expired", "Cancelled", "Completed", "Delivered", "Paid"];
+
+/** Linked leads, quotations and orders — open ones first, then history. */
+export function LinkedRecordsSection({
+  c,
+  title,
+  only,
+  open: openOnly = false,
+  limit,
+  empty,
+}: {
+  c: Commercial;
+  title: string;
+  only?: string[];
+  open?: boolean;
+  limit?: number;
+  empty?: string;
+}) {
+  const { view } = c;
+  const [all, setAll] = useState(false);
+  if (!view) return null;
+  const rows = view.linked
+    .filter((r) => !only || only.includes(r.kind))
+    .filter((r) => !openOnly || !CLOSED.includes(r.status))
+    .sort((a, b) => Number(CLOSED.includes(a.status)) - Number(CLOSED.includes(b.status)) || b.updatedAt.localeCompare(a.updatedAt));
+  const shown = limit && !all ? rows.slice(0, limit) : rows;
+  return (
+    <Section title={title}>
+      {!rows.length ? (
+        <EmptyState title={empty || "Nothing linked yet."} />
+      ) : (
+        <ul className="exec-rows linked-rows">
+          {shown.map((r) => (
+            <li className="exec-row is-link" key={r.id}>
+              <div className="exec-row-main">
+                <Button className="record-link" onClick={() => openRecord(r)}>
+                  {r.title}
+                </Button>
+                <p className="exec-meta">{[noun(r.kind), r.product].filter(Boolean).join(" · ")}</p>
+              </div>
+              <div className="exec-row-end">
+                <StatusBadge status={r.status} size="sm" />
+                {!!r.amount && <span className="e-numeric exec-strong">{money(r.amount, r.currency)}</span>}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {limit && rows.length > limit && (
+        <Button className="ghost compact show-more" onClick={() => setAll(!all)}>
+          {all ? "Show fewer" : `View all ${rows.length}`}
+        </Button>
+      )}
+    </Section>
+  );
+}
+
+export function DealsSection({ c }: { c: Commercial }) {
+  const { view } = c;
+  if (!view || !view.deals.length) return null;
+  return (
+    <Section title="Deals">
+      <ul className="exec-rows">
+        {view.deals.map((d) => (
+          <li className="exec-row is-link" key={d.id}>
+            <div className="exec-row-main">
+              <Button
+                className="record-link"
+                onClick={() =>
+                  openReference({ id: "", label: "Deal", target: { type: "record", kind: "leads", id: d.leadId } })
+                }
+              >
+                Open Deal Room · {view.linked.find((r) => r.id === d.leadId)?.title || d.id.slice(-8)}
+              </Button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Section>
+  );
+}
+
+/** Meetings reached through related records; the record's own list is separate. */
+export function RelatedMeetingsSection({ c }: { c: Commercial }) {
+  const { view } = c;
+  if (!view || !view.meetings.length) return null;
+  return (
+    <Section title="Related meetings">
+      <ul className="exec-rows">
+        {view.meetings.map((m) => (
+          <li className="exec-row is-link" key={m.id}>
+            <div className="exec-row-main">
+              <Button
+                className="record-link"
+                onClick={() => openReference({ id: "", label: m.title, target: { type: "meeting", id: m.id } })}
+              >
+                {m.title}
+              </Button>
+            </div>
+            <div className="exec-row-end">
+              <StatusBadge status={m.status} size="sm" />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Section>
+  );
+}
+
+export function NameMatchesSection({ c }: { c: Commercial }) {
+  const { view, actor, record } = c;
+  if (!view || record.kind !== "customers") return null;
+  return (
+    <details className="exec-disclosure">
+      <summary>Possible name matches · review separately</summary>
+      <p className="exec-caption">Name matches are suggestions, not confirmed history.</p>
+      {view.legacy.length ? (
+        <ul className="exec-rows">
+          {view.legacy.map((r) => (
+            <li className="exec-row is-link" key={r.id}>
+              <div className="exec-row-main">
+                <Button className="record-link" onClick={() => openRecord(r)}>
+                  {r.title}
+                </Button>
+                <p className="exec-meta">{noun(r.kind)}</p>
+              </div>
+              {canWrite(actor, r) && ["leads", "quotations"].includes(r.kind) && (
+                <div className="exec-row-actions">
+                  <Button className="ghost compact" onClick={() => c.linkToCustomer(r)}>
+                    Link to this customer
+                  </Button>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="exec-empty">No unlinked records with a matching name.</p>
+      )}
+    </details>
+  );
+}
+
+export function CommercialFootnote() {
+  return (
+    <p className="exec-caption commercial-footnote">
+      Showing up to 200 records you can access. Possible name matches are shown separately from confirmed links.
+    </p>
+  );
+}
+
+export function LinkEditor({
   record,
   onClose,
   onSaved,
@@ -529,8 +502,7 @@ function LinkEditor({
   const [busy, setBusy] = useState(false);
   const changed = !!record.customerId && customerId !== record.customerId;
   return (
-    <Dialog className="commercial-editor" title="Review relationships" onClose={onClose}>
-      <h2>Review relationships</h2>
+    <Dialog variant="drawer" className="commercial-editor" title="Review relationships" description={record.title} onClose={onClose}>
       {["leads", "quotations"].includes(record.kind) ? (
         <>
           <CustomerSelection
@@ -601,7 +573,7 @@ function LinkEditor({
     </Dialog>
   );
 }
-function ContactEditor({
+export function ContactEditor({
   record,
   contact,
   people,
@@ -626,8 +598,7 @@ function ContactEditor({
       duplicateReasons({ email, phone }, c, false).length,
   );
   return (
-    <Dialog className="commercial-editor" title={contact ? "Edit contact" : "Add contact"} onClose={onClose}>
-      <h2>{contact ? "Edit contact" : "Add contact"}</h2>
+    <Dialog variant="drawer" className="commercial-editor" title={contact ? "Edit contact" : "Add contact"} description={record.title} onClose={onClose}>
       <form
         id={formId}
         onSubmit={async (e) => {
@@ -743,7 +714,7 @@ function ContactEditor({
     </Dialog>
   );
 }
-function CapabilityEditor({
+export function CapabilityEditor({
   record,
   capability: c,
   onClose,
@@ -760,11 +731,10 @@ function CapabilityEditor({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   return (
-    <Dialog className="commercial-editor" title="Supplier capability" onClose={onClose}>
-      <h2>Supplier capability</h2>
-      <p>
-        Record reviewed knowledge. This is not an offer or availability
-        confirmation.
+    <Dialog variant="drawer" className="commercial-editor" title="Supplier capability" description={record.title} onClose={onClose}>
+      <p className="exec-editor-intro">
+        Record reviewed knowledge of what this supplier can supply. This is not
+        an offer or availability confirmation.
       </p>
       <form
         id={formId}

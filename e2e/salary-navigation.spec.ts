@@ -12,7 +12,8 @@ test("salary components persist, total is derived, and legacy records survive ed
 
   // The stored total is derived from the two components, not typed separately.
   await page.getByRole("button", { name: /Salary Check Person/ }).first().click();
-  const detail = page.getByRole("dialog");
+  // A record opens as a page rather than a dialog.
+  const detail = page.locator(".record-workspace");
   await expect(detail).toContainText("Monthly total");
   await expect(detail).toContainText("9250.75");
   await expect(detail).toContainText("8000");
@@ -22,12 +23,13 @@ test("salary components persist, total is derived, and legacy records survive ed
   await detail.getByRole("button", { name: "Edit record", exact: true }).click();
   await page.getByRole("spinbutton", { name: "Allowance", exact: true }).fill("0");
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
-  // Saving returns to the record detail, which must already show the new total.
-  await expect(page.getByRole("dialog")).toContainText("Monthly total");
-  await expect(page.getByRole("dialog")).not.toContainText("9250.75");
+  // Saving returns to the record page, which must already show the new total.
+  await expect(page.getByRole("dialog")).toBeHidden();
+  await expect(detail).toContainText("Monthly total");
+  await expect(detail).not.toContainText("9250.75");
   await page.reload();
   await page.getByRole("button", { name: /Salary Check Person/ }).first().click();
-  const reopened = page.getByRole("dialog");
+  const reopened = page.locator(".record-workspace");
   await expect(reopened).toContainText("8000");
   // The old total must not linger once a component changes.
   await expect(reopened).not.toContainText("9250.75");

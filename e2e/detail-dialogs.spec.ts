@@ -42,9 +42,10 @@ for (const kind of [
       })
       .first()
       .click();
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
-    await expect(page.locator(".record-context .company-label")).toBeVisible();
+    // A record opens as a page (its own workspace), not a dialog.
+    const workspace = page.locator(".record-workspace");
+    await expect(workspace).toBeVisible();
+    await expect(workspace.locator(".rw-meta .company-label")).toBeVisible();
     await expect(
       page.getByText("No notes added yet.", { exact: true }),
     ).toHaveCount(0);
@@ -53,7 +54,8 @@ for (const kind of [
       animations: "disabled",
     });
     if (kind === "orders") {
-      expect((await dialog.boundingBox())!.height).toBeLessThan(550);
+      // The record's header stays compact: identity, status and actions.
+      expect((await workspace.locator(".rw-header").boundingBox())!.height).toBeLessThan(220);
       await expect(page.locator(".missing-record-fields")).toBeVisible();
       await page.locator(".missing-record-fields summary").click();
       await expect(page.locator(".missing-record-fields p")).toContainText(
@@ -73,14 +75,14 @@ for (const kind of [
       animations: "disabled",
     });
     expect(
-      await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth),
+      await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
     ).toBe(true);
-    const footer = await page.locator(".ui-dialog-footer").boundingBox();
-    expect(footer!.y + footer!.height).toBeLessThanOrEqual(844);
-    await page
-      .getByRole("button", { name: "Close dialog", exact: true })
-      .click();
-    await expect(dialog).toBeHidden();
+    // The record's actions are on screen without scrolling.
+    const actions = await workspace.locator(".rw-actions").boundingBox();
+    expect(actions!.y + actions!.height).toBeLessThanOrEqual(844);
+    expect(actions!.x + actions!.width).toBeLessThanOrEqual(391);
+    await page.getByRole("button", { name: /^Back to / }).click();
+    await expect(workspace).toBeHidden();
   });
 }
 

@@ -11,7 +11,8 @@ test("add and cancel a company expense, preserve invoice separation", async ({pa
   await expect(page.getByText("Expense entry",{exact:false})).toBeVisible();
   await page.getByRole("combobox",{name:"Update status"}).click();
   await page.getByRole("option",{name:"Cancelled",exact:true}).click();
-  await page.getByRole("button",{name:"Close",exact:true}).click();
+  // The entry opens as a page; Back returns to the cashbook.
+  await page.getByRole("button",{name:/^Back to /}).click();
   await expect(page.locator(".cashbook-summary")).not.toContainText("$125.50");
   await page.reload();
   await expect(page.locator(".cashbook-panel")).toContainText("Office supplies QA");

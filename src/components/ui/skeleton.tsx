@@ -89,19 +89,25 @@ export function SkeletonDashboard() {
   return (
     <SkeletonRegion label="Loading your dashboard">
       {/* The loaded executive layout, piece for piece: the KPI strip, then the
-          same e-exec-grid (attention | pipeline health), then Operations —
-          so nothing moves or reflows when the data lands. */}
+          same dash-grid — needs attention and what changed in the main
+          column, operations and pipeline health beside them — so nothing
+          moves or reflows when the data lands. */}
       <SkeletonKpiRow />
-      <div className="e-exec-grid">
-        <section className="panel skeleton-attention" aria-hidden="true">
-          <Skeleton w="30%" h={13} />
-          <div className="skeleton-stack">
-            {[0, 1, 2].map((i) => <SkeletonAttnRow key={i} />)}
-          </div>
-        </section>
-        <SkeletonPanel lines={4} />
+      <div className="dash-grid">
+        <div className="dash-main">
+          <section className="panel skeleton-attention" aria-hidden="true">
+            <Skeleton w="30%" h={13} />
+            <div className="skeleton-stack">
+              {[0, 1, 2].map((i) => <SkeletonAttnRow key={i} />)}
+            </div>
+          </section>
+          <SkeletonPanel lines={4} />
+        </div>
+        <div className="dash-side">
+          <SkeletonPanel lines={3} />
+          <SkeletonPanel lines={4} />
+        </div>
       </div>
-      <SkeletonPanel lines={2} />
     </SkeletonRegion>
   );
 }

@@ -20,8 +20,9 @@ import { isCashEntry, cashEntryError } from "@/lib/cashbook";
 import { mutateRecord, deletionReason } from "@/lib/record-mutations";
 import { BrandLogo } from "./brand";
 import DashboardInsights from "./dashboard-insights";
-import { QuotationDocument } from "./quotation-document";
+import { QuotationSummary, QuotationDocument } from "./quotation-document";
 import { Pagination, ListFilters, ListEmpty, SortHeader, usePagination } from "./pagination";
+import { emptyQuery, type ListQuery } from "@/lib/list-query";
 import {
   Button,
   Input,
@@ -29,7 +30,7 @@ import {
   Textarea,
   Field,
 } from "@/components/ui/controls";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   Activity,
   Pencil,
@@ -45,8 +46,6 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
-  Command,
-  Download,
   FileText,
   Globe2,
   LayoutDashboard,
@@ -61,11 +60,8 @@ import {
   ShieldCheck,
   Sparkles,
   AlertTriangle,
-  Phone,
-  Pin,
   Target,
   Truck,
-  UserPlus,
   Users,
   Wallet,
   X,
@@ -82,7 +78,6 @@ import {
   canRead,
   canWrite,
   canManageUsers,
-  companies,
   labels,
   localISO,
   money,
@@ -99,7 +94,6 @@ import {
 } from "@/lib/domain";
 import { makePreview } from "@/lib/fixtures";
 import { transition, addNote, recordPayment, canAssign } from "@/lib/workflow";
-import { RecordActivity } from "./record-tools";
 import Sidebar from "./sidebar";
 import { Dialog, DialogPresence, DialogActions } from "./ui/controls";
 import ThemeToggle from "./theme-toggle";
@@ -107,12 +101,14 @@ import MyRequests from "./my-requests";
 import { storedPreviewActor, previewActorKey } from "@/lib/fixtures";
 import { RECORDS_CHANGED } from "@/lib/proactive/client";
 import { Avatar } from "./avatar";
+import { useAvatar } from "@/lib/avatar-store";
 import RecordForm from "./record-form";
 import { canProspect } from "@/lib/execution/model";
 import Prospecting from "./commercial/prospecting";
-import CommercialPanel from "./commercial/commercial-panel";
-import { recordProfiles, detailFields } from "@/lib/record-profiles";
+import RecordWorkspace from "./record/record-workspace";
+import { recordProfiles } from "@/lib/record-profiles";
 import UserAdmin from "./user-admin";
+import { PageHeader } from "./ui/layout";
 import {
   ProfilePage,
   AppearancePage,
@@ -129,9 +125,8 @@ import { recentRecords, rememberRecord, pinnedIds, togglePin, resolveVisible } f
 import { NotificationsPage, NotificationToasts } from "./notification-center";
 import AssignDialog from "./assign-dialog";
 import MeetingLayer from "./meetings/meeting-layer";
-import RecordMeetings from "./meetings/record-meetings";
 import TodayMeetings from "./meetings/today-meetings";
-import { openPrejoin, useMeetingFlow } from "@/lib/meeting-client";
+import { openPrejoin } from "@/lib/meeting-client";
 import { installSessionRecovery } from "@/lib/session-client";
 import { useNotifications, claimAlert, showDesktop } from "@/lib/notifications-client";
 import { badgeCount, moduleForKind, titleWithCount, type NotificationView, type NotificationPreferences } from "@/lib/notification-types";
@@ -139,7 +134,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useCollabSummary } from "@/lib/collab-client";
 import { HubSkeleton } from "./collaboration/skeletons";
-import { CustomerCopilot, LeadCopilot, MyDaySuggestions } from "./ai/sales-copilot";
+import { MyDaySuggestions } from "./ai/sales-copilot";
 import { applySuggestion, type Suggestion } from "@/lib/ai/client";
 
 /** An AI task to start when a record opens. */
@@ -173,21 +168,21 @@ const icons: Record<Module, LucideIcon> = {
   settings: Settings2,
 };
 const subtitles: Record<Module, string> = {
-  overview: "A clear view of your business. A focused start to your day.",
-  leads: "Every conversation, connected to your next opportunity.",
-  quotations: "From first enquiry to a confident offer.",
-  orders: "A single handover from sales to operations.",
-  logistics: "Keep every shipment moving in the right direction.",
-  accounts: "Know what is due. Keep collections on track.",
-  customers: "Relationships that move your business forward.",
-  suppliers: "Company-specific supply partners, contacts and commercial terms.",
-  products: "Your products, grades and availability in one place.",
-  hr: "Take care of the people behind your business.",
-  marketing: "Turn the right attention into new opportunities.",
-  it: "Keep your team connected and productive.",
-  approvals: "The decisions waiting for your attention.",
-  activity: "A traceable history of what changed and when.",
-  settings: "Your company structure and access overview.",
+  overview: "What needs attention across your companies.",
+  leads: "Open opportunities by stage.",
+  quotations: "Quotations in draft, awaiting approval, sent and accepted.",
+  orders: "Confirmed orders handed over to operations.",
+  logistics: "Shipments in progress and expected arrivals.",
+  accounts: "Invoices, receipts and the cashbook.",
+  customers: "Companies you sell to, with their contacts and deals.",
+  suppliers: "Supply partners, what they can supply and their offers.",
+  products: "Products, grades and recorded availability.",
+  hr: "People and leave requests.",
+  marketing: "Campaigns and the enquiries they bring in.",
+  it: "Support tickets and requests.",
+  approvals: "Decisions waiting for you.",
+  activity: "What changed, when and by whom.",
+  settings: "Companies and access in your scope.",
 };
 const companyColors: Record<string, string> = {
   Petronik: "#169c88",
@@ -336,6 +331,11 @@ export default function Workspace({
   const [toast, setToast] = useState("");
   const [mobile, setMobile] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  // Record pages and the browser history: see openRecordPage below.
+  const dataRef = useRef<WorkspaceData>({ records: [], audit: [] });
+  const pendingRecord = useRef<string | null>(null);
+  const recordPushed = useRef(false);
+  const restoreOnClose = useRef(false);
   useEffect(() => {
     const syncLocation = () => {
       const params = workspaceParams(window.location.pathname, window.location.search);
@@ -370,11 +370,15 @@ export default function Workspace({
       const meetingsTab = params.get("view") === "collaboration" && params.get("tab") === "meetings";
       const meeting = meetingsTab ? params.get("meeting") : null;
       const report = meetingsTab && params.get("mview") === "report";
+      // An open record (?record=) is a page of its own and survives too.
+      const recordId = params.get("record");
       const suffix = conversation
         ? `?c=${encodeURIComponent(conversation)}${message ? `&m=${encodeURIComponent(message)}` : ""}`
         : meetingsTab
           ? `?tab=meetings${meeting ? `&meeting=${encodeURIComponent(meeting)}${report ? "&mview=report" : ""}` : ""}`
-          : "";
+          : recordId
+            ? `?record=${encodeURIComponent(recordId)}`
+            : "";
       window.history.replaceState(null, "", workspaceUrl(self ? "my-requests" : params.get("view") || requested || "overview", params.get("company") || "All companies") + suffix);
       setModule(
         requested && allowedModules(actor).includes(requested as Module)
@@ -382,7 +386,14 @@ export default function Workspace({
           : allowedModules(actor)[0] || "overview",
       );
       setForm(null);
-      setSelected(null);
+      // Back from a record returns to the page underneath it, as it was.
+      const known = recordId ? dataRef.current.records.find((r) => r.id === recordId && !r.deletedAt) : null;
+      if (recordId && !known) pendingRecord.current = recordId;
+      setSelected((current) => {
+        if (current && !recordId) restoreOnClose.current = true;
+        return known ?? null;
+      });
+      recordPushed.current = false;
       setMobile(false);
       setNotifications(false);
     };
@@ -446,25 +457,17 @@ export default function Workspace({
   useEffect(() => { if (form && !editing) createKey.current = crypto.randomUUID(); }, [form, editing]);
   const [quoteSource, setQuoteSource] = useState<RecordItem | null>(null);
   const [selected, setSelected] = useState<RecordItem | null>(null);
-  // The meeting screens sit above the workspace, but a record's detail is a
-  // modal that would leave them unreachable: opening a meeting (from a
-  // record, a notification or a call) closes it first.
-  // Leaving the meeting brings the record back, as it was.
-  const meetingPhase = useMeetingFlow().phase;
-  const recordBeforeMeeting = useRef<RecordItem | null>(null);
-  useEffect(() => {
-    if (meetingPhase !== "idle") {
-      setSelected((current) => {
-        if (current) recordBeforeMeeting.current = current;
-        return null;
-      });
-    } else if (recordBeforeMeeting.current) {
-      const back = recordBeforeMeeting.current;
-      recordBeforeMeeting.current = null;
-      setSelected(back);
-    }
-  }, [meetingPhase]);
+  // The meeting screens cover the workspace. A record is a page, not a modal,
+  // so it simply stays underneath — on the same tab and scroll — and is there
+  // again when the meeting is left.
   const [board, setBoard] = useState(true);
+  // The pipeline opens as a board; every other list opens as a table.
+  useEffect(() => setBoard(module === "leads"), [module]);
+  // One set of filters for a module's list, whichever layout shows it, so
+  // switching between cards and the table keeps the search.
+  const [listQuery, setListQuery] = useState<ListQuery>(emptyQuery);
+  useEffect(() => setListQuery(emptyQuery), [module]);
+  const sharedQuery = { query: listQuery, setQuery: setListQuery };
   // Dashboard period lives here so its control can sit beside the company filter.
   const [period, setPeriod] = useState("all");
   const [periodFrom, setPeriodFrom] = useState("");
@@ -473,7 +476,6 @@ export default function Workspace({
   const [notifications, setNotifications] = useState(false);
   const [busy, setBusy] = useState(false);
   const [hrTab, setHrTab] = useState<"people" | "leave">("people");
-  const searchRef = useRef<HTMLInputElement>(null);
   const permitted = allowedModules(actor);
   async function reload() {
     const response = await fetch("/api/records", { cache: "no-store" });
@@ -504,6 +506,16 @@ export default function Workspace({
       active = false;
     };
   }, [preview]);
+  // A layout effect, so a reloaded or linked record opens before the loaded
+  // list is ever painted: the list must not flash up and vanish again.
+  useLayoutEffect(() => {
+    dataRef.current = data;
+    const id = pendingRecord.current;
+    if (!loaded || !id) return;
+    pendingRecord.current = null;
+    const record = data.records.find((r) => r.id === id && !r.deletedAt);
+    if (record && canRead(actor, record)) setSelected(record);
+  }, [data, loaded, actor]);
   useEffect(() => {
     if (preview && loaded) {
       try {
@@ -562,6 +574,10 @@ export default function Workspace({
         if (e.defaultPrevented) return;
         setNotifications(false);
         setMobile(false);
+        const layered = document.querySelector('[role="dialog"], [data-radix-popper-content-wrapper]');
+        // A meeting covers the record; Escape belongs to the meeting then.
+        const inMeeting = !!document.documentElement.dataset.meeting;
+        if (selected && !typing && !layered && !inMeeting) closeRecordRef.current();
       }
     };
     window.addEventListener("keydown", fn);
@@ -747,6 +763,7 @@ export default function Workspace({
     showDesktop(n, prefs, () => void openNotification(n));
   }
   const inbox = useNotifications(!preview, (n, prefs) => void onNotification(n, prefs));
+  const photo = useAvatar(actor.id);
   // "(4) Enercore …" in the tab, from the unified unread count.
   const baseTitle = useRef("");
   useEffect(() => {
@@ -814,18 +831,81 @@ export default function Workspace({
         .toLowerCase()
         .includes(search.toLowerCase()),
   );
-  const results = search
-    ? records
-        .filter((r) =>
-          `${r.title} ${r.product} ${r.contact} ${r.id}`
-            .toLowerCase()
-            .includes(search.toLowerCase()),
-        )
-        .slice(0, 8)
-    : [];
   const selectedCurrent = selected
     ? data.records.find((r) => r.id === selected.id) || selected
     : null;
+  /**
+   * A record is a page: it has a URL (?record=), Back returns to the page it
+   * was opened from with its scroll position and focus, and the browser's
+   * Back button does the same thing.
+   */
+  const recordOpener = useRef<HTMLElement | null>(null);
+  const recordScroll = useRef(0);
+  const openedRecord = useRef<string | null>(null);
+  // Read on scroll, not when the record opens: by then the list is hidden and
+  // the browser has already clamped the position to the shorter record page.
+  const listScroll = useRef(0);
+  useEffect(() => {
+    const save = () => {
+      if (!openedRecord.current) listScroll.current = window.scrollY;
+    };
+    save();
+    window.addEventListener("scroll", save, { passive: true });
+    return () => window.removeEventListener("scroll", save);
+  }, []);
+  useLayoutEffect(() => {
+    const id = selected?.id ?? null;
+    if (id && !openedRecord.current) {
+      recordOpener.current = document.activeElement as HTMLElement | null;
+      recordScroll.current = listScroll.current;
+      window.scrollTo({ top: 0, behavior: "instant" });
+    } else if (id && id !== openedRecord.current) {
+      window.scrollTo({ top: 0, behavior: "instant" });
+    } else if (!id && openedRecord.current && restoreOnClose.current) {
+      const opener = recordOpener.current;
+      const y = recordScroll.current;
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: y, behavior: "instant" });
+        if (opener?.isConnected && opener.getClientRects().length) opener.focus({ preventScroll: true });
+      });
+    }
+    if (!id) restoreOnClose.current = false;
+    openedRecord.current = id;
+  }, [selected?.id]);
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const current = url.searchParams.get("record");
+    const id = selected?.id ?? null;
+    if (id === current) return;
+    if (id) {
+      url.searchParams.set("record", id);
+      if (current) window.history.replaceState(null, "", url);
+      else {
+        window.history.pushState(null, "", url);
+        recordPushed.current = true;
+      }
+    } else if (current) {
+      url.searchParams.delete("record");
+      window.history.replaceState(null, "", url);
+    }
+  }, [selected?.id]);
+  function closeRecord() {
+    restoreOnClose.current = true;
+    if (recordPushed.current && new URL(window.location.href).searchParams.get("record")) {
+      recordPushed.current = false;
+      window.history.back();
+    } else setSelected(null);
+  }
+  const closeRecordRef = useRef(closeRecord);
+  useEffect(() => {
+    closeRecordRef.current = closeRecord;
+  });
+  const reloadQuietly = useCallback(() => {
+    if (!preview) void reload().catch(() => {});
+    // reload only reads state setters; a stable identity keeps the record's
+    // commercial data from refetching on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preview]);
   // Remembering happens on open, not on render, so the list reflects what was
   // actually looked at.
   useEffect(() => {
@@ -1006,7 +1086,7 @@ export default function Workspace({
         await reload();
       }
       setForm(null);
-      setSelected(editing);
+      if (selected?.id === editing.id) setSelected(editing);
       setEditing(null);
       setToast("Changes saved.");
     } catch (error) {
@@ -1031,6 +1111,22 @@ export default function Workspace({
     } catch (error) { setMutationError(error instanceof Error ? error.message : "Unable to delete record."); }
     finally { setBusy(false); }
   }
+  // Board / cards versus list, shown in the list's own toolbar.
+  const viewToggle = (module === "leads" || cardModules.includes(module)) && (
+    <div className="segmented view-toggle" role="group" aria-label="Layout">
+      <Button
+        aria-label={module === "leads" ? "Board view" : "Card view"}
+        aria-pressed={board}
+        className={board ? "selected" : ""}
+        onClick={() => setBoard(true)}
+      >
+        <LayoutGrid size={16} />
+      </Button>
+      <Button aria-label="List view" aria-pressed={!board} className={!board ? "selected" : ""} onClick={() => setBoard(false)}>
+        <List size={16} />
+      </Button>
+    </div>
+  );
   return (
     <div className={`app-shell ${collapsed ? "is-collapsed" : ""}`}>
       <a className="skip-link" href="#main">
@@ -1063,34 +1159,41 @@ export default function Workspace({
             </Button>
             <nav className="breadcrumb" aria-label="Breadcrumb">
               <Button
-                className="breadcrumb-link"
+                className={`breadcrumb-link${selectedCurrent ? "" : " current"}`}
+                aria-current={selectedCurrent ? undefined : "page"}
                 onClick={() =>
-                  go(permitted.includes("overview") ? "overview" : permitted[0])
+                  selectedCurrent
+                    ? closeRecord()
+                    : selfService
+                      ? openSelfService()
+                      : view
+                        ? openView(view)
+                        : go(module)
                 }
               >
-                Workspace
-              </Button>{" "}
-              <ChevronRight size={13} />
-              <Button
-                className="breadcrumb-link current"
-                aria-current="page"
-                onClick={() =>
-                  selfService
-                    ? openSelfService()
-                    : view
-                      ? openView(view)
-                      : go(module)
-                }
-              >
-                {selfService
-                  ? "My requests"
-                  : view
-                    ? viewLabels[view]
-                    : labels[module]}
+                {selfService ? "My requests" : view ? viewLabels[view] : labels[module]}
               </Button>
+              {selectedCurrent && (
+                <>
+                  <ChevronRight size={13} aria-hidden="true" />
+                  <span className="breadcrumb-link current" aria-current="page" title={selectedCurrent.title}>
+                    {selectedCurrent.title}
+                  </span>
+                </>
+              )}
             </nav>
           </div>
           <div className="top-right">
+            {/* One way to find anything: records, pages and commands. */}
+            <Button
+              className="command-trigger top-search"
+              aria-label="Quick actions: find anything or run a command"
+              onClick={() => setCommandOpen(true)}
+            >
+              <Search size={15} aria-hidden="true" />
+              <span>Search or jump to…</span>
+              <kbd>⌘ K</kbd>
+            </Button>
             <BusinessClock />
             {/* Always reachable, on every screen, so creating a record is
                 never a navigation task. The shortcut is a convenience on top
@@ -1103,61 +1206,14 @@ export default function Workspace({
               <Plus size={17} aria-hidden="true" />
               <span className="quick-add-trigger-label">Quick add</span>
             </Button>
-            {!selfService && !view && (
-              <div className="global-search">
-                <Search size={16} />
-                <Input
-                  aria-label="Search workspace"
-                  ref={searchRef}
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search anything…"
-                />
-                {search && module === "overview" && (
-                  <div className="search-results">
-                    {results.length ? (
-                      results.map((r) => (
-                        <Button
-                          key={r.id}
-                          onClick={() => {
-                            setSelected(r);
-                            setSearch("");
-                          }}
-                        >
-                          <span>
-                            {r.title}
-                            <small>
-                              {r.kind} · {companyName(r.company)}
-                            </small>
-                          </span>
-                          <ArrowUpRight size={14} />
-                        </Button>
-                      ))
-                    ) : (
-                      <p>No matching records</p>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
             <span className="top-divider" />
-            <Button
-              className="command-trigger"
-              aria-label="Quick actions"
-              onClick={() => setCommandOpen(true)}
-            >
-              <Command size={16} />
-              <span>Quick actions</span>
-              <kbd>⌘ K</kbd>
-            </Button>
-            {canProspect(actor) && <Button className="secondary compact" aria-label="Open prospecting" onClick={() => openView("prospecting")}>Prospecting</Button>}
             <ThemeToggle />
             <Button
               className="icon-button notification-button"
               aria-label={inbox.unread ? `Open notifications, ${badgeCount(inbox.unread)} unread` : "Open notifications"}
               onClick={() => openView("notifications")}
             >
-              <Bell size={19} />
+              <Bell size={18} />
               {inbox.unread > 0 && (
                 <span className="notify-badge" aria-hidden="true">
                   {badgeCount(inbox.unread)}
@@ -1165,15 +1221,12 @@ export default function Workspace({
               )}
             </Button>
             <Button
-              className="avatar small-avatar profile-trigger"
+              className="profile-trigger"
               aria-label="My profile"
               onClick={() => openView("profile")}
             >
-              {actor.name
-                .split(" ")
-                .map((x) => x[0])
-                .slice(0, 2)
-                .join("")}
+              {/* The same picture (or initials) as the sidebar and profile. */}
+              <Avatar name={actor.name} image={photo} avatarId={actor.id} size={30} />
             </Button>
           </div>
         </header>
@@ -1191,9 +1244,39 @@ export default function Workspace({
         )}
         <main
           id="main"
-          className={`main-content page-enter${view === "collaboration" && !selfService ? " is-collaboration" : ""}`}
+          className={`main-content page-enter${view === "collaboration" && !selfService && !selectedCurrent ? " is-collaboration" : ""}${selectedCurrent ? " is-record" : ""}`}
           key={selfService ? "my-requests" : view || `${module}-${company}`}
         >
+          {/* An open record is a page of its own. The page it was opened from
+              stays mounted underneath — filters, scroll, answers and all — and
+              returns unchanged on Back. */}
+          {selectedCurrent && (
+            <RecordWorkspace
+              key={selectedCurrent.id}
+              record={selectedCurrent}
+              actor={actor}
+              busy={busy}
+              backLabel={selfService ? "My requests" : view ? viewLabels[view] : labels[module]}
+              onClose={closeRecord}
+              onEdit={() => { setMutationError(""); setEditing(selectedCurrent); setForm(selectedCurrent.kind); }}
+              onDelete={() => { setMutationError(""); setDeleting(selectedCurrent); }}
+              pinned={pins.includes(selectedCurrent.id)}
+              onPin={() => pin(selectedCurrent)}
+              onLog={() => setLogging(selectedCurrent)}
+              onUpdate={(s) => update(selectedCurrent, s)}
+              onAction={(action) => extraAction(selectedCurrent, action)}
+              onAssign={!preview && canAssign(actor, selectedCurrent) ? () => setAssigning(selectedCurrent) : undefined}
+              live={!preview}
+              onAiApply={applyAiSuggestion}
+              onAiChanged={reloadQuietly}
+              autoAi={autoAi?.id === selectedCurrent.id ? autoAi.task : undefined}
+              onQuote={() => {
+                setQuoteSource(selectedCurrent);
+                setForm("quotations");
+              }}
+            />
+          )}
+          <div className="page-under-record" hidden={!!selectedCurrent}>
           {selfService ? (
             <MyRequests actor={actor} preview={preview} />
           ) : view ? (
@@ -1253,40 +1336,8 @@ export default function Workspace({
             </>
           ) : (
             <>
-              <div className={`page-heading${module === "overview" && !executive ? " is-my-day" : ""}`}>
-                <div>
-                  {module === "overview" && executive && (
-                    <p className="welcome-message">
-                      Welcome back, {actor.name.split(" ")[0]}{" "}
-                      <span>— here’s your business at a glance.</span>
-                    </p>
-                  )}
-                  {/* On the employee home, My Day provides the heading, so the
-                      executive framing is omitted rather than stacked on top. */}
-                  {!(module === "overview" && !executive) && (
-                    <>
-                      <div className="eyebrow">
-                        {module === "overview"
-                          ? "PERFORMANCE & OPERATIONS"
-                          : "ENERCORE WORKSPACE"}
-                      </div>
-                      <h1>
-                        {module === "overview"
-                          ? company === "All companies"
-                            ? "Group dashboard"
-                            : `${companyName(company)} dashboard`
-                          : labels[module]}
-                      </h1>
-                      <p>
-                        {module === "overview"
-                          ? company === "All companies"
-                            ? "Consolidated view of your assigned companies."
-                            : `Performance and activity for ${companyName(company)}.`
-                          : subtitles[module]}
-                      </p>
-                    </>
-                  )}
-                </div>
+              {(() => {
+                const headingActions = (
                 <div className="heading-actions">
                   {module === "overview" && !selfService && !view && (
                     <Field className="company-switch period-switch">
@@ -1372,7 +1423,39 @@ export default function Workspace({
                       </Button>
                     )}
                 </div>
-              </div>
+                );
+                // On the employee home My Day supplies the heading, so only the
+                // controls remain rather than stacking two titles.
+                if (module === "overview" && !executive)
+                  return <div className="page-heading is-my-day"><div />{headingActions}</div>;
+                return (
+                  <PageHeader
+                    className="page-heading"
+                    kicker={module === "overview" ? `Welcome back, ${actor.name.split(" ")[0]}` : undefined}
+                    title={
+                      module === "overview"
+                        ? company === "All companies"
+                          ? "Group dashboard"
+                          : `${companyName(company)} dashboard`
+                        : labels[module]
+                    }
+                    description={
+                      module === "overview" ? (
+                        <>
+                          {company === "All companies"
+                            ? "Consolidated view of your assigned companies."
+                            : `Performance and activity for ${companyName(company)}.`}{" "}
+                          {/* Beside the time range it explains. */}
+                          <span className="dashboard-scope">Metrics and charts use record creation date. Daily focus remains current.</span>
+                        </>
+                      ) : (
+                        subtitles[module]
+                      )
+                    }
+                    actions={headingActions}
+                  />
+                );
+              })()}
               {error && (
                 <div className="error" role="alert">
                   {error}
@@ -1493,113 +1576,34 @@ export default function Workspace({
                 <Settings actor={actor} preview={preview} />
               ) : (
                 <>
-                  <div className="module-metrics">
-                    {[
-                      {
-                        label: "Total records",
-                        value: visible.length,
-                        icon: Box,
-                      },
-                      {
-                        label: "Needs attention",
-                        value: visible.filter((r) =>
-                          [
-                            "Pending Approval",
-                            "Overdue",
-                            "Delayed",
-                            "Open",
-                          ].includes(r.status),
-                        ).length,
-                        icon: Clock,
-                      },
-                      {
-                        label: "Companies",
-                        value: new Set(visible.map((r) => r.company)).size,
-                        icon: Building2,
-                      },
-                    ].map((s) => (
-                      <div className="mini-stat" key={s.label}>
-                        <s.icon size={18} />
-                        <span>{s.label}</span>
-                        <b>{s.value}</b>
-                      </div>
-                    ))}
-                  </div>
                   {module === "accounts" && <Cashbook records={records} actor={actor} company={company} onAdd={() => { setEditing(null); setForm("accounts"); }} onOpen={setSelected} />}
-                  <section className="panel records-panel">
-                    <div className="records-toolbar">
-                      <div className="toolbar-title">
-                        {module === "hr" ? (
-                          <div className="segmented">
-                            <Button
-                              className={hrTab === "people" ? "selected" : ""}
-                              onClick={() => {
-                                setHrTab("people");
-                                setFilter("All statuses");
-                              }}
-                            >
-                              People
-                            </Button>
-                            <Button
-                              className={hrTab === "leave" ? "selected" : ""}
-                              onClick={() => {
-                                setHrTab("leave");
-                                setFilter("All statuses");
-                              }}
-                            >
-                              Leave requests
-                            </Button>
-                          </div>
-                        ) : (
-                          <>
-                            <h2>
-                              {module === "leads"
-                                ? "Your opportunities"
-                                : module === "accounts" ? "Invoices" : labels[module]}
-                            </h2>
-                            <span className="count">{visible.length}</span>
-                          </>
-                        )}
-                      </div>
-                      <div className="toolbar-actions">
-                        {kanbanView && (
-                        <Field className="status-filter">
-                          <Filter size={14} />
-                          <Select
-                            aria-label="Filter by status"
-                            value={filter}
-                            onChange={(e) => setFilter(e.target.value)}
+                  <section className="records-panel" aria-label={`${module === "hr" ? (hrTab === "people" ? "People" : "Leave requests") : labels[module]} list`}>
+                    {module === "hr" && (
+                      <div className="list-tabs">
+                        <div className="segmented" role="group" aria-label="HR records">
+                          <Button
+                            className={hrTab === "people" ? "selected" : ""}
+                            aria-pressed={hrTab === "people"}
+                            onClick={() => {
+                              setHrTab("people");
+                              setFilter("All statuses");
+                            }}
                           >
-                            <option>All statuses</option>
-                            {stages[activeKind as Kind]?.map((s) => (
-                              <option key={s}>{s}</option>
-                            ))}
-                          </Select>
-                        </Field>
-                        )}
-                        {(module === "leads" ||
-                          cardModules.includes(module)) && (
-                          <div className="segmented">
-                            <Button
-                              aria-label={
-                                module === "leads" ? "Board view" : "Card view"
-                              }
-                              className={board ? "selected" : ""}
-                              onClick={() => setBoard(true)}
-                            >
-                              <LayoutGrid size={16} />
-                            </Button>
-                            <Button
-                              aria-label="List view"
-                              className={!board ? "selected" : ""}
-                              onClick={() => setBoard(false)}
-                            >
-                              <List size={16} />
-                            </Button>
-                          </div>
-                        )}
+                            People
+                          </Button>
+                          <Button
+                            className={hrTab === "leave" ? "selected" : ""}
+                            aria-pressed={hrTab === "leave"}
+                            onClick={() => {
+                              setHrTab("leave");
+                              setFilter("All statuses");
+                            }}
+                          >
+                            Leave requests
+                          </Button>
+                        </div>
                       </div>
-                    </div>
+                    )}
                     {visible.length === 0 ? (
                       <Empty
                         detail={
@@ -1609,6 +1613,20 @@ export default function Workspace({
                         }
                       />
                     ) : module === "leads" && board ? (
+                      <>
+                      <div className="list-query-controls kanban-controls" role="group" aria-label="Pipeline view">
+                        <Field className="status-filter">
+                          <Filter size={14} />
+                          <Select aria-label="Filter by status" value={filter} onChange={(e) => setFilter(e.target.value)}>
+                            <option>All statuses</option>
+                            {stages[activeKind as Kind]?.map((s) => (
+                              <option key={s}>{s}</option>
+                            ))}
+                          </Select>
+                        </Field>
+                        <span className="list-count">{visible.length} {visible.length === 1 ? "opportunity" : "opportunities"}</span>
+                        <div className="list-query-trailing">{viewToggle}</div>
+                      </div>
                       <div className="kanban">
                         {[
                           "New",
@@ -1685,10 +1703,11 @@ export default function Workspace({
                             </section>
                           ))}
                       </div>
+                      </>
                     ) : cardModules.includes(module) && board ? (
-                      <RecordCards records={visible} onSelect={setSelected} actor={actor} onEdit={r => { setMutationError(""); setEditing(r); setForm(r.kind); }} onDelete={r => { setMutationError(""); setDeleting(r); }} onLog={setLogging} onStatus={(r, status) => { void update(r, status).then(() => setPrompt({ record: r, status })); }} onImport={isImportable(module) ? () => setImporting(true) : undefined} />
+                      <RecordCards toolbar={viewToggle} shared={sharedQuery} records={visible} onSelect={setSelected} actor={actor} onEdit={r => { setMutationError(""); setEditing(r); setForm(r.kind); }} onDelete={r => { setMutationError(""); setDeleting(r); }} onLog={setLogging} onStatus={(r, status) => { void update(r, status).then(() => setPrompt({ record: r, status })); }} onImport={isImportable(module) ? () => setImporting(true) : undefined} />
                     ) : (
-                      <RecordTable records={visible} onSelect={setSelected} actor={actor} onEdit={r => { setMutationError(""); setEditing(r); setForm(r.kind); }} onDelete={r => { setMutationError(""); setDeleting(r); }} onLog={setLogging} onStatus={(r, status) => { void update(r, status).then(() => setPrompt({ record: r, status })); }} onImport={isImportable(module) ? () => setImporting(true) : undefined} />
+                      <RecordTable toolbar={viewToggle} shared={sharedQuery} records={visible} onSelect={setSelected} actor={actor} onEdit={r => { setMutationError(""); setEditing(r); setForm(r.kind); }} onDelete={r => { setMutationError(""); setDeleting(r); }} onLog={setLogging} onStatus={(r, status) => { void update(r, status).then(() => setPrompt({ record: r, status })); }} onImport={isImportable(module) ? () => setImporting(true) : undefined} />
                     )}
                   </section>
                   {["orders", "accounts", "logistics"].includes(module) && (
@@ -1707,6 +1726,7 @@ export default function Workspace({
               )}
             </>
           )}
+          </div>
         </main>
       </div>
       <DialogPresence>
@@ -1861,33 +1881,6 @@ export default function Workspace({
         )}
       </DialogPresence>
       <DialogPresence>
-        {selectedCurrent && (
-          <Detail
-            record={selectedCurrent}
-            actor={actor}
-            busy={busy}
-            onClose={() => setSelected(null)}
-            onEdit={() => { setMutationError(""); setEditing(selectedCurrent); setSelected(null); setForm(selectedCurrent.kind); }}
-            onDelete={() => { setMutationError(""); setDeleting(selectedCurrent); setSelected(null); }}
-            pinned={pins.includes(selectedCurrent.id)}
-            onPin={() => pin(selectedCurrent)}
-            onLog={() => setLogging(selectedCurrent)}
-            onUpdate={(s) => update(selectedCurrent, s)}
-            onAction={(action) => extraAction(selectedCurrent, action)}
-            onAssign={!preview && canAssign(actor, selectedCurrent) ? () => setAssigning(selectedCurrent) : undefined}
-            showMeetings={!preview}
-            onAiApply={applyAiSuggestion}
-            onAiChanged={() => void reload()}
-            autoAi={autoAi?.id === selectedCurrent.id ? autoAi.task : undefined}
-            onQuote={() => {
-              setQuoteSource(selectedCurrent);
-              setSelected(null);
-              setForm("quotations");
-            }}
-          />
-        )}
-      </DialogPresence>
-      <DialogPresence>
         {logging && (
           <LogActivity
             record={logging}
@@ -1925,7 +1918,7 @@ export default function Workspace({
           />
         )}
       </DialogPresence>
-      <DialogPresence>{deleting && <Dialog title="Delete record?" className="delete-record-dialog" onClose={() => { if (!busy) { setSelected(deleting); setDeleting(null); } }}>
+      <DialogPresence>{deleting && <Dialog title="Delete record?" className="delete-record-dialog" onClose={() => { if (!busy) setDeleting(null); }}>
         <p className="delete-record-name">{deleting.title}</p>
         <p className="muted">{companyName(deleting.company)} · {deleting.id}</p>
         <p>{deletionReason(deleting, data.records) || "This removes the record from the workspace. Its audit history is retained. It will not delete related records."}</p>
@@ -1934,7 +1927,7 @@ export default function Workspace({
             primary (danger) action on the right. When deletion is blocked
             there is nothing to confirm and the footer is just Close. */}
         <DialogActions
-          onCancel={() => { setSelected(deleting); setDeleting(null); }}
+          onCancel={() => setDeleting(null)}
           pending={busy}
           cancel={deletionReason(deleting, data.records) ? "Close" : "Cancel"}
           primary={
@@ -2003,8 +1996,6 @@ type RecordActionsProps = {
 
 /** Kinds where "I contacted them" is a real event. */
 const LOGGABLE = ["leads", "customers", "suppliers", "quotations", "orders"];
-/** Records a meeting can be about (see meeting-related.ts). */
-const MEETING_KINDS = ["leads", "customers", "suppliers", "quotations", "orders"];
 /** The next action, with its date kept as secondary detail. */
 function NextActionCell({ record }: { record: RecordItem }) {
   const action = nextAction(record);
@@ -2074,12 +2065,16 @@ function RecordCards({
   records,
   onSelect,
   onImport,
+  toolbar,
+  shared,
   ...actions
 }: {
   records: RecordItem[];
   onSelect: (r: RecordItem) => void;
+  toolbar?: React.ReactNode;
+  shared?: { query: ListQuery; setQuery: (query: ListQuery) => void };
 } & RecordActionsProps) {
-  const pagination = usePagination(records);
+  const pagination = usePagination(records, "", shared);
   return (
     <>
       <ListFilters
@@ -2088,6 +2083,7 @@ function RecordCards({
         exportCount={pagination.matched.length}
         onExport={() => exportRecords(pagination.matched as RecordItem[])}
         onImport={onImport}
+        trailing={toolbar}
       />
       <div className="record-grid">
         {pagination.items.map((r) => {
@@ -2153,12 +2149,18 @@ function RecordTable({
   records,
   onSelect,
   onImport,
+  toolbar,
+  shared,
   ...actions
 }: {
   records: RecordItem[];
   onSelect: (r: RecordItem) => void;
+  toolbar?: React.ReactNode;
+  shared?: { query: ListQuery; setQuery: (query: ListQuery) => void };
 } & RecordActionsProps) {
-  const pagination = usePagination(records);
+  const pagination = usePagination(records, "", shared);
+  // Money is a column only where the records carry money.
+  const valued = records.some((r) => ["leads", "quotations", "orders", "accounts", "products", "marketing"].includes(r.kind));
   return (
     <>
       <ListFilters
@@ -2168,6 +2170,7 @@ function RecordTable({
         exportCount={pagination.matched.length}
         onExport={() => exportRecords(pagination.matched as RecordItem[])}
         onImport={onImport}
+        trailing={toolbar}
       />
       {pagination.total > 0 && <div className="table-scroll">
         <table className="e-record-table">
@@ -2176,11 +2179,13 @@ function RecordTable({
               {/* Six columns, not eight. Company and product are secondary
                   detail and now sit under the name, which removes the
                   horizontal scroll without losing anything. */}
-              <SortHeader sortKey="name" query={pagination.query} setQuery={pagination.setQuery}>Record / Customer</SortHeader>
-              <SortHeader sortKey="status" query={pagination.query} setQuery={pagination.setQuery}>Status</SortHeader>
-              <SortHeader sortKey="owner" query={pagination.query} setQuery={pagination.setQuery}>Created by</SortHeader>
-              <SortHeader sortKey="due" query={pagination.query} setQuery={pagination.setQuery}>Next action</SortHeader>
-              <SortHeader sortKey="amount" query={pagination.query} setQuery={pagination.setQuery}>Value</SortHeader>
+              {/* Columns are sized by class, not position: Value is absent
+                  for kinds that carry no value. */}
+              <SortHeader className="e-col-record" sortKey="name" query={pagination.query} setQuery={pagination.setQuery}>Record / Customer</SortHeader>
+              <SortHeader className="e-col-status" sortKey="status" query={pagination.query} setQuery={pagination.setQuery}>Status</SortHeader>
+              <SortHeader className="e-col-owner" sortKey="owner" query={pagination.query} setQuery={pagination.setQuery}>Created by</SortHeader>
+              <SortHeader className="e-col-next" sortKey="due" query={pagination.query} setQuery={pagination.setQuery}>Next action</SortHeader>
+              {valued && <SortHeader className="e-col-value" sortKey="amount" query={pagination.query} setQuery={pagination.setQuery}>Value</SortHeader>}
               <th className="e-col-actions">Actions</th>
             </tr>
           </thead>
@@ -2207,7 +2212,7 @@ function RecordTable({
                     </span>
                   </Button>
                 </td>
-                <td><Badge status={r.status} /></td>
+                <td className="e-cell-status"><Badge status={r.status} /></td>
                 <td className="e-cell-owner">
                   {r.owner ? (
                     <span className="avatar-name"><Avatar name={r.owner} size={24} /><span title={r.owner}>{r.owner}</span></span>
@@ -2216,9 +2221,11 @@ function RecordTable({
                 {/* The derived next action says what to do as well as when,
                     so nobody opens a record to find out. */}
                 <td className="e-cell-next"><NextActionCell record={r} /></td>
-                <td className="amount e-numeric">
-                  {r.amount ? formatMoney(r.amount, r.currency) : "—"}
-                </td>
+                {valued && (
+                  <td className="amount e-numeric">
+                    {r.amount ? formatMoney(r.amount, r.currency) : "—"}
+                  </td>
+                )}
                 <td className="e-col-actions">
                   <RecordIcons record={r} onOpen={onSelect} {...actions} />
                 </td>
@@ -2270,6 +2277,12 @@ function Overview({
   busy?: boolean;
 }) {
   const [showAllAttention, setShowAllAttention] = useState(false);
+  const [analysisOpen, setAnalysisOpen] = useState(false);
+  useEffect(() => {
+    try {
+      setAnalysisOpen(localStorage.getItem("enercore-dashboard-analysis") === "open");
+    } catch {}
+  }, []);
   const custom = period === "custom";
   const reversed = custom && Boolean(from && to && from > to);
   const incomplete = custom && !(from && to);
@@ -2478,65 +2491,139 @@ function Overview({
 
   return (
     <>
-      {/* Figures first, then the exceptions beside the pipeline that produced
-          them. The brief's counts live inside the attention panel rather than
-          in a panel of their own: they describe the same list. */}
+      {/* The first screen answers four questions, in order: what needs me,
+          where we stand, what is waiting, what changed. Analysis follows,
+          one click away. */}
+      {scopeNote && (
+        <p className="dashboard-period-note" role={reversed ? "alert" : "status"}>
+          {scopeNote}
+        </p>
+      )}
       <KpiStrip records={records} onGo={(m) => go(m as Module)} />
-      <div className="e-exec-grid">
-      {/* The panel is always present so the grid never reflows around a
-          missing column; with nothing to act on it is a one-line all-clear. */}
-      {ranked.length === 0 ? (
-        <section className="panel attention-section command-attention attention-clear">
-          <div className="panel-heading">
-            <h2><AlertTriangle size={16} aria-hidden="true" /> Needs attention</h2>
-          </div>
-          <p className="attention-clear-note">
-            <CheckCircle2 size={16} aria-hidden="true" /> Nothing needs your attention right now.
-          </p>
-        </section>
-      ) : (
-        <section className="panel attention-section tone-urgent command-attention">
-          <div className="panel-heading">
-            <h2><AlertTriangle size={16} /> Needs attention</h2>
-            <span className="attention-count">{rankedAll.length}</span>
-          </div>
-          <MorningBrief actor={actor} records={allRecords} onGo={(m) => go(m as Module)} />
-          <ul className="attention-list">
-            {ranked.map((item) => (
-              <li key={item.id} className={`attention-row sev-${item.severity}`}>
-                <Button className="record-link attention-open" onClick={() => onSelect(item.record)}>
-                  <span className="my-day-title">{item.record.title}</span>
-                  <small>
-                    <span className={`attention-tag sev-${item.severity}`}>{item.category}</span>
-                    {item.reason}
-                    {item.record.amount ? ` · ${money(item.record.amount, item.record.currency)}` : ""}
-                    {item.record.owner ? ` · ${item.record.owner}` : ""}
-                  </small>
+      <div className="dash-grid">
+        <div className="dash-main">
+          {ranked.length === 0 ? (
+            <section className="panel attention-section command-attention attention-clear">
+              <div className="panel-heading">
+                <h2><AlertTriangle size={16} aria-hidden="true" /> Needs attention</h2>
+              </div>
+              <p className="attention-clear-note">
+                <CheckCircle2 size={16} aria-hidden="true" /> Nothing needs your attention right now.
+              </p>
+            </section>
+          ) : (
+            <section className="panel attention-section tone-urgent command-attention">
+              <div className="panel-heading">
+                <h2><AlertTriangle size={16} /> Needs attention</h2>
+                <span className="attention-count">{rankedAll.length}</span>
+              </div>
+              <MorningBrief actor={actor} records={allRecords} onGo={(m) => go(m as Module)} />
+              <ul className="attention-list">
+                {ranked.map((item) => (
+                  <li key={item.id} className={`attention-row sev-${item.severity}`}>
+                    <Button className="record-link attention-open" onClick={() => onSelect(item.record)}>
+                      <span className="my-day-title">{item.record.title}</span>
+                      <small>
+                        <span className={`attention-tag sev-${item.severity}`}>{item.category}</span>
+                        {item.reason}
+                        {item.record.amount ? ` · ${money(item.record.amount, item.record.currency)}` : ""}
+                        {item.record.owner ? ` · ${item.record.owner}` : ""}
+                      </small>
+                    </Button>
+                    {item.action === "follow-up" && (
+                      <FollowUpMenu busy={busy} onChoose={(date) => void onFollowUp(item.record, date)} />
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {rankedAll.length > ranked.length && (
+                <Button className="secondary compact attention-more" onClick={() => setShowAllAttention(true)}>
+                  View all {rankedAll.length} <ArrowRight size={14} />
                 </Button>
-                {item.action === "follow-up" && (
-                  <FollowUpMenu busy={busy} onChoose={(date) => void onFollowUp(item.record, date)} />
-                )}
-              </li>
+              )}
+            </section>
+          )}
+          <section className="panel dash-changes">
+            <div className="panel-heading">
+              <h2>What changed</h2>
+              <span className="muted small">Latest updates in your scope</span>
+            </div>
+            <ActivityList
+              paginated={false}
+              events={audit.filter((a) => company === "All companies" || a.company === company).slice(0, 6)}
+            />
+          </section>
+        </div>
+        <div className="dash-side">
+          <OperationsSnapshot records={records} onGo={(m) => go(m as Module)} />
+          <PipelineHealth records={records} onGo={(m) => go(m as Module)} />
+        <section className="panel dash-watch">
+          <div className="panel-heading">
+            <div>
+              <h2>
+                {allowed.includes("logistics")
+                  ? "Shipment watch"
+                  : "Recent records"}
+              </h2>
+              <p>
+                {allowed.includes("logistics")
+                  ? "Active deliveries and expected arrival dates."
+                  : "Your latest workspace updates."}
+              </p>
+            </div>
+            {allowed.includes("logistics") && (
+              <Button className="text-button" onClick={() => go("logistics")}>
+                View all <ArrowRight size={14} />
+              </Button>
+            )}
+          </div>
+          {(allowed.includes("logistics") ? shipments : records)
+            .slice(0, 4)
+            .map((r) => (
+              <Button
+                key={r.id}
+                className="shipment-row"
+                onClick={() => onSelect(r)}
+              >
+                <span className="shipment-symbol">
+                  <Truck size={19} />
+                </span>
+                <span>
+                  <b>{r.title}</b>
+                  <small>{r.detail || r.product || r.kind}</small>
+                </span>
+                <Badge status={r.status} />
+                <span className="shipment-date">
+                  <small>EXPECTED</small>
+                  {r.due}
+                </span>
+                <ArrowUpRight size={16} />
+              </Button>
             ))}
-          </ul>
-          {rankedAll.length > ranked.length && (
-            <Button className="secondary attention-more" onClick={() => setShowAllAttention(true)}>
-              View all {rankedAll.length} <ArrowRight size={14} />
-            </Button>
+          {!(allowed.includes("logistics") ? shipments : records).length && (
+            <Empty />
           )}
         </section>
-      )}
-        <PipelineHealth records={records} onGo={(m) => go(m as Module)} />
+        </div>
       </div>
-      <OperationsSnapshot records={records} onGo={(m) => go(m as Module)} />
-      <p className="dashboard-scope">
-        <span>Metrics and charts use record creation date. Daily focus remains current.</span>
-        {scopeNote && <span className="dashboard-period-note" role={reversed ? "alert" : "status"}>{scopeNote}</span>}
-      </p>
-      {commercial && (
-        <DashboardInsights actor={actor} records={records} onSelect={onSelect} />
-      )}
-      <div className="overview-grid">
+      <details
+        className="dash-analysis"
+        open={analysisOpen}
+        onToggle={(e) => {
+          const open = (e.currentTarget as HTMLDetailsElement).open;
+          setAnalysisOpen(open);
+          try {
+            localStorage.setItem("enercore-dashboard-analysis", open ? "open" : "closed");
+          } catch {}
+        }}
+      >
+        <summary>
+          <span className="dash-analysis-title">Business analysis</span>
+          <span className="muted small">Sales, demand and performance by company</span>
+        </summary>
+        {analysisOpen && commercial && <DashboardInsights actor={actor} records={records} onSelect={onSelect} />}
+        {analysisOpen && commercial && (
+          <div className="overview-grid">
         {commercial && <section className="panel performance">
           <div className="panel-heading">
             <div>
@@ -2628,73 +2715,9 @@ function Overview({
             </span>
           </div>
         </section>}
-      </div>
-      <div className="overview-lower">
-        <section className="panel">
-          <div className="panel-heading">
-            <div>
-              <h2>
-                {allowed.includes("logistics")
-                  ? "Shipment watch"
-                  : "Recent records"}
-              </h2>
-              <p>
-                {allowed.includes("logistics")
-                  ? "Active deliveries and expected arrival dates."
-                  : "Your latest workspace updates."}
-              </p>
-            </div>
-            {allowed.includes("logistics") && (
-              <Button className="text-button" onClick={() => go("logistics")}>
-                View all <ArrowRight size={14} />
-              </Button>
-            )}
           </div>
-          {(allowed.includes("logistics") ? shipments : records)
-            .slice(0, 3)
-            .map((r) => (
-              <Button
-                key={r.id}
-                className="shipment-row"
-                onClick={() => onSelect(r)}
-              >
-                <span className="shipment-symbol">
-                  <Truck size={19} />
-                </span>
-                <span>
-                  <b>{r.title}</b>
-                  <small>{r.detail || r.product || r.kind}</small>
-                </span>
-                <Badge status={r.status} />
-                <span className="shipment-date">
-                  <small>EXPECTED</small>
-                  {r.due}
-                </span>
-                <ArrowUpRight size={16} />
-              </Button>
-            ))}
-          {!(allowed.includes("logistics") ? shipments : records).length && (
-            <Empty />
-          )}
-        </section>
-        <section className="panel">
-          <div className="panel-heading">
-            <div>
-              <h2>Workspace activity</h2>
-              <p>Recent updates in your access scope.</p>
-            </div>
-            <Activity size={19} />
-          </div>
-          <ActivityList
-            paginated={false}
-            events={audit
-              .filter(
-                (a) => company === "All companies" || a.company === company,
-              )
-              .slice(0, 3)}
-          />
-        </section>
-      </div>
+        )}
+      </details>
     </>
   );
 }
@@ -2729,20 +2752,19 @@ function ActivityList({
   // table, which fills the available width and opens each entry.
   if (!paginated)
     return (
-      <div className="activity-list">
+      <ul className="change-list">
         {events.map((a) => (
-          <div className="activity-item" key={a.id}>
-            <span className="activity-dot" />
-            <div>
-              <b>{a.actor}</b>
-              <p>{a.action}</p>
-              <small>
-                {companyName(a.company)} · {activityWhen(a.at)}
-              </small>
-            </div>
-          </div>
+          <li key={a.id}>
+            <span className="change-text">
+              <b>{a.actor}</b> <span>{a.action}</span>
+            </span>
+            <small>
+              {companyName(a.company)} · {activityWhen(a.at)}
+            </small>
+          </li>
         ))}
-      </div>
+        {!events.length && <li className="change-empty">No recorded changes yet.</li>}
+      </ul>
     );
   return (
     <>
@@ -2843,227 +2865,6 @@ function ActivityList({
         )}
       </DialogPresence>
     </>
-  );
-}
-function Detail({
-  record: r,
-  actor,
-  busy,
-  onClose,
-  onUpdate,
-  onQuote,
-  onAction,
-  onEdit,
-  onDelete,
-  pinned,
-  onPin,
-  onLog,
-  onAssign,
-  onAiApply,
-  onAiChanged,
-  autoAi,
-  showMeetings = false,
-}: {
-  /** Applies one reviewed Enercore AI suggestion (records API), then refreshes. */
-  onAiApply: (s: Suggestion) => Promise<void>;
-  /** Refreshes after an AI-assisted change made elsewhere (e.g. a draft saved as a note). */
-  onAiChanged: () => void;
-  /** Opened from the Sales Copilot or command palette: start this AI task straight away. */
-  autoAi?: AutoAi;
-  record: RecordItem;
-  actor: Actor;
-  busy: boolean;
-  /** Live workspace only: the record's meetings (schedule, start, history). */
-  showMeetings?: boolean;
-  /** Present when this person may hand the record to someone else. */
-  onAssign?: () => void;
-  /** Pinning is a per-person convenience; it never touches the record. */
-  pinned: boolean;
-  onPin: () => void;
-  onLog: () => void;
-  onClose: () => void;
-  onUpdate: (s: string) => void;
-  onQuote: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-  onAction: (
-    action:
-      | { action: "note"; text: string; due?: string }
-      | { action: "payment"; amountCents: number; reference: string },
-  ) => Promise<void>;
-}) {
-  const writable = canWrite(actor, r);
-  const fields = detailFields(r);
-  const filledFields = fields.filter(
-    ([, value]) => value.trim() && value !== "—",
-  );
-  const missingFields = fields.filter(
-    ([, value]) => !value.trim() || value === "—",
-  );
-  return (
-    <Dialog title={r.title} onClose={onClose} className="record-detail-dialog">
-      <div className="record-context">
-        <span className="record-kind">
-          {isCashEntry(r) ? `${r.attributes?.entryType} entry` : recordProfiles[r.kind].noun} · {r.id}
-        </span>
-        <Company name={r.company} />
-        <Badge status={r.status} />
-        <span className="detail-quick-actions">
-          {onAssign && (
-            <Button className="secondary" disabled={busy} onClick={onAssign}>
-              <UserPlus size={15} aria-hidden="true" /> Assign
-            </Button>
-          )}
-          {LOGGABLE.includes(r.kind) && canWrite(actor, r) && (
-            <Button className="secondary" onClick={onLog}>
-              <Phone size={15} aria-hidden="true" /> Log activity
-            </Button>
-          )}
-          <Button
-            className="icon-button"
-            aria-pressed={pinned}
-            aria-label={pinned ? `Unpin ${r.title}` : `Pin ${r.title}`}
-            title={pinned ? "Remove from pinned" : "Pin for quick access"}
-            onClick={onPin}
-          >
-            <Pin size={16} className={pinned ? "is-pinned" : undefined} />
-          </Button>
-        </span>
-      </div>
-      {r.kind === "quotations" && <QuotationDocument record={r} />}
-      {r.kind !== "quotations" && (
-        <>
-          <div
-            className={`detail-grid ${filledFields.length <= 4 ? "detail-grid-small" : ""}`}
-          >
-            {filledFields.map(([k, v]) => (
-              <div key={k}>
-                <span>{k}</span>
-                <strong>{v}</strong>
-              </div>
-            ))}
-          </div>
-          {!!missingFields.length && (
-            <details className="missing-record-fields">
-              <summary>
-                {missingFields.length}{" "}
-                {missingFields.length === 1 ? "field" : "fields"} not provided
-              </summary>
-              <p>{missingFields.map(([label]) => label).join(" · ")}</p>
-            </details>
-          )}
-          {!!r.detail?.trim() && (
-            <div className="detail-notes">
-              <h3>{recordProfiles[r.kind].notes}</h3>
-              <p>{r.detail}</p>
-            </div>
-          )}
-          {!!r.lines?.length && (
-            <div className="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Product</th>
-                    <th>Qty</th>
-                    <th>Unit price</th>
-                    <th>Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {r.lines.map((l, i) => (
-                    <tr key={i}>
-                      <td>{l.description}</td>
-                      <td>{l.quantity}</td>
-                      <td>{money(l.unitPriceCents / 100, r.currency)}</td>
-                      <td>
-                        {money(
-                          Math.round(l.quantity * l.unitPriceCents) / 100,
-                          r.currency,
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          {(r.email || r.phone || r.destination) && (
-            <p className="muted small">
-              {[r.email, r.phone, r.destination].filter(Boolean).join(" · ")}
-            </p>
-          )}
-          {r.parentId && (
-            <p className="muted small">Connected record: {r.parentId}</p>
-          )}
-        </>
-      )}
-      {showMeetings && ["leads", "customers", "suppliers", "products"].includes(r.kind) && <CommercialPanel key={`commercial-${r.id}`} record={r} actor={actor} onChanged={onAiChanged} onQuote={onQuote} onLog={onLog} />}
-      {showMeetings && r.kind === "leads" && (
-        <LeadCopilot key={r.id} recordId={r.id} onLog={LOGGABLE.includes(r.kind) && writable ? onLog : undefined} auto={autoAi === "brief" || autoAi === "draft" ? autoAi : undefined} onApply={onAiApply} onChanged={onAiChanged} />
-      )}
-      {showMeetings && r.kind === "customers" && <CustomerCopilot key={r.id} recordId={r.id} title={r.title} canNote={writable} auto={autoAi === "customer-brief" ? "brief" : undefined} />}
-      {showMeetings && MEETING_KINDS.includes(r.kind) && !isCashEntry(r) && (
-        <RecordMeetings record={{ id: r.id, title: r.title, ownerId: r.ownerId, owner: r.owner }} meId={actor.id} canCreate={canRead(actor, r)} />
-      )}
-      {/* One footer for the whole detail view (see DialogActions):
-          destructive and contextual controls on the left, then Close, Edit
-          and the record's next workflow step — its primary — on the right. */}
-      <DialogActions
-        cancel="Close"
-        pending={busy}
-        start={
-          <>
-            {writable && (
-              <Button className="secondary delete-action" disabled={busy} onClick={onDelete}>
-                Delete
-              </Button>
-            )}
-            {(r.kind === "quotations" || (r.kind === "accounts" && !isCashEntry(r))) && (
-              <Button className="secondary print-button" onClick={() => window.print()}>
-                <Download size={16} aria-hidden="true" />
-                Print / Save PDF
-              </Button>
-            )}
-            {writable && (
-              <Field className="ui-inline-field">
-                Update status
-                <Select value={r.status} disabled={busy} onChange={(e) => onUpdate(e.target.value)}>
-                  {(isCashEntry(r) ? ["Recorded", "Cancelled"] : stages[r.kind]).map((s) => (
-                    <option key={s}>{s}</option>
-                  ))}
-                </Select>
-              </Field>
-            )}
-          </>
-        }
-        secondary={
-          writable && (r.kind === "leads" || (r.kind === "quotations" && r.status === "Approved")) && (
-            <Button className="secondary" disabled={busy} onClick={onEdit}>
-              Edit record
-            </Button>
-          )
-        }
-        primary={
-          !writable
-            ? undefined
-            : r.kind === "leads"
-              ? { label: "Create quotation", icon: <ArrowRight size={15} aria-hidden="true" />, onClick: onQuote }
-              : r.kind === "quotations" && r.status === "Approved"
-                ? { label: "Accept & create order", pending: busy, onClick: () => onUpdate("Accepted") }
-                : { label: "Edit record", disabled: busy, onClick: onEdit }
-        }
-      />
-      <RecordActivity
-        record={r}
-        writable={writable}
-        busy={busy}
-        onAction={onAction}
-      />
-      <p className="record-timestamps">
-        Created {new Date(r.createdAt).toLocaleDateString()} · Updated{" "}
-        {new Date(r.updatedAt).toLocaleDateString()}
-      </p>
-    </Dialog>
   );
 }
 function Settings({ actor, preview }: { actor: Actor; preview: boolean }) {

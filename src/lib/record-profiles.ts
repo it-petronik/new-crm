@@ -457,7 +457,7 @@ export function detailFields(record: RecordItem): [string, string][] {
             f.name === "amount"
               ? money(record.amount, record.currency)
               : f.name === "quantity"
-                ? `${record.quantity} ${record.kind === "leave" || record.kind === "marketing" ? profile.unit : record.unit}`.trim()
+                ? `${typeof record.quantity === "number" ? record.quantity.toLocaleString("en-US") : record.quantity} ${record.kind === "leave" || record.kind === "marketing" ? profile.unit : record.unit}`.trim()
                 : recordFieldValue(record, f.name) || "—",
           ] as [string, string],
       ),

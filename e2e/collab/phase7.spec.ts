@@ -516,10 +516,11 @@ for (const width of [320, 360, 390, 430, 768, 820, 1024, 1280, 1440])
         ),
       f.lead,
     );
-    await expect(
-      page.getByRole("region", { name: "Sourcing and commercial execution" }),
-    ).toBeVisible();
-    await page
+    // The Deal Room opens on its overview; offers live on the Sourcing tab.
+    const room = page.getByRole("region", { name: "Deal Room", exact: true });
+    await expect(room).toBeVisible();
+    await room.getByRole("tab", { name: /^Sourcing/ }).click();
+    await room
       .getByRole("button", { name: "Create scenario", exact: true })
       .click();
     await expect(
@@ -576,10 +577,10 @@ test("keyboard-friendly RFQ and offer editors save structured requests and immut
       ),
     f.lead,
   );
-  const panel = page.getByRole("region", {
-    name: "Sourcing and commercial execution",
-  });
+  // The Deal Room opens on its overview; sourcing has its own tab.
+  const panel = page.getByRole("region", { name: "Deal Room", exact: true });
   await expect(panel).toBeVisible();
+  await panel.getByRole("tab", { name: /^Sourcing/ }).click();
   await panel.getByRole("button", { name: "Prepare RFQ", exact: true }).click();
   let dialog = page.getByRole("dialog", {
     name: "Supplier request",
@@ -629,9 +630,8 @@ test("keyboard-friendly RFQ and offer editors save structured requests and immut
     .fill("490");
   await dialog.getByRole("button", { name: "Save offer", exact: true }).click();
   await expect(dialog).toHaveCount(0);
-  await expect(
-    panel.getByRole("heading", { name: /revision 2/ }),
-  ).toBeVisible();
+  // Offers are compared in a table; the revision is part of its row header.
+  await expect(panel.getByText(/· revision 2/)).toBeVisible();
   await panel
     .getByRole("button", { name: "Create scenario", exact: true })
     .click();
@@ -649,6 +649,8 @@ test("keyboard-friendly RFQ and offer editors save structured requests and immut
     .getByRole("button", { name: "Save scenario", exact: true })
     .click();
   await expect(dialog).toHaveCount(0);
+  // Scenarios and margin live on the Commercial tab.
+  await panel.getByRole("tab", { name: /^Commercial/ }).click();
   await panel
     .getByRole("button", { name: "Mark reviewed", exact: true })
     .click();

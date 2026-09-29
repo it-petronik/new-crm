@@ -76,7 +76,7 @@ export function MeetingActions({ conversation, meetings }: { conversation: Conve
         <Popover.Root open={menu} onOpenChange={setMenu}>
           <Popover.Trigger asChild>
             <Button className="secondary compact" aria-haspopup="menu" disabled={busy}>
-              <Video size={15} aria-hidden="true" /> Start meeting <ChevronDown size={14} aria-hidden="true" />
+              <Video size={15} aria-hidden="true" /> <span className="meet-start-label">Start meeting</span> <ChevronDown size={14} aria-hidden="true" />
             </Button>
           </Popover.Trigger>
           <Popover.Portal>

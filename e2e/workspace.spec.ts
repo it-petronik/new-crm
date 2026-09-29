@@ -179,7 +179,7 @@ test("accepting a quote creates connected operational records", async ({
     .click();
   await page.getByRole("button", { name: "Accept & create order" }).click();
   await expect(page.getByRole("combobox", { name: "Update status" })).toHaveText("Accepted");
-  await page.getByRole("button", { name: "Close dialog" }).click();
+  await page.getByRole("button", { name: /^Back to / }).click();
   await expect(page.locator(".toast[role=status]")).toContainText(
     "Order, shipment and draft invoice created",
   );

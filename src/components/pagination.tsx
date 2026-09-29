@@ -8,9 +8,13 @@ import { pageWindow } from "@/lib/pagination";
 export function usePagination<T extends { id: string }>(
   items: T[],
   filterKey = "",
+  /** Held by the parent when two views of one list share their filters. */
+  shared?: { query: ListQuery; setQuery: (query: ListQuery) => void },
 ) {
   const [size, setSize] = useState(10);
-  const [query, setQuery] = useState(emptyQuery);
+  const [ownQuery, setOwnQuery] = useState(emptyQuery);
+  const query = shared?.query ?? ownQuery;
+  const setQuery = shared?.setQuery ?? setOwnQuery;
   const source = items;
   // The complete permitted set is filtered and sorted before any page is cut.
   items = queryList(items, query);
@@ -64,8 +68,10 @@ type SortChoice = { value: string; label: string };
 
 export function ListFilters({
   query, setQuery, statuses, valued, mixedCurrency, sourceTotal, label = "results", sortable = true,
-  sortOptions, onExport, exportCount, onImport,
+  sortOptions, onExport, exportCount, onImport, trailing,
 }: ListControls & {
+  /** Page-level controls that belong on the same row, e.g. the view toggle. */
+  trailing?: ReactNode;
   sortable?: boolean;
   sortOptions?: SortChoice[];
   /** Exports the rows currently matching the filters; omitted where export makes no sense. */
@@ -108,15 +114,16 @@ export function ListFilters({
           title={exportCount ? `Export ${exportCount} ${label} as CSV` : `No ${label} to export`}
         >
           <Download size={15} aria-hidden="true" />
-          Export
+          <span className="list-query-label">Export</span>
         </Button>
       )}
       {onImport && (
         <Button className="secondary list-query-import" onClick={onImport}>
           <Upload size={15} aria-hidden="true" />
-          Import
+          <span className="list-query-label">Import</span>
         </Button>
       )}
+      {trailing && <div className="list-query-trailing">{trailing}</div>}
       <div id={panelId} className="list-query-panel" hidden={!open}>
         {statuses.length > 0 && <label>Status
           <Select aria-label={`${label} status`} value={query.status} onChange={e=>setQuery({...query,status:e.target.value})}><option value="all">All statuses</option>{statuses.map(s=><option key={s}>{s}</option>)}</Select>

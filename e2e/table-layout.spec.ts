@@ -143,9 +143,9 @@ test("record links and row actions respond to real clicks in every module", asyn
     await showList(page);
     const row = page.locator(".table-scroll tbody tr").first();
     await row.locator(".record-link").first().click();
-    await expect(page.getByRole("dialog"), `${label}: opening the record`).toBeVisible();
-    await page.getByRole("button", { name: "Close dialog" }).first().click();
-    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(page.locator(".record-workspace"), `${label}: opening the record`).toBeVisible();
+    await page.getByRole("button", { name: /^Back to / }).click();
+    await expect(page.locator(".record-workspace")).toHaveCount(0);
     const more = row.getByRole("button", { name: /^More actions for / });
     if (await more.count()) {
       await more.first().click();

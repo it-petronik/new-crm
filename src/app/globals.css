@@ -20,72 +20,8 @@
 @import "./notifications.css";
 @import "./meetings.css";
 @import "./ai.css";
-
-/* Phase 6: scoped stacked rows preserve every other table layout. */
-.commercial-panel { margin-block: 1.25rem; padding: 1rem; border: 1px solid var(--e-border); border-radius: 16px; min-width: 0; }
-.commercial-panel section { margin-block: 1rem; }
-.commercial-head, .commercial-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .6rem; justify-content: space-between; }
-.commercial-list, .commercial-results { list-style: none; padding: 0; margin: .75rem 0; }
-.commercial-list > li { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .75rem; padding: .8rem 0; border-bottom: 1px solid var(--e-border); }
-.commercial-list > li > div { min-width: 0; }
-.commercial-panel p, .commercial-panel strong, .commercial-list button { overflow-wrap: anywhere; }
-.commercial-selection, .commercial-picker { display: grid; gap: .6rem; min-width: 0; }
-.commercial-results button { width: 100%; justify-content: space-between; white-space: normal; text-align: left; }
-.commercial-skeleton { display: grid; gap: .6rem; padding: 1rem 0; }
-.commercial-skeleton span { height: 2.2rem; border-radius: 8px; background: var(--e-border); }
-.commercial-skeleton span:last-child { width: 65%; }
-@media (max-width: 600px) { .commercial-panel { padding: .75rem; } .commercial-list > li { align-items: flex-start; flex-direction: column; } .commercial-actions { justify-content: flex-start; } .commercial-panel .ui-button { min-height: 40px; max-width: 100%; } }
-@media (max-width: 560px) {
-  .record-detail-dialog:has(.commercial-panel) .ui-dialog-actions-end { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
-  .record-detail-dialog:has(.commercial-panel) .ui-dialog-actions-end:has(> .ui-button:nth-child(3)) .ui-primary-action { grid-column: 1 / -1; width: 100%; }
-}
-
-/* Keep the existing shared controls inside the narrow commercial detail footer. */
-.commercial-editor .dialog-body { overflow-wrap: anywhere; }
-.commercial-results small { flex-shrink: 0; margin-left: .5rem; }
-@media (max-width: 560px) {
-  .record-detail-dialog:has(.commercial-panel) .ui-dialog-actions-start { display: grid; grid-template-columns: auto minmax(0, 1fr); width: 100%; }
-  .record-detail-dialog:has(.commercial-panel) .ui-inline-field.ui-field { flex-direction: column; align-items: stretch; gap: 4px; }
-  .record-detail-dialog:has(.commercial-panel) .ui-inline-field .ui-select-trigger { min-width: 0; width: 100%; }
-}
-/* Long breadcrumbs must yield space to the fixed-size header controls. */
-.topbar .top-left { flex: 1 1 auto; }
-.topbar .top-right { flex-shrink: 0; }
-.topbar .breadcrumb { min-width: 0; }
-.topbar .breadcrumb-link { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-@media (max-width: 560px) {
-  .topbar .breadcrumb-link:first-child, .topbar .breadcrumb > svg { display: none; }
-}
-@media (max-width: 1280px) {
-  .topbar .business-clock { display: none; }
-}
-@media (max-width: 1100px) {
-  .topbar .global-search, .topbar .command-trigger span { display: none; }
-  .topbar .command-trigger { padding: 8px !important; }
-}
-
-/* Phase 7 uses the existing controls and adapts cards to narrow workspaces. */
-.execution-panel{margin-top:24px;padding-top:20px;border-top:1px solid var(--e-border)}
-.execution-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:14px;margin:12px 0 22px}
-.execution-card{border:1px solid var(--e-border);border-radius:14px;padding:18px;min-width:0;overflow-wrap:anywhere;background:var(--e-surface)}
-.execution-card h4,.execution-card h5{margin:0 0 8px}.execution-card p{margin:8px 0}.execution-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:14px 0}
-.execution-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.execution-fields>*{min-width:0}
-.execution-editor{width:min(820px,calc(100vw - 24px));max-width:calc(100vw - 24px)}
-.execution-cost{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:12px;margin:12px 0;border:1px solid var(--e-border);border-radius:10px}
-.execution-check{display:flex;align-items:flex-start;gap:10px;margin:16px 0}.execution-check input{margin-top:4px;flex:none}
-.execution-copy{white-space:pre-wrap;user-select:text}.execution-numbers{display:grid;grid-template-columns:1fr auto;gap:8px}.execution-numbers dd{margin:0;font-variant-numeric:tabular-nums}.execution-panel details{margin:14px 0}.execution-panel summary,.execution-editor summary{cursor:pointer;padding:8px 0}.execution-panel h4{margin-top:16px}
-.prospecting-workspace{max-width:1440px;margin:auto}.execution-panel button,.execution-editor button{white-space:normal}
-@media(max-width:540px){.execution-fields,.execution-cost{grid-template-columns:minmax(0,1fr)}.execution-card{padding:14px}.execution-editor{padding:16px}.execution-actions>.ui-button{max-width:100%}}
-
-/* Phase 7 visual review: readable financial values and bounded dialog content. */
-.execution-numbers { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); align-items: baseline; }
-.execution-numbers dd { text-align: right; overflow-wrap: anywhere; font-weight: 600; }
-.execution-editor .dialog-body { overflow-wrap: anywhere; }
-.execution-editor .dialog-heading { flex-shrink: 0; }
-@media(max-width:540px) {
-  .execution-numbers { grid-template-columns: minmax(0,1fr); gap: 4px; }
-  .execution-numbers dd { text-align: left; margin-bottom: 10px; font-size: 1rem; }
-}
+@import "./commercial.css";
+@import "./shell.css";
 
 /* Apollo workspace: scoped to the prospecting extension. */
 .apollo-workspace{min-width:0}.apollo-workspace button,.apollo-dialog button{white-space:normal;max-width:100%}.apollo-workspace p,.apollo-workspace h3,.apollo-dialog,.apollo-report{overflow-wrap:anywhere}.apollo-topbar,.apollo-mode,.apollo-tabs,.apollo-active-filters{display:flex;align-items:center;flex-wrap:wrap;gap:8px}.apollo-topbar{justify-content:space-between;margin:20px 0}.apollo-mode{margin:18px 0}.apollo-active-filters{margin-bottom:14px}.apollo-active-filters .ui-button{max-width:100%;text-align:left}.apollo-layout{display:grid;grid-template-columns:280px minmax(0,1fr);gap:22px;align-items:start}.apollo-filter-sidebar{padding:18px}.apollo-filter-form{display:grid;gap:14px}.apollo-filter-heading,.apollo-results-heading{display:flex;gap:12px;justify-content:space-between;align-items:center;flex-wrap:wrap}.apollo-filter-heading h3,.apollo-results-heading h2{margin:0}.apollo-filter-group{border-top:1px solid var(--e-border);padding-top:10px}.apollo-filter-group summary{cursor:pointer;font-weight:600;padding:6px 0 12px}.apollo-filter-group .ui-field{margin-bottom:14px}.apollo-filter-group small{display:block;line-height:1.5;margin-top:5px}.apollo-filter-form input,.apollo-filter-form .ui-select-trigger{min-width:0;width:100%}.apollo-filter-toggle{display:none!important}.apollo-results{min-width:0}.apollo-empty{padding:40px 24px;text-align:center;display:grid;justify-items:center;gap:10px}.apollo-empty p{max-width:520px}.apollo-context,.apollo-notice{padding:12px 16px;border:1px solid var(--e-border);border-radius:12px}.apollo-selection-toolbar{padding:16px;margin:16px 0}.apollo-selection-toolbar>.ui-field{max-width:350px}.apollo-result-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:14px}.apollo-result-card{padding:20px;display:flex;flex-direction:column;gap:10px;min-width:0}.apollo-result-card h3,.apollo-result-card p{margin:0}.apollo-result-card>.ui-button{margin-top:auto;align-self:flex-start}.apollo-card-select{display:flex;align-items:center;gap:12px;min-height:28px}.apollo-card-select input,.apollo-dialog input[type=checkbox]{width:18px;height:18px;flex:none;accent-color:var(--e-accent)}.apollo-badges{display:flex;flex-wrap:wrap;gap:6px}.apollo-badges span{font-size:11px;padding:5px 8px;border:1px solid var(--e-border);border-radius:8px;line-height:1.4}.apollo-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:22px 0;flex-wrap:wrap}.apollo-pagination span{font-size:12px}.apollo-saved-row{display:flex;align-items:center;flex-wrap:wrap;gap:14px;padding:16px 0;border-bottom:1px solid var(--e-border)}.apollo-saved-row>div{flex:1;min-width:180px}.apollo-stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr));gap:12px;margin:20px 0}.apollo-stat-grid p{margin:0;padding:14px;border:1px solid var(--e-border);border-radius:12px;font-size:12px}.apollo-stat-grid strong{display:block;font-size:25px;font-variant-numeric:tabular-nums;margin-top:6px}.apollo-credit-total{padding:20px;border:1px solid var(--e-border);border-radius:14px;background:var(--e-surface);display:grid;gap:8px;margin:18px 0}.apollo-credit-total strong{font-size:28px}.apollo-dialog progress{width:100%;height:14px}.apollo-progress-list{list-style:none;margin:16px 0;padding:0;max-height:260px;overflow:auto}.apollo-progress-list li{display:grid;gap:5px;padding:10px 0;border-bottom:1px solid var(--e-border)}.apollo-import-row{padding:10px 0;border-bottom:1px solid var(--e-border)}.apollo-import-row>.ui-field{margin:12px 0}.apollo-import-row summary{font-weight:600}.apollo-usage-list{display:grid;gap:12px}.apollo-usage-list article{display:grid;gap:5px;padding:16px;border:1px solid var(--e-border);border-radius:12px;font-size:13px}.apollo-report-tally{display:grid;gap:8px}.apollo-report-tally>div{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px;border-bottom:1px solid var(--e-border);padding:8px 0}.apollo-report-tally dd{font-variant-numeric:tabular-nums;margin:0}.apollo-report h3{margin-top:26px}.apollo-filter-sheet{max-width:520px}.apollo-workspace input:focus-visible,.apollo-dialog input:focus-visible,.apollo-workspace summary:focus-visible,.apollo-dialog summary:focus-visible{outline:2px solid var(--e-accent);outline-offset:3px}

@@ -19,7 +19,7 @@ async function signedIn(browser: Browser, key: string, viewport = { width: 1440,
 
 /** Each column of the executive grid: left edge and width. */
 const columns = (page: Page) =>
-  page.locator(".e-exec-grid").first().evaluate((grid) =>
+  page.locator(".dash-grid").first().evaluate((grid) =>
     [...grid.children].map((c) => {
       const r = c.getBoundingClientRect();
       return { left: Math.round(r.left), width: Math.round(r.width) };
@@ -50,7 +50,8 @@ test("dashboard: an empty Needs attention keeps the grid, and the skeleton has t
   // Attention stays in the first (wider) column, Pipeline health beside it…
   expect(loaded[0].left).toBeLessThan(loaded[1].left);
   expect(loaded[0].width).toBeGreaterThan(loaded[1].width);
-  await expect(page.locator(".e-exec-grid").first().locator(":scope > :nth-child(2)")).toContainText("Pipeline health");
+  await expect(page.locator(".dash-grid").first().locator(":scope > :nth-child(1)")).toContainText("Needs attention");
+  await expect(page.locator(".dash-grid").first().locator(":scope > :nth-child(2)")).toContainText("Pipeline health");
   // …exactly where the skeleton drew them.
   for (const i of [0, 1]) {
     expect(Math.abs(loaded[i].left - skeleton[i].left)).toBeLessThanOrEqual(1);

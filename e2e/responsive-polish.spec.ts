@@ -100,30 +100,24 @@ test("the sidebar fades only while more navigation lies below, and not at the bo
   await expect(nav).toHaveAttribute("data-fade-start", "false");
 });
 
-test("the welcome line is one naturally wrapping sentence at 390px", async ({ page }) => {
+test("the welcome line is one short line above the page title at 390px", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
-  const line = page.locator(".welcome-message");
+  // The greeting became a short kicker; the page title carries the scope.
+  const line = page.locator(".page-heading .ui-page-kicker");
   await expect(line).toBeVisible();
+  await expect(line).toHaveText(/^Welcome back, \S+$/);
   const layout = await line.evaluate((p) => {
-    const span = p.querySelector("span")!;
-    const first = span.getClientRects()[0];
+    const title = p.parentElement!.querySelector("h1")!.getBoundingClientRect();
     const box = p.getBoundingClientRect();
-    // The greeting's last character, measured as text like the span is.
-    const greeting = p.firstChild as Text;
-    const end = document.createRange();
-    end.setStart(greeting, greeting.length - 2);
-    end.setEnd(greeting, greeting.length - 1);
-    const greetingEnd = end.getClientRects()[0];
+    const lineHeight = parseFloat(getComputedStyle(p).lineHeight) || 18;
     return {
-      display: getComputedStyle(span).display,
-      // The muted half continues on the line where the greeting ends…
-      sameLine: Math.abs(first.top - greetingEnd.top) < 2,
-      // …rather than being pushed to the start of a line of its own.
-      startsLine: Math.abs(first.left - box.left) < 1,
+      oneLine: box.height < lineHeight * 1.5,
+      aboveTitle: box.bottom <= title.top + 1,
+      fits: box.right <= innerWidth,
     };
   });
-  expect(layout).toEqual({ display: "inline", sameLine: true, startsLine: false });
+  expect(layout).toEqual({ oneLine: true, aboveTitle: true, fits: true });
 });
 
 test("create forms name what they create; edit saves changes", async ({ page }) => {
@@ -148,8 +142,10 @@ test("create forms name what they create; edit saves changes", async ({ page }) 
     await expect(page.getByRole("dialog")).toHaveCount(0);
   }
   await page.goto("/?module=customers");
-  await page.locator(".record-card-shell, table tbody tr").first().click();
-  await page.getByRole("dialog").getByRole("button", { name: "Edit record" }).last().click();
+  // Lists open as a table; the record's name is its link.
+  await page.locator(".record-card-shell > button, .table-scroll .record-link").first().click();
+  // The record opens as a page; Edit is its header's primary action.
+  await page.locator(".rw-actions").getByRole("button", { name: "Edit record", exact: true }).click();
   // Visible text: the hidden pending label ("Saving…") is not part of it.
   await expect
     .poll(() => page.getByRole("dialog").locator(".ui-dialog-actions-end").getByRole("button").last().evaluate((b) => (b as HTMLElement).innerText.trim()))

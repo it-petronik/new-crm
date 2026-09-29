@@ -1,5 +1,4 @@
 "use client";
-import { useState } from "react";
 import { BrandLogo } from "./brand";
 import Link from "next/link";
 import * as Drawer from "@radix-ui/react-dialog";
@@ -8,7 +7,6 @@ import {
   Box,
   Building2,
   CalendarDays,
-  ChevronDown,
   FileText,
   Globe2,
   LayoutDashboard,
@@ -23,12 +21,10 @@ import {
   Wallet,
   X,
   Settings2,
-  Bell,
-  Sun,
-  Keyboard,
   MessagesSquare,
   Sparkles,
   ListChecks,
+  Radar,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -38,6 +34,7 @@ import {
   type Actor,
   type Module,
 } from "@/lib/domain";
+import { canProspect } from "@/lib/execution/model";
 import { type WorkspaceView } from "./workspace-pages";
 import { Button, Tooltip } from "./ui/controls";
 import { Avatar } from "./avatar";
@@ -70,14 +67,45 @@ const icons: Record<Module, LucideIcon> = {
   activity: Activity,
   settings: Settings2,
 };
-const groups: [string, Module[]][] = [
-  ["Workspace", ["overview", "leads", "quotations", "orders"]],
+/**
+ * Navigation by the work people do, not by database table. Every entry is
+ * still gated exactly as before: modules by allowedModules(), Enercore AI and
+ * the Action Center by the live workspace, Prospecting by canProspect(),
+ * Access control by canManageUsers().
+ */
+type NavEntry = { module: Module } | { view: WorkspaceView; label: string; icon: LucideIcon };
+const groups: [string, NavEntry[]][] = [
+  ["", [{ module: "overview" }, { view: "actions", label: "Action Center", icon: ListChecks }]],
   [
-    "Operations",
-    ["logistics", "accounts", "customers", "suppliers", "products"],
+    "Commercial",
+    [
+      { module: "leads" },
+      { module: "quotations" },
+      { module: "orders" },
+      { module: "customers" },
+      { module: "suppliers" },
+      { module: "products" },
+      { view: "prospecting", label: "Prospecting", icon: Radar },
+    ],
   ],
-  ["Organization", ["hr", "marketing", "it"]],
-  ["Manage", ["approvals", "activity", "settings"]],
+  [
+    "Work",
+    [
+      { view: "collaboration", label: "Collaboration", icon: MessagesSquare },
+      { view: "ai", label: "Enercore AI", icon: Sparkles },
+    ],
+  ],
+  ["Operations", [{ module: "logistics" }, { module: "accounts" }]],
+  ["Organization", [{ module: "hr" }, { module: "marketing" }, { module: "it" }]],
+  [
+    "Manage",
+    [
+      { module: "approvals" },
+      { module: "activity" },
+      { module: "settings" },
+      { view: "access", label: "Access control", icon: ShieldCheck },
+    ],
+  ],
 ];
 export default function Sidebar({
   actor,
@@ -111,7 +139,6 @@ export default function Sidebar({
   onView: (view: WorkspaceView) => void;
 }) {
   const photo = useAvatar(actor.id);
-  const [closed, setClosed] = useState<string[]>([]);
   const permitted = allowedModules(actor);
   function contents(isMobile: boolean) {
     const compact = collapsed && !isMobile;
@@ -147,188 +174,101 @@ export default function Sidebar({
           )}
         </div>
         <FadingNav aria-label={isMobile ? "Mobile navigation" : "Main navigation"}>
-          <Tooltip label="Collaboration" enabled={compact}>
-            <Button
-              className={`nav-item nav-item-collab ${module === "collaboration" ? "active" : ""}`}
-              onClick={() => onView("collaboration")}
-              aria-label={
-                collabUnread
-                  ? `Collaboration, ${collabUnread} unread${collabMentions ? `, ${collabMentions} mentions` : ""}`
-                  : "Collaboration"
-              }
-              aria-current={module === "collaboration" ? "page" : undefined}
-            >
-              <MessagesSquare size={19} />
-              <span className="nav-label">Collaboration</span>
-              {collabMentions > 0 ? (
-                <b className="nav-count nav-count-mention">@</b>
-              ) : collabUnread > 0 ? (
-                <b className="nav-count nav-count-subtle">{collabUnread > 99 ? "99+" : collabUnread}</b>
-              ) : null}
-            </Button>
-          </Tooltip>
-          {!preview && (
-            <Tooltip label="Enercore AI" enabled={compact}>
-              <Button
-                className={`nav-item ${module === "ai" ? "active" : ""}`}
-                onClick={() => onView("ai")}
-                aria-label="Enercore AI"
-                aria-current={module === "ai" ? "page" : undefined}
-              >
-                <Sparkles size={19} />
-                <span className="nav-label">Enercore AI</span>
-              </Button>
-            </Tooltip>
-          )}
-          {!preview && (
-            <Tooltip label="Action Center" enabled={compact}>
-              <Button
-                className={`nav-item ${module === "actions" ? "active" : ""}`}
-                onClick={() => onView("actions")}
-                aria-label="Action Center"
-                aria-current={module === "actions" ? "page" : undefined}
-              >
-                <ListChecks size={19} />
-                <span className="nav-label">Action Center</span>
-              </Button>
-            </Tooltip>
-          )}
-          {groups.map(([title, items]) => {
-            const visible = items.filter((m) => permitted.includes(m));
+          {groups.map(([title, entries]) => {
+            const visible = entries.filter((e) =>
+              "module" in e
+                ? permitted.includes(e.module)
+                : e.view === "prospecting"
+                  ? canProspect(actor)
+                  : e.view === "access"
+                    ? canManageUsers(actor)
+                    : e.view === "ai" || e.view === "actions"
+                      ? !preview
+                      : true,
+            );
             if (!visible.length) return null;
-            const open = compact || !closed.includes(title);
             return (
-              <section className="nav-group" key={title}>
-                <Button
-                  className="nav-group-toggle"
-                  tabIndex={compact ? -1 : 0}
-                  aria-hidden={compact}
-                  aria-expanded={open}
-                  aria-controls={`${isMobile ? "mobile" : "desktop"}-${title}`}
-                  onClick={() =>
-                    setClosed(
-                      closed.includes(title)
-                        ? closed.filter((t) => t !== title)
-                        : [...closed, title],
-                    )
+              <section className="nav-group" key={title || "home"} aria-label={title || undefined}>
+                {title && <h2 className="nav-group-title">{title}</h2>}
+                {visible.map((e) => {
+                  if ("module" in e) {
+                    const Icon = icons[e.module];
+                    return (
+                      <Tooltip key={e.module} label={labels[e.module]} enabled={compact}>
+                        <Button
+                          className={`nav-item ${module === e.module ? "active" : ""}`}
+                          onClick={() => onNavigate(e.module)}
+                          aria-label={labels[e.module]}
+                          aria-current={module === e.module ? "page" : undefined}
+                        >
+                          <Icon size={18} />
+                          <span className="nav-label">{labels[e.module]}</span>
+                          {e.module === "approvals" && approvalCount > 0 && <b className="nav-count">{approvalCount}</b>}
+                        </Button>
+                      </Tooltip>
+                    );
                   }
-                >
-                  <span>{title}</span>
-                  <ChevronDown size={12} className={open ? "" : "is-rotated"} />
-                </Button>
-                <div
-                  className={`nav-group-content ${open ? "is-expanded" : ""}`}
-                  id={`${isMobile ? "mobile" : "desktop"}-${title}`}
-                  inert={!open}
-                >
-                  <div>
-                    {visible.map((m) => {
-                      const Icon = icons[m];
-                      return (
-                        <Tooltip key={m} label={labels[m]} enabled={compact}>
-                          <Button
-                            className={`nav-item ${module === m ? "active" : ""}`}
-                            onClick={() => onNavigate(m)}
-                            aria-label={labels[m]}
-                            aria-current={module === m ? "page" : undefined}
-                          >
-                            <Icon size={19} />
-                            <span className="nav-label">{labels[m]}</span>
-                            {m === "approvals" && approvalCount > 0 && (
-                              <b className="nav-count">{approvalCount}</b>
-                            )}
-                          </Button>
-                        </Tooltip>
-                      );
-                    })}
-                  </div>
-                </div>
+                  const Icon = e.icon;
+                  const collab = e.view === "collaboration";
+                  return (
+                    <Tooltip key={e.view} label={e.label} enabled={compact}>
+                      <Button
+                        className={`nav-item ${collab ? "nav-item-collab " : ""}${module === e.view ? "active" : ""}`}
+                        onClick={() => onView(e.view)}
+                        aria-label={
+                          collab && collabUnread
+                            ? `Collaboration, ${collabUnread} unread${collabMentions ? `, ${collabMentions} mentions` : ""}`
+                            : e.label
+                        }
+                        aria-current={module === e.view ? "page" : undefined}
+                      >
+                        <Icon size={18} />
+                        <span className="nav-label">{e.label}</span>
+                        {collab &&
+                          (collabMentions > 0 ? (
+                            <b className="nav-count nav-count-mention">@</b>
+                          ) : collabUnread > 0 ? (
+                            <b className="nav-count nav-count-subtle">{collabUnread > 99 ? "99+" : collabUnread}</b>
+                          ) : null)}
+                      </Button>
+                    </Tooltip>
+                  );
+                })}
               </section>
             );
           })}
-          {canManageUsers(actor) && (
-            <Tooltip label="Access control" enabled={compact}>
-              <Button
-                className={`nav-item ${module === "access" ? "active" : ""}`}
-                onClick={() => onView("access")}
-                aria-label="Access control"
-              >
-                <ShieldCheck size={19} />
-                <span className="nav-label">Access control</span>
-              </Button>
-            </Tooltip>
-          )}
-          <Tooltip label="Notifications" enabled={compact}>
-            <Button
-              className={`nav-item ${module === "notifications" ? "active" : ""}`}
-              onClick={() => onView("notifications")}
-              aria-label="Notifications"
-            >
-              <Bell size={19} />
-              <span className="nav-label">Notifications</span>
-            </Button>
-          </Tooltip>
-          <Tooltip label="Shortcuts" enabled={compact}>
-            <Button
-              className={`nav-item ${module === "shortcuts" ? "active" : ""}`}
-              onClick={() => onView("shortcuts")}
-              aria-label="Shortcuts"
-            >
-              <Keyboard size={19} />
-              <span className="nav-label">Shortcuts</span>
-            </Button>
-          </Tooltip>
         </FadingNav>
         <div className="sidebar-bottom">
-          <Tooltip label="Appearance" enabled={compact}>
-            <Button
-              className={`nav-item ${module === "appearance" ? "active" : ""}`}
-              onClick={() => onView("appearance")}
-              aria-label="Appearance"
-            >
-              <Sun size={19} />
-              <span className="nav-label">Appearance</span>
-            </Button>
-          </Tooltip>
           <Tooltip label="My requests" enabled={compact}>
             <Link
               className={`nav-item ${module === "my-requests" ? "active" : ""}`}
               aria-current={module === "my-requests" ? "page" : undefined}
               href="/my-requests"
               onClick={(event) => {
-                if (
-                  onMyRequests &&
-                  !event.metaKey &&
-                  !event.ctrlKey &&
-                  !event.shiftKey &&
-                  !event.altKey
-                ) {
+                if (onMyRequests && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
                   event.preventDefault();
                   onMyRequests();
                 }
               }}
               aria-label="My requests"
             >
-              <CalendarDays size={19} />
+              <CalendarDays size={18} />
               <span className="nav-label">My requests</span>
             </Link>
           </Tooltip>
-          <div className="connection">
-            <i />
-            <span>{preview ? "Preview environment" : "Secure workspace"}</span>
-            <ShieldCheck size={13} />
-          </div>
           <Button
-            className="profile profile-link"
+            className={`profile profile-link ${module === "profile" ? "active" : ""}`}
             aria-label="Open my profile"
             onClick={() => onView("profile")}
           >
-            <Avatar name={actor.name} image={photo} size={36} />
+            <Avatar name={actor.name} image={photo} avatarId={actor.id} size={30} />
             <span className="profile-info">
               {actor.name}
-              <small>{actor.role}</small>
+              <small>
+                {actor.role}
+                {preview ? " · Preview" : ""}
+              </small>
             </span>
-            <span className="profile-presence" />
           </Button>
         </div>
       </>

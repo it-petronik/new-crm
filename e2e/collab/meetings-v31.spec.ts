@@ -430,6 +430,8 @@ test("lead detail: schedule (prefilled), start now, upcoming and past, report, l
   const m = await signedIn(browser, "mv2");
   await m.page.goto("/?module=leads");
   await m.page.locator(".lead-card", { hasText: name }).click();
+  // The lead opens as a page; its meetings are on the Activity tab.
+  await m.page.getByRole("article", { name }).getByRole("tab", { name: /^Activity/ }).click();
   const section = m.page.locator(".record-meetings");
   await expect(section.getByRole("heading", { name: "Meetings" })).toBeVisible();
   await expect(section).toContainText("No meetings about this yet.");
@@ -478,7 +480,7 @@ test("lead detail: schedule (prefilled), start now, upcoming and past, report, l
   await expect(m.page.getByRole("heading", { name: "The meeting has ended" })).toBeVisible({ timeout: 20_000 });
   // Back to Enercore: the lead is open again, where they left it.
   await m.page.getByRole("button", { name: "Back to Enercore" }).click();
-  await expect(m.page.getByRole("dialog", { name })).toBeVisible();
+  await expect(m.page.getByRole("article", { name })).toBeVisible();
 
   // Past, with its report, from the lead.
   const past = section.locator(".record-meetings-group", { hasText: "Past" });
@@ -568,6 +570,7 @@ test("Meetings, details, report, a lead's meetings and the guest page fit 390, 7
     expect(await fits(page), `report @${width}`).toBe(true);
     await page.goto("/?module=leads");
     await page.locator(".lead-card", { hasText: lead.title }).click();
+    await page.getByRole("article", { name: lead.title }).getByRole("tab", { name: /^Activity/ }).click();
     await expect(page.locator(".record-meetings")).toContainText("A rather long meeting title");
     expect(await fits(page), `lead @${width}`).toBe(true);
     await context.close();

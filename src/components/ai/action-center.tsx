@@ -286,23 +286,43 @@ function SignalCard({
   aiDrafts: boolean;
 }) {
   const sev = SEVERITY[s.severity];
+  const due = s.entity.due?.slice(0, 10);
+  const when = due
+    ? due
+    : s.section === "needs_action"
+      ? "Now"
+      : s.section === "today"
+        ? "Today"
+        : s.section === "waiting"
+          ? "Waiting"
+          : "When convenient";
   return (
     <li className={`action-card is-${s.severity}`} data-signal={s.type}>
-      {selectable && <input type="checkbox" className="action-card-check" aria-label={`Select ${s.entity.title}`} checked={selected} onChange={(e) => onSelect(e.target.checked)} />}
-      <div className="action-card-body">
-        <div className="action-card-top">
-          <span className={`badge ${sev.tone}`}>{sev.label}</span>
-          <small className="muted">{KIND_LABELS[s.entity.type] ?? s.entity.type}</small>
-          {s.entity.value && <small className="muted">· {s.entity.value}</small>}
-          {team && s.entity.owner && <small className="muted">· {s.entity.owner}</small>}
-        </div>
+      {selectable ? (
+        <input type="checkbox" className="action-card-check" aria-label={`Select ${s.entity.title}`} checked={selected} onChange={(e) => onSelect(e.target.checked)} />
+      ) : (
+        <span className="action-card-check" aria-hidden="true" />
+      )}
+      <div className="action-what">
         <Button className="record-link action-card-title" onClick={() => openEntity(s)}>
           {s.entity.title}
         </Button>
-        {!s.related?.length && <p className="action-card-label">{s.label}</p>}
-        {s.missing && s.missing.length > 0 && <p className="action-card-missing">Missing: {s.missing.map((m) => MISSING_LABELS[m as MissingField] ?? m).join(", ")}</p>}
-        {s.related && s.related.length > 0 && (
-          <p className="action-card-missing">
+        <small className="action-card-top">
+          {KIND_LABELS[s.entity.type] ?? s.entity.type}
+          {s.entity.value && ` · ${s.entity.value}`}
+          {team && s.entity.owner && ` · ${s.entity.owner}`}
+        </small>
+      </div>
+      <div className="action-why">
+        {/* Normal is the default; only a raised severity earns a badge. */}
+        {s.severity !== "normal" && <span className={`badge ${sev.tone}`}>{sev.label}</span>}
+        {!s.related?.length ? (
+          <span className="action-card-label">
+            {s.label}
+            {s.missing && s.missing.length > 0 && `: ${s.missing.map((m) => MISSING_LABELS[m as MissingField] ?? m).join(", ")}`}
+          </span>
+        ) : (
+          <span className="action-card-missing">
             Possible duplicate of{" "}
             {s.related.map((r) => (
               <Button key={r.id} className="record-link" onClick={() => openRecord(r.type, r.id)}>
@@ -310,55 +330,59 @@ function SignalCard({
               </Button>
             ))}
             {s.facts.evidence ? ` — ${s.facts.evidence}` : ""}
-          </p>
+          </span>
         )}
-        <div className="copilot-actions action-card-actions">
-          {s.actions.includes("complete_details") && (
-            <Button className="primary compact" onClick={() => onAct("complete", s)}>
-              <ListChecks size={14} aria-hidden="true" /> Complete details
-            </Button>
-          )}
-          {canFollowUp(s) && (
-            <Button className="secondary compact" onClick={() => onAct("follow_up", s)}>
-              <CalendarClock size={14} aria-hidden="true" /> Set follow-up
-            </Button>
-          )}
-          {aiDrafts && s.actions.includes("draft_follow_up") && (
-            <Button className="secondary compact" onClick={() => onAct("draft", s)}>
-              <MessageSquare size={14} aria-hidden="true" /> Draft message
-            </Button>
-          )}
-          {(s.actions.includes("review_meeting") || s.actions.includes("generate_meeting_report")) && (
-            <Button className="secondary compact" onClick={() => openMeeting(s.entity.id, "report")}>
-              <FileText size={14} aria-hidden="true" /> Review meeting
-            </Button>
-          )}
-          {s.actions.includes("review_approval") && (
-            <Button className="primary compact" onClick={() => openEntity(s)}>
-              Review approval
-            </Button>
-          )}
-          {s.actions.includes("review_duplicates") && (
-            <Button className="secondary compact" onClick={() => openEntity(s)}>
-              <Copy size={14} aria-hidden="true" /> Review
-            </Button>
-          )}
-          {!s.actions.some((a) => ["complete_details", "review_approval", "review_duplicates", "review_meeting"].includes(a)) && (
-            <Button className="secondary compact" onClick={() => openEntity(s)}>
-              Open <ArrowRight size={14} aria-hidden="true" />
-            </Button>
-          )}
-          {s.snoozable && (
-            <Button className="secondary compact" aria-label={`Snooze ${s.entity.title} until tomorrow`} onClick={() => onAct("snooze", s)}>
-              <AlarmClock size={14} aria-hidden="true" /> Tomorrow
-            </Button>
-          )}
-          {s.dismissible && (
-            <Button className="secondary compact" aria-label={`Dismiss ${s.entity.title}`} onClick={() => onAct("dismiss", s)}>
-              <EyeOff size={14} aria-hidden="true" /> Dismiss
-            </Button>
-          )}
-        </div>
+      </div>
+      <div className="action-when">
+        <span className="sr-only">When: </span>
+        {when}
+      </div>
+      <div className="copilot-actions action-card-actions">
+        {s.actions.includes("complete_details") && (
+          <Button className="secondary compact" onClick={() => onAct("complete", s)}>
+            <ListChecks size={14} aria-hidden="true" /> Complete details
+          </Button>
+        )}
+        {canFollowUp(s) && (
+          <Button className="secondary compact" onClick={() => onAct("follow_up", s)}>
+            <CalendarClock size={14} aria-hidden="true" /> Set follow-up
+          </Button>
+        )}
+        {aiDrafts && s.actions.includes("draft_follow_up") && (
+          <Button className="secondary compact" onClick={() => onAct("draft", s)}>
+            <MessageSquare size={14} aria-hidden="true" /> Draft message
+          </Button>
+        )}
+        {(s.actions.includes("review_meeting") || s.actions.includes("generate_meeting_report")) && (
+          <Button className="secondary compact" onClick={() => openMeeting(s.entity.id, "report")}>
+            <FileText size={14} aria-hidden="true" /> Review meeting
+          </Button>
+        )}
+        {s.actions.includes("review_approval") && (
+          <Button className="secondary compact" onClick={() => openEntity(s)}>
+            Review approval
+          </Button>
+        )}
+        {s.actions.includes("review_duplicates") && (
+          <Button className="secondary compact" onClick={() => openEntity(s)}>
+            <Copy size={14} aria-hidden="true" /> Review
+          </Button>
+        )}
+        {!s.actions.some((a) => ["complete_details", "review_approval", "review_duplicates", "review_meeting"].includes(a)) && (
+          <Button className="secondary compact" onClick={() => openEntity(s)}>
+            Open <ArrowRight size={14} aria-hidden="true" />
+          </Button>
+        )}
+        {s.snoozable && (
+          <Button className="ghost compact" aria-label={`Snooze ${s.entity.title} until tomorrow`} onClick={() => onAct("snooze", s)}>
+            <AlarmClock size={14} aria-hidden="true" /> Tomorrow
+          </Button>
+        )}
+        {s.dismissible && (
+          <Button className="ghost compact" aria-label={`Dismiss ${s.entity.title}`} onClick={() => onAct("dismiss", s)}>
+            <EyeOff size={14} aria-hidden="true" /> Dismiss
+          </Button>
+        )}
       </div>
     </li>
   );
@@ -523,9 +547,8 @@ export default function ActionCenter() {
     <div className="action-center">
       <div className="page-heading">
         <div>
-          <span className="eyebrow">WORKSPACE</span>
           <h1>Action Center</h1>
-          <p>What needs action now — from your CRM data, by Enercore&apos;s rules. Every change is previewed and saved as your own edit.</p>
+          <p>What needs action now, from your CRM data. Every change is previewed and saved as your own edit.</p>
         </div>
       </div>
 
@@ -577,9 +600,9 @@ export default function ActionCenter() {
       )}
 
       {aiReady && view && (
-        <section className="panel action-ai">
+        <div className="action-ai">
           <BriefButton kind="today" label="Brief me with AI" />
-        </section>
+        </div>
       )}
 
       {chosen.length > 0 && (
@@ -610,16 +633,26 @@ export default function ActionCenter() {
 
       {view && (
         <div className="action-sections">
-          {SECTIONS.map((sec) => {
+          {[...SECTIONS]
+            .sort((a, b) => Number(!view.sections[a.id].length) - Number(!view.sections[b.id].length))
+            .map((sec) => {
             const items = view.sections[sec.id];
             return (
-              <section key={sec.id} className="panel action-section" aria-labelledby={`action-${sec.id}`}>
+              <section key={sec.id} className={`panel action-section${items.length ? "" : " is-empty"}`} aria-labelledby={`action-${sec.id}`}>
                 <div className="panel-heading">
                   <h2 id={`action-${sec.id}`}>
                     {sec.title} <span className="muted">{items.length}</span>
                   </h2>
                 </div>
                 {items.length ? (
+                  <>
+                  <div className="action-columns" aria-hidden="true">
+                    <span />
+                    <span>What</span>
+                    <span>Why</span>
+                    <span>When</span>
+                    <span>Action</span>
+                  </div>
                   <ul className="action-list">
                     {items.map((s) => (
                       <SignalCard
@@ -641,6 +674,7 @@ export default function ActionCenter() {
                       />
                     ))}
                   </ul>
+                  </>
                 ) : (
                   <p className="muted small">{sec.empty}</p>
                 )}

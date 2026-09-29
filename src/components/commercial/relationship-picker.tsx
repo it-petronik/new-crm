@@ -281,6 +281,7 @@ export function CustomerSelection({
               ))}
               <Button
                 type="button"
+                className="secondary compact"
                 disabled={busy}
                 onClick={() => void create(true)}
               >
@@ -291,6 +292,7 @@ export function CustomerSelection({
           {!possible.length && (
             <Button
               type="button"
+              className="secondary compact"
               disabled={busy || name.trim().length < 2}
               onClick={() => void create()}
             >

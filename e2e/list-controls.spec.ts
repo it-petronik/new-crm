@@ -114,6 +114,8 @@ test("user administration has a single search control", async ({ page }) => {
 });
 
 test("selecting a donut segment does not move the page", async ({ page }) => {
+  // Business analysis is collapsed by default; open it as a person would.
+  await page.addInitScript(() => localStorage.setItem("enercore-dashboard-analysis", "open"));
   await page.goto("/workspace/all-companies/overview");
   const selection = page.locator(".chart-selection").first();
   await expect(selection).toBeVisible();

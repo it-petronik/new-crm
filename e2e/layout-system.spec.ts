@@ -43,13 +43,16 @@ test("the executive dashboard is laid out by the shared system", async ({ page }
   await expectInsideViewport(kpis, page, "KPI strip");
   await expectNotOverlapping(page.locator(".topbar"), kpis, "header and KPI strip");
 
-  // The two executive panels start on the same line and do not collide.
-  await expectAlignedTop(attention, pipeline, 2, "attention and pipeline");
+  // The main and side columns start on the same line and do not collide:
+  // attention leads the main column, operations leads the side column.
+  await expectAlignedTop(attention, operations, 2, "attention and operations");
+  await expectNotOverlapping(attention, operations, "attention and operations");
   await expectNotOverlapping(attention, pipeline, "attention and pipeline");
 
   // Sections are separated by the page rhythm, not by ad-hoc margins.
   await expectReasonableGap(kpis, attention, 8, 40, "KPI strip to attention");
-  await expectReasonableGap(attention, operations, 8, 40, "attention to operations");
+  await expectReasonableGap(attention, page.locator(".dash-changes"), 8, 40, "attention to what changed");
+  await expectReasonableGap(operations, pipeline, 8, 40, "operations to pipeline");
 
   // Equal gutters, and nothing wider than the container.
   await expectEqualGutters(page.locator(".main-content"), page);

@@ -1,0 +1,653 @@
+/* ===========================================================================
+   COMMERCIAL — Customer / Supplier / Product 360, the Deal Room and its
+   sourcing editors.
+
+   Replaces the Phase 6/7 one-line rules that used to sit at the end of
+   globals.css. The panel is a section of the record, not a card inside the
+   record dialog: sections are separated by space and a hairline, rows carry
+   one line of identity, one of context and their actions at the end, and a
+   card is used only for a unit people compare side by side (an offer, a
+   scenario). Every value comes from the semantic tokens in tokens.css and
+   form-system.css, so both themes follow automatically.
+   ======================================================================== */
+
+/* --- button sizes and the quiet variant (shared by every module) --------- */
+/* `compact` used to be a class name with no styles, so "compact" buttons were
+   as tall as primary actions. It now means the small control height. */
+.ui-button.compact:is(.primary, .secondary) {
+  min-height: var(--f-h-sm);
+  padding: 0 12px !important;
+  gap: 6px;
+}
+/* Tertiary: available, not loud. For the second and third action on a row. */
+.ui-button.ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--f-h-sm);
+  padding: 0 10px;
+  border-radius: var(--f-radius);
+  color: var(--e-text-secondary);
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.ui-button.ghost:hover:not(:disabled) {
+  background: var(--e-surface-sunken);
+  color: var(--e-text);
+}
+
+/* --- panel ---------------------------------------------------------------- */
+.commercial-panel {
+  display: grid;
+  gap: var(--e-6);
+  min-width: 0;
+  margin-top: var(--e-5);
+  padding-top: var(--e-5);
+  border-top: 1px solid var(--e-border);
+}
+.commercial-panel > * { min-width: 0; }
+.commercial-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--e-2) var(--e-3);
+}
+.commercial-panel > .commercial-head h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: var(--e-weight-strong);
+  letter-spacing: -0.01em;
+}
+.commercial-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--e-2);
+}
+.commercial-head-actions:empty { display: none; }
+.commercial-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: var(--e-3) var(--e-6);
+  margin: 0;
+  padding: var(--e-3) var(--e-4);
+  border-radius: var(--e-radius);
+  background: var(--e-surface-sunken);
+}
+.commercial-summary dt,
+.exec-progress dt {
+  font-size: var(--e-meta);
+  color: var(--e-text-secondary);
+}
+.commercial-summary dd {
+  margin: 2px 0 0;
+  font-weight: var(--e-weight-strong);
+  line-height: var(--e-leading-tight);
+  overflow-wrap: anywhere;
+}
+.commercial-section,
+.exec-section {
+  display: grid;
+  gap: var(--e-2);
+  min-width: 0;
+}
+:is(.commercial-section, .exec-section) h4 {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: var(--e-weight-strong);
+}
+.commercial-link {
+  justify-self: start;
+  font-size: var(--e-meta);
+  color: var(--e-accent-strong);
+}
+.commercial-footnote { margin: 0; }
+.commercial-skeleton,
+.exec-skeleton {
+  display: grid;
+  gap: var(--e-2);
+}
+.commercial-skeleton span,
+.exec-skeleton span {
+  height: 2.25rem;
+  border-radius: var(--e-radius-sm);
+  background: var(--e-surface-sunken);
+}
+.commercial-skeleton span:last-child,
+.exec-skeleton span:last-child { width: 65%; }
+
+/* --- text roles ----------------------------------------------------------- */
+.exec-caption {
+  margin: 0;
+  font-size: var(--e-meta);
+  line-height: var(--e-leading-body);
+  color: var(--e-text-secondary);
+}
+.exec-empty {
+  margin: 0;
+  font-size: var(--e-secondary);
+  color: var(--e-text-secondary);
+}
+.exec-meta {
+  margin: 0;
+  font-size: var(--e-secondary);
+  line-height: 1.45;
+  color: var(--e-text-secondary);
+  overflow-wrap: anywhere;
+}
+.exec-contact-lines {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--e-3);
+}
+.exec-note {
+  margin: 2px 0 0;
+  font-size: var(--e-meta);
+  color: var(--e-text-muted);
+  overflow-wrap: anywhere;
+}
+.exec-strong { color: var(--e-text); font-weight: var(--e-weight-strong); }
+.exec-revision {
+  font-size: var(--e-secondary);
+  font-weight: var(--e-weight-regular);
+  color: var(--e-text-secondary);
+}
+.exec-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: var(--e-radius-sm);
+  font-size: var(--e-caption);
+  font-weight: var(--e-weight-strong);
+  line-height: 1.6;
+  color: var(--e-text-secondary);
+  background: var(--e-neutral-soft);
+  white-space: nowrap;
+}
+.exec-tag.is-accent { color: var(--e-accent-strong); background: var(--e-accent-soft); }
+
+/* --- rows ----------------------------------------------------------------- */
+.exec-rows {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.exec-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--e-2) var(--e-4);
+  padding: var(--e-3) 0;
+  border-top: 1px solid var(--e-border-muted);
+}
+.exec-row:first-child { border-top: 0; padding-top: var(--e-1); }
+.exec-row.is-link { align-items: center; padding-block: var(--e-2); }
+.exec-row-main {
+  display: grid;
+  gap: 2px;
+  flex: 1 1 260px;
+  min-width: 0;
+}
+/* Inline flow, not flex: a long name wraps like text and the status or
+   revision follows it, instead of being stranded on a line of its own. */
+.exec-row-main :is(h4, h5),
+.exec-card :is(h4, h5) {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: var(--e-weight-strong);
+  line-height: var(--e-leading-tight);
+  overflow-wrap: anywhere;
+}
+:is(.exec-row-main, .exec-card) :is(h4, h5) > :is(.e-badge, .exec-tag) {
+  margin-left: 6px;
+  vertical-align: 1px;
+}
+.exec-row-main .record-link {
+  justify-self: start;
+  font-weight: var(--e-weight-medium);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.exec-row-actions,
+.exec-row-end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--e-1) var(--e-2);
+}
+.exec-row-end { flex: 0 0 auto; gap: var(--e-3); }
+.exec-row.is-potential .exec-row-main h5 { font-weight: var(--e-weight-medium); }
+
+/* --- disclosure ------------------------------------------------------------ */
+.exec-disclosure > summary {
+  width: fit-content;
+  min-height: 28px;
+  padding: 4px 0;
+  font-size: var(--e-meta);
+  font-weight: var(--e-weight-strong);
+  color: var(--e-text-secondary);
+  cursor: pointer;
+}
+.exec-disclosure > summary:hover { color: var(--e-text); }
+.exec-disclosure[open] > summary { margin-bottom: var(--e-1); }
+.exec-disclosure > p { margin: 4px 0; font-size: var(--e-secondary); overflow-wrap: anywhere; }
+.execution-copy {
+  margin: 4px 0;
+  padding: var(--e-2) 10px;
+  border-radius: var(--e-radius-sm);
+  background: var(--e-surface-sunken);
+  font-size: var(--e-secondary);
+  white-space: pre-wrap;
+  user-select: text;
+  overflow-wrap: anywhere;
+}
+
+/* --- Deal Room: sourcing and commercial review ----------------------------- */
+.execution-panel {
+  display: grid;
+  gap: var(--e-6);
+  min-width: 0;
+}
+.exec-head { display: grid; gap: 4px; }
+.exec-head h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: var(--e-weight-strong);
+  letter-spacing: -0.01em;
+}
+/* Where the deal stands, in one line: counts, not decoration. The 1px gaps
+   draw the dividers, and wrapped items stretch so no empty cell shows. */
+.exec-progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--e-border);
+  border-radius: var(--e-radius);
+  background: var(--e-border);
+}
+.exec-progress > div {
+  flex: 1 1 104px;
+  min-width: 0;
+  padding: var(--e-2) var(--e-3);
+  background: var(--e-surface);
+}
+.exec-progress dd {
+  margin: 2px 0 0;
+  font-size: 0.95rem;
+  font-weight: var(--e-weight-strong);
+  font-variant-numeric: tabular-nums;
+}
+.exec-progress small {
+  font-size: var(--e-meta);
+  font-weight: var(--e-weight-regular);
+  color: var(--e-text-secondary);
+}
+/* Comparison groups (one currency, unit and Incoterm each) sit side by side
+   when there is room; each is only as wide as its own offers. */
+.exec-offer-groups {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--e-3) var(--e-5);
+}
+.exec-group {
+  display: grid;
+  gap: var(--e-2);
+  flex: 1 1 min(100%, 300px);
+  min-width: 0;
+  max-width: calc(var(--offers, 1) * 452px);
+}
+.exec-group-label {
+  margin: 0;
+  font-size: var(--e-meta);
+  font-weight: var(--e-weight-strong);
+  color: var(--e-text-secondary);
+}
+/* Cards grow to a readable width and stop; a lone offer does not stretch
+   across a wide Deal Room, and two offers sit side by side to compare. */
+.exec-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 440px));
+  gap: var(--e-3);
+}
+.exec-card {
+  display: grid;
+  align-content: start;
+  gap: var(--e-3);
+  min-width: 0;
+  padding: var(--e-4);
+  border: 1px solid var(--e-border);
+  border-radius: var(--e-radius);
+  background: var(--e-surface);
+  overflow-wrap: anywhere;
+}
+.exec-card > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--e-2);
+}
+.exec-card .exec-row-actions {
+  padding-top: var(--e-3);
+  border-top: 1px solid var(--e-border-muted);
+}
+.exec-show-all { justify-self: start; }
+
+/* Supplier BUY price: the one number to compare across offers. */
+.exec-price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  margin: 0;
+}
+.exec-price-label {
+  font-size: var(--e-caption);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--e-text-secondary);
+}
+.exec-price strong {
+  font-size: 1.2rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.exec-price-unit { font-size: var(--e-secondary); color: var(--e-text-secondary); }
+.exec-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--e-2) var(--e-3);
+  margin: 0;
+}
+.exec-facts dt { font-size: var(--e-caption); color: var(--e-text-secondary); }
+.exec-facts dd { margin: 1px 0 0; font-size: var(--e-secondary); overflow-wrap: anywhere; }
+.exec-validity.tone-danger { color: var(--e-danger); font-weight: var(--e-weight-strong); }
+.exec-validity.tone-warning { color: var(--e-warning); font-weight: var(--e-weight-strong); }
+
+/* Scenario money: BUY → additional costs → landed → SELL → margin, separated
+   by rules and weight rather than coloured boxes. Amounts never wrap. */
+.exec-money {
+  display: grid;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.exec-money > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--e-3);
+  padding: 4px 0;
+}
+.exec-money dt {
+  min-width: 0;
+  font-size: var(--e-secondary);
+  color: var(--e-text-secondary);
+}
+.exec-money dd {
+  margin: 0;
+  font-size: var(--e-secondary);
+  text-align: right;
+  white-space: nowrap;
+}
+.exec-money .is-cost dt { padding-left: var(--e-3); text-transform: capitalize; }
+.exec-money .is-total {
+  margin-top: 2px;
+  padding-top: 7px;
+  border-top: 1px solid var(--e-border-muted);
+}
+.exec-money :is(.is-total, .is-margin) dt { color: var(--e-text); font-weight: var(--e-weight-strong); }
+.exec-money .is-total dd { color: var(--e-text); font-weight: 650; }
+.exec-money .is-margin {
+  margin-top: 2px;
+  padding-top: var(--e-2);
+  border-top: 1px solid var(--e-border);
+}
+.exec-money .is-margin dd {
+  display: grid;
+  justify-items: end;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+.exec-margin-percent {
+  font-size: var(--e-meta);
+  font-weight: var(--e-weight-strong);
+  color: var(--e-text-secondary);
+}
+/* The label itself says "Negative margin"; the colour only reinforces it. */
+.exec-money .is-negative :is(dt, dd, .exec-margin-percent) { color: var(--e-danger); }
+.exec-fx {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: var(--e-radius-sm);
+  background: var(--e-surface-sunken);
+  font-size: var(--e-meta);
+  color: var(--e-text-secondary);
+}
+.exec-fx > span:first-child,
+.exec-fx .e-numeric { color: var(--e-text); font-weight: var(--e-weight-strong); }
+.exec-fx .e-numeric { font-weight: var(--e-weight-medium); }
+
+/* --- the Deal Room is a primary screen: give it room on desktop ----------- */
+@media screen and (min-width: 900px) {
+  .modal.ui-dialog.record-detail-dialog:has(.execution-panel):not(:has(.reference-document)) {
+    width: min(1180px, calc(100vw - 48px));
+  }
+}
+.record-reference { user-select: all; overflow-wrap: anywhere; }
+
+/* --- sourcing editors (RFQ, offer, scenario) ------------------------------- */
+@media screen {
+  .modal.ui-dialog.execution-editor:not(:has(.command-list)) {
+    width: min(820px, calc(100vw - 32px));
+  }
+}
+.execution-editor .dialog-body { overflow-wrap: anywhere; }
+.execution-editor .dialog-heading { flex-shrink: 0; }
+.exec-editor-intro {
+  margin: 0 0 var(--e-4);
+  font-size: var(--e-secondary);
+  color: var(--e-text-secondary);
+}
+.exec-editor-section {
+  margin: var(--e-6) 0 4px;
+  font-size: 0.875rem;
+  font-weight: var(--e-weight-strong);
+}
+.execution-editor form > .ui-field,
+.execution-editor form > details { margin-top: var(--f-field-gap); }
+.exec-cost-table { display: grid; gap: var(--e-2); margin: var(--e-3) 0; }
+.exec-cost-head,
+.exec-cost-table > .execution-cost {
+  display: grid;
+  grid-template-columns: 7.5rem repeat(3, minmax(0, 1fr));
+  align-items: center;
+  gap: var(--e-3);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.exec-cost-head span {
+  font-size: var(--e-caption);
+  font-weight: var(--e-weight-strong);
+  color: var(--e-text-secondary);
+}
+/* A floated legend is an ordinary grid item, so the row lines up. */
+.exec-cost-table > .execution-cost > legend {
+  float: left;
+  padding: 0;
+  font-size: var(--e-secondary);
+  font-weight: var(--e-weight-medium);
+  text-transform: capitalize;
+}
+/* The column headings name each control; the full label stays for assistive
+   technology (e.g. "freight amount"). */
+.exec-cost-table .ui-field-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.exec-preview {
+  margin: var(--e-4) 0 0;
+  padding: var(--e-3) var(--e-4);
+  border: 1px solid var(--e-border);
+  border-radius: var(--e-radius);
+}
+
+/* --- shared with the Apollo dialogs ---------------------------------------- */
+.execution-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--f-field-gap) var(--e-4);
+}
+.execution-fields > * { min-width: 0; }
+.execution-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--e-2);
+  margin: var(--e-3) 0;
+}
+.execution-check { display: flex; align-items: flex-start; gap: 10px; margin: var(--e-4) 0; }
+.execution-check input { flex: none; margin-top: 4px; }
+.execution-card {
+  min-width: 0;
+  padding: var(--e-4);
+  border: 1px solid var(--e-border);
+  border-radius: var(--e-radius);
+  background: var(--e-surface);
+  overflow-wrap: anywhere;
+}
+.execution-card h4,
+.execution-card h5 { margin: 0 0 var(--e-2); }
+.execution-card p { margin: var(--e-2) 0; }
+.execution-editor button { white-space: normal; }
+.prospecting-workspace { max-width: 1440px; margin: auto; }
+
+/* --- relationship picker ---------------------------------------------------- */
+.commercial-editor .dialog-body { overflow-wrap: anywhere; }
+.commercial-selection,
+.commercial-picker { display: grid; gap: var(--e-2); min-width: 0; }
+.commercial-results { margin: var(--e-3) 0; padding: 0; list-style: none; }
+.commercial-results button {
+  width: 100%;
+  justify-content: space-between;
+  text-align: left;
+  white-space: normal;
+}
+.commercial-results small { flex-shrink: 0; margin-left: var(--e-2); }
+
+/* --- narrow screens ---------------------------------------------------------- */
+@media (max-width: 720px) {
+  .exec-disclosure > summary { min-height: 40px; padding-block: 10px; }
+  .exec-row-actions { width: 100%; }
+  /* The "More" trigger matches the other compact controls' touch height. */
+  .exec-row-actions > .icon-button { width: var(--f-h-sm); height: var(--f-h-sm); }
+}
+@media (max-width: 600px) {
+  .execution-fields { grid-template-columns: minmax(0, 1fr); }
+  .execution-card { padding: 14px; }
+  .execution-actions > .ui-button { max-width: 100%; }
+  .exec-card { padding: var(--e-3); }
+  .exec-cost-head,
+  .exec-cost-table > .execution-cost { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--e-2); }
+  .exec-cost-head span:first-child { display: none; }
+  .exec-cost-table > .execution-cost > legend { grid-column: 1 / -1; float: none; margin-top: var(--e-1); }
+}
+
+/* --- record detail footer on a phone ------------------------------------------ */
+@media (max-width: 560px) {
+  /* Delete and the status selector share a row when there is room; a third
+     control (Print on quotations) pushes the selector to its own full row. */
+  .record-detail-dialog .ui-dialog-actions-start {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--e-2);
+    width: 100%;
+  }
+  .record-detail-dialog .ui-inline-field.ui-field {
+    flex: 1 1 200px;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--e-2);
+    min-width: 0;
+  }
+  .record-detail-dialog .ui-inline-field > .ui-field-label { white-space: nowrap; }
+  .record-detail-dialog .ui-inline-field .ui-select-trigger { flex: 1; min-width: 0; width: 100%; }
+  /* The header's X already closes the record; a third full-width row for
+     "Close" would push the record's own actions off a small screen.
+     !important because the .secondary layer sets display with !important. */
+  .record-detail-dialog .ui-dialog-actions-end:has(> .ui-button:nth-child(3)) > .ui-button:first-child { display: none !important; }
+}
+@media (max-width: 400px) {
+  /* Two actions share a 260px row at 320px: drop the arrow, keep the words. */
+  .record-detail-dialog .ui-dialog-actions-end > .ui-button { padding-inline: 10px !important; }
+  .record-detail-dialog .ui-dialog-actions-end > .ui-primary-action > svg { display: none; }
+}
+@media (max-width: 370px) {
+  /* The selector still reads its label aloud; there is no room to print it. */
+  .record-detail-dialog .ui-inline-field > .ui-field-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+}
+
+/* --- Prospecting: section tabs and Companies / People are segmented
+   controls, so the Search button is the one primary action on the screen. */
+.apollo-search-first .apollo-mode { align-items: center; }
+.apollo-search-first .apollo-mode > .ui-button.compact { min-height: var(--f-h-sm); padding-block: 0; }
+.apollo-kind > .ui-button { gap: 6px; }
+@media (max-width: 540px) {
+  .apollo-search-first .apollo-mode > .segmented { grid-column: 1 / -1; }
+  .apollo-search-first .apollo-mode > .segmented > .ui-button { flex: 1 1 0; }
+}
+
+/* --- quotation: the summary is the page; the A4 document sits below it ---- */
+.quotation-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+  gap: 12px 28px;
+  margin: 0;
+  padding: 16px 20px;
+  border: 1px solid var(--e-border);
+  border-radius: var(--e-radius-lg);
+  background: var(--e-surface);
+}
+.quotation-summary .is-wide { grid-column: span 2; }
+.quotation-summary dt { font-size: 12px; color: var(--e-text-muted); }
+.quotation-summary dd {
+  display: grid;
+  gap: 2px;
+  margin: 2px 0 0;
+  font-size: 14px;
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+.quotation-summary .quotation-summary-total { font-size: 20px; font-weight: 650; letter-spacing: -0.01em; }
+@media (max-width: 640px) {
+  .quotation-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 14px 16px; }
+  .quotation-summary .is-wide { grid-column: 1 / -1; }
+}
+@media print {
+  .quotation-summary { display: none !important; }
+}

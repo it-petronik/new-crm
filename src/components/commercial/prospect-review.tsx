@@ -188,6 +188,7 @@ export function ProspectReview({
           fields below.
         </p>
         <Button
+          className="secondary compact"
           disabled={busy}
           onClick={() =>
             onEnrich({ stageId: review.stageId, providerId: p.id })
@@ -231,6 +232,7 @@ export function ProspectReview({
             </label>
           ))}
           <Button
+            className="secondary compact"
             disabled={busy || !fields.length}
             onClick={async () => {
               setBusy(true);

@@ -1,4 +1,5 @@
 "use client";
+import { PageHeader } from "./ui/layout";
 import { BrandLogo, brands } from "./brand";
 import { useEffect, useState } from "react";
 import {
@@ -38,19 +39,13 @@ export const viewLabels: Record<WorkspaceView, string> = {
 export function PageTitle({
   title,
   subtitle,
+  actions,
 }: {
   title: string;
   subtitle: string;
+  actions?: React.ReactNode;
 }) {
-  return (
-    <div className="page-heading">
-      <div>
-        <span className="eyebrow">WORKSPACE</span>
-        <h1>{title}</h1>
-        <p>{subtitle}</p>
-      </div>
-    </div>
-  );
+  return <PageHeader className="page-heading" title={title} description={subtitle} actions={actions} />;
 }
 export function ProfilePage({
   actor,

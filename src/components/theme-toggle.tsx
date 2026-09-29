@@ -52,7 +52,10 @@ export default function ThemeToggle() {
         aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
         onClick={toggle}
       >
-        {dark ? <Sun size={18} /> : <Moon size={18} />}
+        {/* Both icons, chosen by CSS from <html data-theme>: the boot script
+            sets that before the first paint, before this component hydrates. */}
+        <Sun size={18} className="theme-icon-sun" aria-hidden="true" />
+        <Moon size={18} className="theme-icon-moon" aria-hidden="true" />
       </Button>
     </Tooltip>
   );

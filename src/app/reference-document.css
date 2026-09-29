@@ -56,9 +56,6 @@
   height: 46px;
   object-fit: contain;
 }
-.reference-document .pdf-company-logo[src*="istanergy"] {
-  object-fit: cover;
-}
 .reference-document [data-print-document] > div {
   font-size: 11.5px !important;
 }
@@ -101,7 +98,7 @@
   }
   /* Radix portals the dialog beside the app, not inside it. Hiding only
      the sidebar/main leaves the empty, viewport-height app on page one. */
-  body:has(.reference-document) .app-shell {
+  body:has(.modal .reference-document) .app-shell {
     display: none !important;
   }
   body:has(.reference-document) {

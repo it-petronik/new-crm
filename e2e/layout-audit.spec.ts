@@ -96,9 +96,10 @@ test("quotation preview starts at the top and legal name is consistent", async (
   await expect(page.locator(".reference-document")).toContainText(
     "PETRONIK FZCO",
   );
-  expect(
-    await page.locator(".dialog-body").evaluate((el) => el.scrollTop),
-  ).toBe(0);
+  // The quotation opens as a page, scrolled to its own header.
+  const header = (await page.locator(".rw-header").boundingBox())!;
+  expect(header.y).toBeGreaterThanOrEqual(0);
+  expect(header.y).toBeLessThan(200);
   await page.screenshot({
     path: info.outputPath("quotation-preview.png"),
     animations: "disabled",

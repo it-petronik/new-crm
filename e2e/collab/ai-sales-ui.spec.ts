@@ -80,7 +80,8 @@ test("lead panel: next action first, one brief per click, sources, and a quotati
   await page.goto("/workspace/all-companies/sales-pipeline");
   // The record card exists only after hydration and data loading.
   await page.locator(".lead-card").filter({ has: page.getByRole("heading", { name: "Screen Copilot Oils", exact: true }) }).click();
-  const dialog = page.getByRole("dialog", { name: "Screen Copilot Oils" });
+  // The record opens as a page.
+  const dialog = page.getByRole("article", { name: "Screen Copilot Oils" });
   const panel = dialog.getByRole("region", { name: "Enercore AI" });
   // Deterministic, before any AI.
   await expect(panel.locator(".copilot-next")).toContainText("Send a follow-up");
@@ -192,7 +193,7 @@ test("on a 390px phone: single-column cards, reachable Copy, no sideways scrolli
   await page.goto("/workspace/all-companies/sales-pipeline");
   // The record card exists only after hydration and data loading.
   await page.locator(".lead-card").filter({ has: page.getByRole("heading", { name: "Mobile Copilot Oils", exact: true }) }).click();
-  const panel = page.getByRole("dialog", { name: "Mobile Copilot Oils" }).getByRole("region", { name: "Enercore AI" });
+  const panel = page.getByRole("article", { name: "Mobile Copilot Oils" }).getByRole("region", { name: "Enercore AI" });
   await panel.getByRole("button", { name: "Brief me" }).click();
   await expect(panel.locator(".copilot-profile")).toBeVisible();
   for (const el of await panel.locator(".copilot-profile-list > div, .copilot-actions > button").all()) {

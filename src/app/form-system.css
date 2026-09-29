@@ -228,6 +228,11 @@
      Cancel first and the primary last. */
   .ui-dialog-actions-end { flex: 1 1 100%; }
   .ui-dialog-actions-end > .ui-button { flex: 1 1 0; min-width: 0; }
+  /* Three actions do not fit one phone row: the others share the first row
+     and the primary takes a full-width row below them — still last. */
+  .ui-dialog-actions-end:has(> :nth-child(3)) { flex-wrap: wrap; }
+  .ui-dialog-actions-end:has(> :nth-child(3)) > :last-child { flex-basis: 100%; }
+  .ui-dialog-actions-end > .ui-button { white-space: normal; line-height: 1.2; }
   .ui-inline-field.ui-field { flex: 1 1 100%; justify-content: space-between; }
 }
 @media print {

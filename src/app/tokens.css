@@ -34,7 +34,18 @@
   --e-danger: #b4372f;
   --e-info: #1f5f8b;
   --e-neutral: var(--muted);
+}
 
+/* The same meanings on a dark surface. The light values are dark text for a
+   light page and read as near-invisible on dark; the tints follow these. */
+:root[data-theme="dark"] {
+  --e-success: #5cc98f;
+  --e-warning: #e3a84a;
+  --e-danger: #f07b71;
+  --e-info: #72b6ea;
+}
+
+:root {
   /* Tints for badges and rails; mixed so they follow the theme. */
   --e-success-soft: color-mix(in srgb, var(--e-success) 12%, transparent);
   --e-warning-soft: color-mix(in srgb, var(--e-warning) 13%, transparent);
@@ -194,11 +205,19 @@ tr:hover .table-record-actions, tr:focus-within .table-record-actions { opacity:
 
 /* --- pipeline health ------------------------------------------------------- */
 .e-pipeline-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+/* Sized by the panel, not the window: in the executive grid this panel is
+   narrower at 1440px than at 1024px, so a viewport breakpoint cannot know. */
+.e-pipeline { container-type: inline-size; }
 .e-pipeline-list li {
   display: grid; align-items: center; gap: var(--e-3);
-  grid-template-columns: 8.5rem minmax(60px, 1fr) 2.5rem 7rem 8rem;
+  grid-template-columns: minmax(5.5rem, 8.5rem) minmax(40px, 1fr) 2rem minmax(4rem, 7rem) minmax(4rem, 8rem);
   padding: 7px 0; border-top: 1px solid var(--e-border-muted);
   font-size: var(--e-secondary);
+}
+.e-pipeline-list li > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@container (max-width: 440px) {
+  .e-pipeline-list li { grid-template-columns: minmax(5.5rem, 8.5rem) minmax(40px, 1fr) 2rem minmax(4rem, 6rem); }
+  .e-pipeline-list .e-pipeline-stale { display: none; }
 }
 .e-pipeline-list li:first-child { border-top: 0; }
 .e-pipeline-stage { font-weight: var(--e-weight-medium); }

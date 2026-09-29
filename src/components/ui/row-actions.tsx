@@ -21,6 +21,42 @@ export type RowAction = {
   run: () => void;
 };
 
+/**
+ * One "More" control holding secondary actions, for any row or card. The
+ * popover is the same one the business tables use, so every overflow menu in
+ * the CRM looks and behaves alike.
+ */
+export function MoreActions({ label, actions }: { label: string; actions: RowAction[] }) {
+  const [open, setOpen] = useState(false);
+  if (!actions.length) return null;
+  return (
+    <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
+      <PopoverPrimitive.Trigger asChild>
+        <Button className="icon-button" aria-label={`More actions for ${label}`} title="More">
+          <MoreHorizontal size={16} />
+        </Button>
+      </PopoverPrimitive.Trigger>
+      <PopoverPrimitive.Portal>
+        <PopoverPrimitive.Content className="row-overflow-menu" align="end" sideOffset={6}>
+          {actions.map((action) => (
+            <Button
+              key={action.id}
+              className={`row-overflow-item${action.destructive ? " is-destructive" : ""}`}
+              onClick={() => {
+                setOpen(false);
+                action.run();
+              }}
+            >
+              {action.icon}
+              {action.label}
+            </Button>
+          ))}
+        </PopoverPrimitive.Content>
+      </PopoverPrimitive.Portal>
+    </PopoverPrimitive.Root>
+  );
+}
+
 export function RowActions({
   label,
   status,
@@ -37,8 +73,6 @@ export function RowActions({
   onOpen?: () => void;
   actions?: RowAction[];
 }) {
-  const [open, setOpen] = useState(false);
-
   return (
     <div className="table-record-actions">
       {onStatus && statusOptions && statusOptions.length > 1 && (
@@ -60,32 +94,7 @@ export function RowActions({
         </Button>
       )}
 
-      {actions.length > 0 && (
-        <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
-          <PopoverPrimitive.Trigger asChild>
-            <Button className="icon-button" aria-label={`More actions for ${label}`} title="More">
-              <MoreHorizontal size={16} />
-            </Button>
-          </PopoverPrimitive.Trigger>
-          <PopoverPrimitive.Portal>
-            <PopoverPrimitive.Content className="row-overflow-menu" align="end" sideOffset={6}>
-              {actions.map((action) => (
-                <Button
-                  key={action.id}
-                  className={`row-overflow-item${action.destructive ? " is-destructive" : ""}`}
-                  onClick={() => {
-                    setOpen(false);
-                    action.run();
-                  }}
-                >
-                  {action.icon}
-                  {action.label}
-                </Button>
-              ))}
-            </PopoverPrimitive.Content>
-          </PopoverPrimitive.Portal>
-        </PopoverPrimitive.Root>
-      )}
+      <MoreActions label={label} actions={actions} />
     </div>
   );
 }

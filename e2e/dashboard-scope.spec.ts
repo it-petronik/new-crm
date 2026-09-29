@@ -31,7 +31,9 @@ test("every dashboard period applies to the metrics and charts it controls", asy
     expect(count, `${label} must not exceed all time`).toBeLessThanOrEqual(allCount);
     // Money is still named by its currency rather than shown as a bare number,
     // and currencies are listed separately instead of being summed together.
-    expect(text, "the KPI must name its currency").toMatch(/[A-Z]{3}|[$€]/);
+    // (An empty period shows no amount at all, so there is nothing to name.)
+    const value = await pipeline().locator(".e-kpi-value").innerText();
+    if (/\d/.test(value)) expect(value, "the KPI must name its currency").toMatch(/[A-Z]{3}|[$€]/);
   }
 
   await pickPeriod(page, "All time");

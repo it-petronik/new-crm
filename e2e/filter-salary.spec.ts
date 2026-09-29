@@ -1,7 +1,10 @@
 import {test,expect} from "@playwright/test";
 test("record sorting, search and dashboard custom period",async({page},info)=>{
+ // Business analysis is collapsed by default; open it as a person would.
+ await page.addInitScript(() => localStorage.setItem("enercore-dashboard-analysis", "open"));
  await page.goto("/workspace/all-companies/customers");
  // Card views have no columns, so they keep the sort dropdown behind the filter toggle.
+ await page.getByRole("button",{name:"Card view",exact:true}).click();
  await page.getByRole("button",{name:/^Filters/}).click();
  await page.getByRole("combobox",{name:"Sort records",exact:true}).click();
  await expect(page.getByRole("option",{name:"Newest first",exact:true})).toBeVisible();

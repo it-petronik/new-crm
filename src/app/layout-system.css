@@ -181,8 +181,12 @@
 @media (max-width: 1024px) {
   .e-kpi-strip, .stats-grid, .skeleton-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+/* Phones keep two columns: four full-width cards for four numbers cost a
+   whole screen of scrolling before anything that needs action. */
 @media (max-width: 420px) {
-  .e-kpi-strip, .stats-grid, .skeleton-kpis { grid-template-columns: minmax(0, 1fr); }
+  .e-kpi-strip, .stats-grid, .skeleton-kpis { gap: var(--e-2); }
+  .e-kpi { padding: var(--e-3); }
+  .e-kpi .e-kpi-value { font-size: 1.3rem; }
 }
 
 /* ------------------------------------------------------------------ toolbars */
@@ -257,14 +261,18 @@
 .table-scroll table:not(.e-record-table) td { white-space: normal; overflow-wrap: break-word; }
 .table-scroll table:not(.e-record-table) :is(.record-link, .avatar-name, .cell-date, .e-badge) { white-space: nowrap; }
 
-.e-record-table thead th:nth-child(1) { width: auto; }
+/* Sized by column class, not position: the Value column is absent for
+   kinds that carry no value, which would shift every later column. */
+.e-record-table thead th.e-col-record { width: auto; }
 /* Wide enough for the longest status ("Ready to Dispatch", "Documents
    Pending") as a badge, so a status never paints into the next column. */
-.e-record-table thead th:nth-child(2) { width: 10.5rem; }
-.e-record-table thead th:nth-child(3) { width: 11rem; }
-.e-record-table thead th:nth-child(4) { width: 14rem; }
-.e-record-table thead th:nth-child(5) { width: 8.5rem; }
-.e-record-table thead th:nth-child(6) { width: 16rem; }
+.e-record-table thead th.e-col-status { width: 10.5rem; }
+.e-record-table thead th.e-col-owner { width: 11rem; }
+.e-record-table thead th.e-col-next { width: 14rem; }
+.e-record-table thead th.e-col-value { width: 8.5rem; }
+.e-record-table thead th.e-col-actions { width: 16rem; }
+/* Without an inline status control (read-only), actions are two icons. */
+.e-record-table:not(:has(.inline-status)) thead th.e-col-actions { width: 6.5rem; }
 /* Belt and braces for a status longer than any known one: it truncates
    inside its own cell (full text in the badge's tooltip) rather than
    spilling over the neighbouring column. */
@@ -374,18 +382,34 @@
 /* ===========================================================================
    RESPONSIVE — reduce information, never squeeze columns.
    ======================================================================== */
-@media (max-width: 1280px) {
-  /* Owner is the first thing a narrower screen can do without. */
-  .e-record-table thead th:nth-child(3), .e-record-table .e-cell-owner { display: none; }
+/* Tables respond to the room they actually have (their .table-scroll box),
+   measured in rem, so a narrower panel, a larger text size or browser zoom
+   drop columns in step instead of squeezing the record's name. The name
+   column always keeps at least 16rem. */
+.table-scroll:has(> .e-record-table) { container-type: inline-size; }
+@container (max-width: 76rem) {
+  .e-record-table thead th.e-col-next { width: 11rem; }
+  .e-record-table thead th.e-col-owner { width: 9rem; }
+}
+@container (max-width: 70rem) {
+  /* Owner is the first thing a narrower table can do without... */
+  .e-record-table thead th.e-col-owner, .e-record-table .e-cell-owner { display: none; }
   /* ...and the creator travels with the record's own summary line. */
   .e-record-table .e-row-owner { display: inline; }
-  .e-record-table thead th:nth-child(4) { width: 12rem; }
 }
-@media (max-width: 1024px) {
-  /* Then the next action's date detail, and the status column header. */
-  .e-record-table thead th:nth-child(2) { width: 9.5rem; }
-  .e-record-table thead th:nth-child(6) { width: 13rem; }
+@container (max-width: 63rem) {
+  .e-record-table thead th.e-col-status { width: 9.5rem; }
+  .e-record-table thead th.e-col-next { width: 10rem; }
+  .e-record-table:has(.inline-status) thead th.e-col-actions { width: 13rem; }
   .next-action-cell .cell-date { display: none; }
+}
+@container (max-width: 57rem) {
+  /* The row's own status control already shows the status, so the badge
+     column goes next; the others wrap or truncate. */
+  .e-record-table:has(.inline-status) :is(thead th.e-col-status, tbody .e-cell-status) { display: none; }
+  .e-record-table thead th.e-col-next { width: 8.5rem; }
+  .e-record-table thead th.e-col-value { width: 7rem; }
+  .e-record-table:has(.inline-status) thead th.e-col-actions { width: 12rem; }
 }
 
 /* ===========================================================================
@@ -435,6 +459,30 @@
   .table-record-actions .inline-status { max-width: 11rem; padding-right: 26px; }
   .row-overflow-menu { min-width: 220px; }
   .row-overflow-item { min-height: 44px; }
+}
+/* A record table also becomes cards when its own panel is narrower than
+   44rem on a larger screen (a tablet column, or zoomed text). */
+@container (max-width: 44rem) {
+  .e-record-table thead { display: none; }
+  .e-record-table, .e-record-table tbody, .e-record-table tr, .e-record-table td { display: block; width: auto; }
+  .e-record-table tbody tr {
+    position: relative;
+    height: auto;
+    margin-bottom: var(--l-row-gap);
+    padding: var(--l-panel-pad-compact);
+    border: 1px solid var(--e-border);
+    border-radius: var(--e-radius);
+    background: var(--e-surface);
+  }
+  .e-record-table tbody td { border: 0; padding: 0; }
+  .e-record-table tbody td:nth-child(2) { position: absolute; top: var(--l-panel-pad-compact); right: var(--l-panel-pad-compact); }
+  .e-record-table .e-cell-next { max-width: none; margin-bottom: var(--e-2, 8px); }
+  .e-record-table .e-col-actions { margin-top: var(--e-2, 8px); }
+  .e-record-table .e-row-meta { white-space: normal; }
+  .e-record-table .e-cell-identity { padding-right: 96px; }
+  .e-record-table .amount { text-align: left; }
+  .e-record-table .next-action-cell .cell-date { display: inline-flex; }
+  .e-record-table .table-record-actions { justify-content: flex-start; gap: var(--e-2, 8px); }
 }
 
 /* ===========================================================================
@@ -488,8 +536,8 @@
    ======================================================================== */
 :root { --l-cell-pad-x: 14px; }
 
-.e-record-table thead th:nth-child(5) { text-align: right; padding-right: 0; }
-.e-record-table thead th:nth-child(5) .column-sort {
+.e-record-table thead th.e-col-value { text-align: right; padding-right: 0; }
+.e-record-table thead th.e-col-value .column-sort {
   display: flex;
   align-items: center;
   justify-content: flex-end;

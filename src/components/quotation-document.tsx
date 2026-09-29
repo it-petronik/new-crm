@@ -1,4 +1,4 @@
-import { type RecordItem } from "@/lib/domain";
+import { money, type RecordItem } from "@/lib/domain";
 import { quotationData } from "@/lib/pdf/quotation-data";
 import { DOCUMENT_PRINT_CSS } from "@/lib/pdf/document-print-css";
 import { DocumentTemplate } from "./pdf/DocumentTemplate";
@@ -38,5 +38,52 @@ export function QuotationDocument({ record }: { record: RecordItem }) {
         />
       </div>
     </article>
+  );
+}
+
+/**
+ * What a phone needs before the A4 preview: who it is for, what, how much and
+ * until when. Read from the same quotationData() the printed document uses, so
+ * the two can never disagree. Screen only; print is the document alone.
+ */
+export function QuotationSummary({ record }: { record: RecordItem }) {
+  const data = quotationData(record);
+  return (
+    <dl className="quotation-summary" aria-label="Quotation summary">
+      <div className="is-wide">
+        <dt>Customer</dt>
+        <dd>{data.to.name}</dd>
+      </div>
+      <div className="is-wide">
+        <dt>{data.items.length === 1 ? "Product" : "Products"}</dt>
+        <dd>
+          {data.items.map((item) => (
+            <span key={item.id}>
+              {item.name || "Product not specified"} · {item.quantity.toLocaleString("en-US")} {item.unit}
+            </span>
+          ))}
+        </dd>
+      </div>
+      <div>
+        <dt>Total</dt>
+        <dd className="quotation-summary-total e-numeric">
+          {money(data.totals.total, data.totals.currency)}
+        </dd>
+      </div>
+      <div>
+        <dt>Valid until</dt>
+        <dd>{data.dates.expiryDate || "Not set"}</dd>
+      </div>
+      {data.deliveryTerms && (
+        <div>
+          <dt>Incoterm</dt>
+          <dd>{data.deliveryTerms}</dd>
+        </div>
+      )}
+      <div>
+        <dt>Reference</dt>
+        <dd className="record-reference">{data.refNo}</dd>
+      </div>
+    </dl>
   );
 }

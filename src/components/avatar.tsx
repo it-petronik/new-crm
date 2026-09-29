@@ -29,17 +29,21 @@ export function Avatar({
   image,
   size = 34,
   className,
+  avatarId,
 }: {
   name: string;
   image?: string;
   size?: number;
   className?: string;
+  /** A person with a saved picture: lets the boot script show it at first paint. */
+  avatarId?: string;
 }) {
   const tone = avatarTone(name);
   return (
     <span
       className={["entity-avatar", className].filter(Boolean).join(" ")}
       aria-hidden="true"
+      data-avatar-id={avatarId}
       style={{
         width: size,
         height: size,

@@ -156,7 +156,7 @@ export function CreditDialog({
         </section>
       )}
       {d.phoneJobs?.some((j) => !j.done) && (
-        <Button disabled={busy} onClick={onPhones}>
+        <Button className="secondary compact" disabled={busy} onClick={onPhones}>
           Check pending phone results · no credits
         </Button>
       )}
@@ -172,7 +172,7 @@ export function CreditDialog({
       {(op.status === "failed" ||
         (op.status === "completed" &&
           d.items.some((i) => i.status === "failed"))) && (
-        <Button disabled={busy} onClick={onRetry}>
+        <Button className="secondary compact" disabled={busy} onClick={onRetry}>
           Review retry of failed items only
         </Button>
       )}
@@ -293,6 +293,7 @@ export function BulkImportDialog({
       </p>
       <div className="execution-actions">
         <Button
+          className="secondary compact"
           disabled={busy || !!result}
           onClick={() =>
             setItems((items) => items.map((i) => ({ ...i, createLead: true })))
@@ -301,6 +302,7 @@ export function BulkImportDialog({
           Add Leads to included prospects
         </Button>
         <Button
+          className="secondary compact"
           disabled={busy || !!result}
           onClick={() =>
             setItems((items) =>
@@ -495,7 +497,7 @@ export function BulkImportDialog({
             ))}
           </ul>
           {result.counts.failed > 0 && (
-            <Button disabled={busy} onClick={() => void submit(true)}>
+            <Button className="secondary compact" disabled={busy} onClick={() => void submit(true)}>
               Retry failed imports only
             </Button>
           )}

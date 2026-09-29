@@ -46,6 +46,8 @@ test("shared dialog retains actions and saves employee fields", async ({
 test("dashboard charts render and mobile has no horizontal overflow", async ({
   page,
 }, info) => {
+  // Business analysis is collapsed by default; open it as a person would.
+  await page.addInitScript(() => localStorage.setItem("enercore-dashboard-analysis", "open"));
   await page.goto("/");
   await expect(page.locator(".insight-chart").first()).toBeVisible();
   await page

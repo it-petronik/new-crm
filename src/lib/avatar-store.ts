@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 
 /**
  * Profile pictures are held in this browser only. This is preview storage, not
@@ -24,21 +24,26 @@ export function writeAvatar(id: string, image: string) {
   } catch {
     // A full or blocked store must not break the page.
   }
+  // The boot script's first-paint pictures (boot-script.ts) are only a stand-in
+  // until React renders; once a picture changes they would show the old one.
+  document.getElementById("enercore-avatar-css")?.remove();
   window.dispatchEvent(new CustomEvent(changed, { detail: id }));
 }
 
-/** Reads after mount so the server and first client render stay identical. */
+const subscribe = (notify: () => void) => {
+  window.addEventListener(changed, notify);
+  window.addEventListener("storage", notify);
+  return () => {
+    window.removeEventListener(changed, notify);
+    window.removeEventListener("storage", notify);
+  };
+};
+
+/**
+ * The saved picture, read during render. The server (and hydration) sees no
+ * picture; React then re-renders with the stored one before painting, and
+ * the boot script has already shown it on the server-rendered avatar.
+ */
 export function useAvatar(id: string) {
-  const [image, setImage] = useState("");
-  useEffect(() => {
-    const sync = () => setImage(readAvatar(id));
-    sync();
-    window.addEventListener(changed, sync);
-    window.addEventListener("storage", sync);
-    return () => {
-      window.removeEventListener(changed, sync);
-      window.removeEventListener("storage", sync);
-    };
-  }, [id]);
-  return image;
+  return useSyncExternalStore(subscribe, () => readAvatar(id), () => "");
 }

@@ -7,6 +7,8 @@ const signIn = async (page: Page, email: string) => {
 };
 
 test("demo accounts sign in and scope the workspace to that role", async ({ page }) => {
+  // Business analysis is collapsed by default; open it as a person would.
+  await page.addInitScript(() => localStorage.setItem("enercore-dashboard-analysis", "open"));
   await signIn(page, "sales@enercore.test");
   const sidebar = page.locator(".sidebar");
   await expect(sidebar).toContainText("Sales pipeline");

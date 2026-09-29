@@ -578,37 +578,37 @@ export default function Prospecting({
     >
       <PageTitle
         title="Prospecting"
-        subtitle="Find companies and decision-makers with Apollo."
+        subtitle="Find companies and decision-makers."
+        actions={
+          <div className="segmented apollo-tabs" role="group" aria-label="Prospecting sections">
+            {(
+              [
+                ["results", "Search"],
+                ["saved", "Saved searches"],
+                ["usage", "Credits & usage"],
+              ] as const
+            ).map(([k, label]) => (
+              <Button
+                className={tab === k ? "selected" : ""}
+                aria-pressed={tab === k}
+                key={k}
+                onClick={() => setTab(k)}
+              >
+                {label}
+              </Button>
+            ))}
+          </div>
+        }
       />
       {contextProduct && (
         <p className="apollo-context">Searching with your product context.</p>
       )}
       {preview && (
-        <p>
+        <p className="apollo-notice">
           Preview does not contact Apollo. Use the local fictional workspace to
           review this flow.
         </p>
       )}
-      <div className="apollo-topbar">
-        <div className="apollo-tabs" aria-label="Prospecting sections">
-          {(
-            [
-              ["results", "Search"],
-              ["saved", "Saved searches"],
-              ["usage", "Credits & usage"],
-            ] as const
-          ).map(([k, label]) => (
-            <Button
-              className={tab === k ? "primary" : "secondary"}
-              aria-pressed={tab === k}
-              key={k}
-              onClick={() => setTab(k)}
-            >
-              {label}
-            </Button>
-          ))}
-        </div>
-      </div>
       {tab !== "results" && error && (
         <p className="form-error" role="alert">
           {error}
@@ -712,32 +712,34 @@ export default function Prospecting({
             )}
           </div>
           <div className="apollo-mode">
+            <div className="segmented apollo-kind" role="group" aria-label="Search for">
+              <Button
+                disabled={busy}
+                aria-pressed={draft.kind === "company"}
+                className={draft.kind === "company" ? "selected" : ""}
+                onClick={() => mode("company")}
+              >
+                <Building2 size={16} />
+                Companies
+                {resultCache.current.company
+                  ? ` (${resultCache.current.company.page.prospects.length})`
+                  : ""}
+              </Button>
+              <Button
+                disabled={busy}
+                aria-pressed={draft.kind === "person"}
+                className={draft.kind === "person" ? "selected" : ""}
+                onClick={() => mode("person")}
+              >
+                <Users size={16} />
+                People
+                {resultCache.current.person
+                  ? ` (${resultCache.current.person.page.prospects.length})`
+                  : ""}
+              </Button>
+            </div>
             <Button
-              disabled={busy}
-              aria-pressed={draft.kind === "company"}
-              className={draft.kind === "company" ? "primary" : "secondary"}
-              onClick={() => mode("company")}
-            >
-              <Building2 size={16} />
-              Companies
-              {resultCache.current.company
-                ? ` (${resultCache.current.company.page.prospects.length})`
-                : ""}
-            </Button>
-            <Button
-              disabled={busy}
-              aria-pressed={draft.kind === "person"}
-              className={draft.kind === "person" ? "primary" : "secondary"}
-              onClick={() => mode("person")}
-            >
-              <Users size={16} />
-              People
-              {resultCache.current.person
-                ? ` (${resultCache.current.person.page.prospects.length})`
-                : ""}
-            </Button>
-            <Button
-              className="secondary apollo-filter-toggle"
+              className="secondary compact apollo-filter-toggle"
               onClick={(e) => {
                 trigger.current = e.currentTarget;
                 setDrawer(true);
@@ -747,7 +749,7 @@ export default function Prospecting({
               Filters{active.length ? ` (${active.length})` : ""}
             </Button>
             <Button
-              className="secondary"
+              className="ghost compact"
               onClick={(e) => {
                 trigger.current = e.currentTarget;
                 setSave(true);
@@ -852,6 +854,7 @@ export default function Prospecting({
                     {refs.length > 0 && (
                       <div className="execution-actions">
                         <Button
+                          className="secondary compact"
                           disabled={busy || !refs.length}
                           onClick={(e) => {
                             trigger.current = e.currentTarget;
@@ -861,7 +864,7 @@ export default function Prospecting({
                           Enrich selected
                         </Button>
                         <Button
-                          className="secondary"
+                          className="secondary compact"
                           disabled={busy || !refs.length}
                           onClick={(e) => {
                             trigger.current = e.currentTarget;
@@ -876,7 +879,7 @@ export default function Prospecting({
                         </Button>
                         {page.criteria.kind === "company" && (
                           <Button
-                            className="secondary"
+                            className="secondary compact"
                             disabled={!refs.length}
                             onClick={() =>
                               findPeople(
@@ -1078,7 +1081,7 @@ export default function Prospecting({
                         )}
                         <div className="apollo-card-actions">
                           <Button
-                            className="secondary compact"
+                            className="ghost compact"
                             disabled={busy}
                             onClick={(e) =>
                               void viewProspect(r, e.currentTarget)
@@ -1087,7 +1090,7 @@ export default function Prospecting({
                             View
                           </Button>
                           <Button
-                            className="secondary compact"
+                            className="ghost compact"
                             disabled={busy}
                             onClick={(e) => {
                               trigger.current = e.currentTarget;
@@ -1107,16 +1110,16 @@ export default function Prospecting({
                           >
                             Add to Enercore
                           </Button>
+                          {r.prospect.kind === "company" && (
+                            <Button
+                              className="ghost compact"
+                              disabled={busy}
+                              onClick={() => findPeople([r.prospect.id])}
+                            >
+                              Find decision-makers
+                            </Button>
+                          )}
                         </div>
-                        {r.prospect.kind === "company" && (
-                          <Button
-                            className="secondary compact"
-                            disabled={busy}
-                            onClick={() => findPeople([r.prospect.id])}
-                          >
-                            Find decision-makers
-                          </Button>
-                        )}
                       </article>
                     ))}
                   </div>
@@ -1187,6 +1190,14 @@ export default function Prospecting({
                 </p>
               </div>
               <Button
+                className="secondary compact"
+                disabled={busy || preview}
+                onClick={() => void task(() => executeSearch(s.criteria))}
+              >
+                Run search
+              </Button>
+              <Button
+                className="ghost compact"
                 onClick={() => {
                   setDraft(s.criteria);
                   manualKeys.current.clear();
@@ -1200,13 +1211,7 @@ export default function Prospecting({
                 Open
               </Button>
               <Button
-                disabled={busy || preview}
-                onClick={() => void task(() => executeSearch(s.criteria))}
-              >
-                Run search
-              </Button>
-              <Button
-                className="secondary"
+                className="ghost compact"
                 onClick={() =>
                   void task(async () => {
                     await call({ action: "delete-search", id: s.id });
@@ -1235,6 +1240,7 @@ export default function Prospecting({
                 {new Date(r.createdAt).toLocaleString()} · {r.status}
               </span>
               <Button
+                className="ghost compact"
                 onClick={() =>
                   void task(async () => {
                     const o = await call<OperationView>({

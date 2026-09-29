@@ -51,18 +51,33 @@ export function RefChips({ ids, refs }: { ids: string[]; refs: Map<string, Refer
   );
 }
 
-function Items({ title, items, refs }: { title: string; items: { text: string; refs: string[] }[]; refs: Map<string, Reference> }) {
-  if (!items.length) return null;
+function Items({
+  title,
+  items,
+  refs,
+  tone,
+  children,
+}: {
+  title: string;
+  items: { text: string; refs: string[] }[];
+  refs: Map<string, Reference>;
+  tone?: "facts" | "risks" | "next";
+  children?: React.ReactNode;
+}) {
+  if (!items.length && !children) return null;
   return (
-    <div className="ai-section">
+    <div className={`ai-section${tone ? ` is-${tone}` : ""}`}>
       <h4>{title}</h4>
-      <ul>
-        {items.map((p, i) => (
-          <li key={i}>
-            {p.text} <RefChips ids={p.refs} refs={refs} />
-          </li>
-        ))}
-      </ul>
+      {items.length > 0 && (
+        <ul>
+          {items.map((p, i) => (
+            <li key={i}>
+              {p.text} <RefChips ids={p.refs} refs={refs} />
+            </li>
+          ))}
+        </ul>
+      )}
+      {children}
     </div>
   );
 }
@@ -187,81 +202,90 @@ export function AiAnswerView({ result, onApply }: { result: AiResult; onApply?: 
     <div className="ai-answer">
       {result.scope && <p className="ai-scope">{result.scope}</p>}
       <p className="ai-summary">{answer.summary}</p>
-      <Items title="Key points" items={answer.points} refs={refs} />
-      <Items title="Risks" items={answer.risks} refs={refs} />
-      <Items title="Next actions" items={answer.nextActions} refs={refs} />
-      {result.figures.length > 0 && (
-        <details className="ai-figures" open={result.feature === "ask"}>
-          <summary>Figures from Enercore ({result.figures.length})</summary>
-          <dl>
-            {result.figures.map((f, i) => (
-              <div key={i}>
-                <dt>{f.label}</dt>
-                <dd>
-                  {f.value} {f.ref && <RefChips ids={[f.ref]} refs={refs} />}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </details>
-      )}
+      {/* Summary first, then what is known, what is missing or at risk, and
+          what to do — each a short list, side by side where there is room. */}
+      <div className="ai-answer-grid">
+        <Items title="Key facts" items={answer.points} refs={refs} tone="facts">
+          {result.figures.length > 0 && (
+            <details className="ai-figures" open={result.feature === "ask"}>
+              <summary>Figures from Enercore ({result.figures.length})</summary>
+              <dl>
+                {result.figures.map((f, i) => (
+                  <div key={i}>
+                    <dt>{f.label}</dt>
+                    <dd>
+                      {f.value} {f.ref && <RefChips ids={[f.ref]} refs={refs} />}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </details>
+          )}
+        </Items>
+        <Items title="Gaps and risks" items={answer.risks} refs={refs} tone="risks">
+          {answer.missing.length > 0 && (
+            <div className="ai-missing">
+              <p className="ai-subhead">Not in Enercore</p>
+              <ul>
+                {answer.missing.map((m, i) => (
+                  <li key={i}>{m}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </Items>
+        <Items title="Next actions" items={answer.nextActions} refs={refs} tone="next">
+          {result.suggestions.length > 0 && (
+            <div className="ai-suggestions-block">
+              <p className="ai-subhead">Suggested changes</p>
+              <ul className="ai-suggestions">
+                {result.suggestions.map((s) => (
+                  <li key={s.id}>
+                    <span>
+                      {s.label}
+                      <small>{s.reason}</small>
+                    </span>
+                    {applied.includes(s.id) ? (
+                      <span className="ai-applied">
+                        <Check size={14} aria-hidden="true" /> Applied
+                      </span>
+                    ) : (
+                      <Button className="secondary compact" onClick={() => setReviewing(s)}>
+                        Review
+                      </Button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </Items>
+      </div>
       {answer.draft && <Draft draft={answer.draft} />}
-      {result.suggestions.length > 0 && (
-        <div className="ai-section">
-          <h4>Suggested changes</h4>
-          <ul className="ai-suggestions">
-            {result.suggestions.map((s) => (
-              <li key={s.id}>
-                <span>
-                  {s.label}
-                  <small>{s.reason}</small>
-                </span>
-                {applied.includes(s.id) ? (
-                  <span className="ai-applied">
-                    <Check size={14} aria-hidden="true" /> Applied
-                  </span>
-                ) : (
-                  <Button className="secondary compact" onClick={() => setReviewing(s)}>
-                    Review
-                  </Button>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {answer.missing.length > 0 && (
-        <div className="ai-section ai-missing">
-          <h4>Not in Enercore</h4>
-          <ul>
-            {answer.missing.map((m, i) => (
-              <li key={i}>{m}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {result.references.length > 0 && (
-        <details className="ai-sources">
-          <summary>Sources ({result.references.length})</summary>
-          <ul>
-            {result.references.map((r) => (
-              <li key={r.id}>
-                <button type="button" className="ai-ref" title={r.label} onClick={() => openReference(r)}>
-                  {refLabel(r)}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
-      {result.flaggedText > 0 && (
-        <p className="ai-flag" role="note">
-          <ShieldAlert size={14} aria-hidden="true" /> Some text in these records looked like instructions to the AI. It was treated as plain data.
+      <footer className="ai-answer-foot">
+        {result.references.length > 0 && (
+          <details className="ai-sources">
+            <summary>Sources ({result.references.length})</summary>
+            <ul>
+              {result.references.map((r) => (
+                <li key={r.id}>
+                  <button type="button" className="ai-ref" title={r.label} onClick={() => openReference(r)}>
+                    {refLabel(r)}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+        {result.flaggedText > 0 && (
+          <p className="ai-flag" role="note">
+            <ShieldAlert size={14} aria-hidden="true" /> Some text in these records looked like instructions to the AI. It was treated as plain data.
+          </p>
+        )}
+        <p className="ai-fineprint">
+          AI-generated from what you can see in Enercore · confidence {answer.confidence}. Figures are calculated by Enercore, not the AI. Check before relying on it.
         </p>
-      )}
-      <p className="ai-fineprint">
-        AI-generated from what you can see in Enercore · confidence {answer.confidence}. Figures are calculated by Enercore, not the AI. Check before relying on it.
-      </p>
+      </footer>
       <DialogPresence>
         {reviewing && (
           <ReviewSuggestion

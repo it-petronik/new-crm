@@ -35,7 +35,10 @@ for (const [count, company] of [
       page.getByRole("article", { name: "Quotation document" }),
     ).toBeVisible();
     await page.emulateMedia({ media: "print" });
-    await expect(page.locator(".app-shell")).toBeHidden();
+    // The quotation is a page inside the shell; printing drops the shell's
+    // navigation and the record's own controls, leaving only the document.
+    for (const chrome of [".sidebar", ".topbar", ".rw-header", ".page-under-record"])
+      await expect(page.locator(chrome)).toBeHidden();
     await expect(page.locator(".reference-document")).toBeVisible();
     await expect(page.locator(".pdf-footer-band")).toBeHidden();
     await expect(

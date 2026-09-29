@@ -140,9 +140,6 @@
     .record-context {
       gap: 8px;
     }
-    .record-context .record-kind {
-      width: 100%;
-    }
     .record-detail-dialog .detail-grid {
       gap: 12px;
     }

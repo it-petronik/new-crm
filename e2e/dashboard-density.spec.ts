@@ -85,7 +85,8 @@ test("the header clock shows Gulf time wherever the reader is", async ({ browser
     // The existing sidebar animates its margin when crossing into phone layout.
     if (width <= 720) await expect(page.locator(".main-shell")).toHaveCSS("margin-left", "0px");
     await expect(clock).toBeHidden();
-    await expect(page.getByRole("button", { name: "Quick actions", exact: true })).toBeVisible();
+    // The command palette trigger is now the top bar's search field.
+    await expect(page.getByRole("button", { name: /^Quick actions/ })).toBeVisible();
     await expect(page.getByRole("button", { name: "My profile", exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `page fits ${width}px`).toBe(true);
   }

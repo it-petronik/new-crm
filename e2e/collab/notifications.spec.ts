@@ -311,11 +311,13 @@ test("assign → live bell, one toast across tabs, inbox row, deep link, mark re
 
   // Clicking opens exactly that lead, and reading it clears the count everywhere.
   await row.locator(".notify-main").click();
-  await expect(withToast.getByRole("dialog", { name: "Gulf Lubricants Trading" })).toBeVisible();
-  await expect(withToast.getByRole("dialog")).toContainText("Nour Sales10");
-  // Close the record (a modal hides the page behind it), then check both tabs.
+  // The record opens as a page.
+  const opened = withToast.getByRole("article", { name: "Gulf Lubricants Trading" });
+  await expect(opened).toBeVisible();
+  await expect(opened).toContainText("Nour Sales10");
+  // Close the record, then check both tabs.
   await withToast.keyboard.press("Escape");
-  await expect(withToast.getByRole("dialog")).toHaveCount(0);
+  await expect(opened).toHaveCount(0);
   for (const p of [tab, other]) {
     await expect(bell(p)).toHaveAccessibleName("Open notifications");
     await expect(p.locator(".notify-badge")).toHaveCount(0);
@@ -330,13 +332,14 @@ test("the manager's Assign action in the record view", async ({ page, context })
   await manager.signInBrowser(context);
   await page.goto("/?module=leads");
   await page.getByText("Desert Oils LLC").first().click();
-  const detail = page.getByRole("dialog", { name: "Desert Oils LLC" });
-  await detail.getByRole("button", { name: "Assign" }).click();
+  // The record is a page; Assign sits in its More actions menu.
+  const detail = page.getByRole("article", { name: "Desert Oils LLC" });
+  await detail.getByRole("button", { name: /^More actions for / }).click();
+  await page.locator(".row-overflow-item", { hasText: "Assign" }).click();
   const dialog = page.getByRole("dialog", { name: "Assign Desert Oils LLC" });
   await dialog.getByRole("combobox").click();
   await page.getByRole("option", { name: /Nour Sales3/ }).click();
   await dialog.getByRole("button", { name: "Assign" }).click();
-  // The confirmation toast sits outside the (modal) record view.
   await expect(page.locator(".toast")).toContainText("Assigned to Nour Sales3.");
   await expect(detail).toContainText("Nour Sales3");
   expect((await manager.request("GET", `/api/records?id=${record.id}`)).body.record.owner).toBe("Nour Sales3");
@@ -348,8 +351,12 @@ test("the manager's Assign action in the record view", async ({ page, context })
   const salesPage = await salesContext.newPage();
   await salesPage.goto("/?module=leads");
   await salesPage.getByText("Desert Oils LLC").first().click();
-  await expect(salesPage.getByRole("dialog", { name: "Desert Oils LLC" })).toBeVisible();
-  await expect(salesPage.getByRole("dialog", { name: "Desert Oils LLC" }).getByRole("button", { name: "Assign" })).toHaveCount(0);
+  const theirs = salesPage.getByRole("article", { name: "Desert Oils LLC" });
+  await expect(theirs).toBeVisible();
+  await expect(theirs.getByRole("button", { name: "Assign" })).toHaveCount(0);
+  await theirs.getByRole("button", { name: /^More actions for / }).click();
+  await expect(salesPage.locator(".row-overflow-menu")).toBeVisible();
+  await expect(salesPage.locator(".row-overflow-item", { hasText: "Assign" })).toHaveCount(0);
   await salesContext.close();
 });
 

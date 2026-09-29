@@ -52,6 +52,8 @@ test("each role gets a dashboard built from its own modules", async ({ page }) =
 });
 
 test("a role's dashboard fills its row instead of leaving another role's gaps", async ({ page }) => {
+  // Business analysis is collapsed by default; open it as a person would.
+  await page.addInitScript(() => localStorage.setItem("enercore-dashboard-analysis", "open"));
   await signIn(page, "hr");
   await page.locator(".stats-grid .stat-card").first().waitFor();
   const grid = page.locator(".stats-grid");
@@ -146,6 +148,8 @@ test("a list with no records at all offers nothing to filter", async ({ page }) 
 test("record cards show one identity row, not a separate glyph row", async ({ page }) => {
   await signIn(page, "md");
   await page.goto("/workspace/all-companies/customers");
+  // Lists open as a table; cards are one click away in the layout switch.
+  await page.getByRole("button", { name: "Card view", exact: true }).click();
   await page.locator(".record-grid").waitFor();
   const card = page.locator(".record-card-shell").first();
   // The module glyph row was redundant once the avatar carried identity.

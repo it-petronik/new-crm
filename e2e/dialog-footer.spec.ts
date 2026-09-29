@@ -42,17 +42,28 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
     expect(z.primaryRightmost).toBe(true);
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
 
-    // Record detail: Delete on the left; Close, then the primary, on the right.
+    // A record is a page, not a dialog: its primary is the rightmost header
+    // action (only More sits after it), and Delete waits behind More.
     await page.locator(".record-card-shell > button, .table-scroll .record-link").first().click();
-    z = await zones(page);
-    expect(z.start[0]).toBe("Delete");
-    expect(z.end[0]).toBe("Close");
-    expect(z.end.at(-1)).toBe("Edit record");
-    expect(z.primaryRightmost).toBe(true);
-    expect(z.endRightOfStart).toBe(true);
+    const header = page.locator(".rw-actions");
+    await expect(header).toBeVisible();
+    const order = await header.evaluate((el) => {
+      const buttons = [...el.querySelectorAll<HTMLElement>(":scope > .ui-button")];
+      const primary = el.querySelector<HTMLElement>(".rw-primary")!;
+      const rights = buttons.filter((b) => b !== primary && !b.matches('[aria-label^="More actions"]')).map((b) => b.getBoundingClientRect().right);
+      return {
+        primary: primary.innerText.trim(),
+        rightOfOthers: rights.every((r) => r <= primary.getBoundingClientRect().right + 0.5),
+        noDeleteInHeader: !buttons.some((b) => /^Delete/.test(b.innerText.trim())),
+      };
+    });
+    expect(order.primary).toBe("Edit record");
+    expect(order.rightOfOthers).toBe(true);
+    expect(order.noDeleteInHeader).toBe(true);
 
     // Confirmation: [Cancel] [Delete record] — the confirmed act is primary.
-    await page.getByRole("button", { name: "Delete", exact: true }).click();
+    await header.getByRole("button", { name: /^More actions for / }).click();
+    await page.locator(".row-overflow-item.is-destructive", { hasText: "Delete record" }).click();
     await expect(page.getByRole("heading", { name: "Delete record?" })).toBeVisible();
     z = await zones(page);
     expect(z.start).toEqual([]);

@@ -1,8 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import Script from "next/script";
 import "@fontsource-variable/inter";
 import "react-day-picker/style.css";
 import "./globals.css";
+import { bootScript } from "./boot-script";
 export const metadata: Metadata = {
   title: "Enercore · Connected business",
   description: "One workspace for every part of your energy business.",
@@ -23,13 +23,9 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning data-scroll-behavior="smooth">
       <head>
-        <Script
-          id="enercore-theme-init"
-          strategy="beforeInteractive"
-          dangerouslySetInnerHTML={{
-            __html: `try{var t=localStorage.getItem('enercore-theme');document.documentElement.dataset.theme=t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';var p=localStorage.getItem('enercore-palette');if(['company','ocean','forest','violet','rose','slate'].includes(p))document.documentElement.dataset.palette=p}catch(e){}`,
-          }}
-        />
+        {/* A plain inline script, so it runs before the first paint (see
+            boot-script.ts). */}
+        <script id="enercore-boot" dangerouslySetInnerHTML={{ __html: bootScript }} />
       </head>
       <body>{children}</body>
     </html>
