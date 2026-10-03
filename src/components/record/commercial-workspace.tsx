@@ -2,6 +2,8 @@
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { ChevronRight, Radar, Link2 } from "lucide-react";
 import type { Actor, RecordItem } from "@/lib/domain";
+import type { ExecutionView } from "@/lib/execution/store";
+import type { LeadContact } from "./record-workspace";
 import { nextAction } from "@/lib/attention";
 import { Button } from "../ui/controls";
 import { EmptyState, Metric, Section, Tabs, tabPanelProps, useMediaQuery, type TabItem } from "../ui/layout";
@@ -33,6 +35,7 @@ import {
   useExecution,
   useExecutionHistory,
   type Execution,
+  type EditorTarget,
 } from "../commercial/execution-panel";
 import { AiPanel } from "../ai/ai-answer";
 
@@ -54,6 +57,7 @@ export default function CommercialWorkspace({
   details,
   activity,
   copilot,
+  onNewLead,
 }: {
   record: RecordItem;
   actor: Actor;
@@ -64,6 +68,8 @@ export default function CommercialWorkspace({
   activity: ReactNode;
   /** The record's Enercore AI panel, when available. */
   copilot?: ReactNode;
+  /** A new lead from this customer, optionally for one of its contacts. */
+  onNewLead?: (contact?: LeadContact) => void;
 }) {
   const c = useCommercial(record, actor, onChanged);
   const dealId = record.kind === "leads" ? c.view?.deal?.id : undefined;
@@ -100,7 +106,7 @@ export default function CommercialWorkspace({
         ? [
             { id: "overview", label: "Overview" },
             { id: "sourcing", label: "Sourcing", count: v ? v.candidates.length + v.rfqs.length + (v.canSeeCosts ? s!.offers : 0) : undefined },
-            { id: "commercial", label: "Commercial", count: v?.canSeeCosts ? v.scenarios.length : undefined, hidden: !!v && !v.canSeeCosts },
+            { id: "commercial", label: "Pricing", count: v?.canSeeCosts ? v.scenarios.length : undefined, hidden: !!v && !v.canSeeCosts },
             { id: "activity", label: "Activity" },
           ]
         : [
@@ -152,14 +158,17 @@ export default function CommercialWorkspace({
       <DealSummary record={record} c={c}>
         {deal ? (
           v ? (
-            <SourcingProgress v={v} onJump={(t) => setTab(t)} />
+            <>
+              <SourcingProgress v={v} onJump={(t) => setTab(t)} />
+              <NextStep v={v} onTab={setTab} onEditor={x.setEditor} />
+            </>
           ) : (
             <div className="exec-skeleton" role="status" aria-label="Loading commercial activity"><span /></div>
           )
         ) : (
           <div className="deal-cta">
             <p>
-              <b>No Deal Room yet.</b> Open one to source suppliers, compare offers and build the quotation.
+              <b>Next step: find suppliers.</b> Open the Deal Room to ask suppliers for prices and build the quotation.
             </p>
             <Button className="primary compact" disabled={c.busy || (!c.writable && !c.view.deal)} onClick={() => void c.openDeal()}>
               Open Deal Room
@@ -261,7 +270,7 @@ export default function CommercialWorkspace({
           </>
         );
       case "contacts":
-        return <ContactsSection c={c} />;
+        return <ContactsSection c={c} onNewLead={record.kind === "customers" ? onNewLead : undefined} />;
       case "capabilities":
       case "suppliers":
         return <CapabilitiesSection c={c} />;
@@ -325,6 +334,42 @@ export default function CommercialWorkspace({
       </div>
       {c.editorsNode}
       {x.editorNode}
+    </div>
+  );
+}
+
+/**
+ * The one obvious next step, read from where the Deal stands. It only moves
+ * to the tab where that work happens; it never changes anything itself.
+ */
+function NextStep({ v, onTab, onEditor }: { v: ExecutionView; onTab: (tab: Tab) => void; onEditor: (e: EditorTarget) => void }) {
+  const s = sourcingState(v);
+  const openCandidates = v.candidates.filter((c) => c.status !== "Removed");
+  const unasked = openCandidates.find((c) => !v.rfqs.some((r) => r.supplierId === c.supplierId && r.productId === c.productId));
+  const sentNoOffer = v.rfqs.find(
+    (r) => r.status === "Sent externally" && !s.liveOffers.some((o) => o.supplierId === r.supplierId && o.productId === r.productId),
+  );
+  // [what to do, button, what the button does]. The button opens the right
+  // place or editor; nothing is saved until the person saves it there.
+  const step: [string, string, () => void] | null =
+    !openCandidates.length && !s.rfqs ? ["Find suppliers who can supply this product.", "Find suppliers", () => onTab("sourcing")]
+    : !s.rfqs && unasked ? [`Ask ${unasked.supplier} for a price.`, "Prepare RFQ", () => onEditor({ type: "rfq", supplierId: unasked.supplierId, productId: unasked.productId })]
+    : !s.sent && !s.offers ? ["Send the request to the supplier, then mark it as sent.", "Open requests", () => onTab("sourcing")]
+    : !s.offers && sentNoOffer ? [`Waiting for ${sentNoOffer.supplier}'s price. Record it when it arrives.`, "Record offer", () => onEditor({ type: "offer", supplierId: sentNoOffer.supplierId, productId: sentNoOffer.productId, rfq: sentNoOffer })]
+    : !s.offers ? ["Waiting for a supplier's price.", "Open requests", () => onTab("sourcing")]
+    : !v.canSeeCosts ? null
+    : !s.scenarios ? ["Work out your selling price from an offer.", "Compare offers", () => onTab("sourcing")]
+    : !s.selectedScenario ? ["Review the pricing and select the one to quote.", "Open pricing", () => onTab("commercial")]
+    : !s.quoted ? ["Prepare the quotation from the selected pricing.", "Open pricing", () => onTab("commercial")]
+    : ["Quotation prepared. Follow up with the customer.", "Open pricing", () => onTab("commercial")];
+  if (!step || !v.writable) return null;
+  return (
+    <div className="deal-next" role="note">
+      <span className="deal-next-label">Next step</span>
+      <span className="deal-next-text">{step[0]}</span>
+      <Button className="secondary compact" onClick={step[2]}>
+        {step[1]}
+      </Button>
     </div>
   );
 }

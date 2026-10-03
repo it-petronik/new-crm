@@ -132,9 +132,9 @@ for (const width of [320, 360, 390, 430, 768, 820, 1024, 1280, 1440])
       .getByRole("button", { name: "Select this page", exact: true })
       .click();
     await page
-      .getByRole("button", { name: "Enrich selected", exact: true })
+      .getByRole("button", { name: "Find contact details", exact: true })
       .click();
-    const dialog = page.getByRole("dialog", { name: "Review enrichment" });
+    const dialog = page.getByRole("dialog", { name: "Find contact details" });
     await expect(dialog).toBeVisible();
     expect(actions.filter((a) => a === "advance")).toHaveLength(0);
     await fits(page);
@@ -469,10 +469,10 @@ test("explicit enrichment confirmation still runs while exports use only staged 
   const { context, page } = await open(browser);
   await manual(page, "industrial");
   await page
-    .getByRole("button", { name: "Enrich", exact: true })
+    .getByRole("button", { name: /^Find contact details for / })
     .first()
     .click();
-  const dialog = page.getByRole("dialog", { name: "Review enrichment" });
+  const dialog = page.getByRole("dialog", { name: "Find contact details" });
   await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: /Confirm enrichment/ }).click();
   await expect(

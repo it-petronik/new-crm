@@ -1,5 +1,6 @@
 import { eq, and, or, lt, gt, inArray, sql, desc, isNull, ne } from "drizzle-orm";
 import type { Database } from "./d1";
+import type { BatchItem } from "drizzle-orm/batch";
 import { users, sessions, businessRecords, auditEvents, loginAttempts, passwordResets, refreshTokens } from "./schema";
 import type { RefreshTokenRow } from "./schema";
 import type { UserRow } from "./schema";
@@ -294,10 +295,19 @@ const insertAudit = (db: Database, event: NewAudit) =>
 /** Writes a single audit entry. */
 export const writeAudit = (db: Database, event: NewAudit) => insertAudit(db, event).run();
 
-/** Create a record and its audit entry together, or neither. */
-export function createRecordWithAudit(db: Database, record: NewRecord, event: NewAudit) {
+/**
+ * Create a record and its audit entry together, or neither. `alsoWrite` adds
+ * statements that belong to the same business action (a new customer's main
+ * contact), so they succeed or fail with the record.
+ */
+export function createRecordWithAudit(
+  db: Database,
+  record: NewRecord,
+  event: NewAudit,
+  alsoWrite: BatchItem<"sqlite">[] = [],
+) {
   const now = new Date();
-  return db.batch([insertRecord(db, record, now), insertAudit(db, event)]);
+  return db.batch([insertRecord(db, record, now), ...alsoWrite, insertAudit(db, event)]);
 }
 
 /**

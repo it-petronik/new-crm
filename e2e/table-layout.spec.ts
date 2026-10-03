@@ -102,7 +102,7 @@ async function openModule(page: Page, path: string) {
   // form so the Suppliers list has a row to lay out.
   if (path.endsWith("/suppliers") && (await empty.isVisible())) {
     await page.getByRole("button", { name: "Add supplier", exact: true }).first().click();
-    await page.getByRole("textbox", { name: "Supplier legal name", exact: true }).fill("Harbour Additives Trading LLC");
+    await page.getByRole("textbox", { name: "Company name", exact: true }).fill("Harbour Additives Trading LLC");
     await page.getByRole("button", { name: "Create supplier", exact: true }).click();
     await expect(page.getByRole("dialog")).toBeHidden();
   }

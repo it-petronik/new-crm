@@ -27,6 +27,7 @@ import {
   contactInput,
   CommercialError,
   duplicateReasons,
+  companyCore,
   normalizedName,
   unavailable,
   type Capability,
@@ -516,6 +517,45 @@ async function stableId(actor: string, key: string) {
       .slice(0, 40)
   );
 }
+/**
+ * A new customer's (or supplier's) main contact, as one business action with
+ * the record: returns the record linked to its primary contact and the
+ * statements that write the contact and the link, for the same batch as the
+ * (unlinked) record insert. The
+ * contact id is derived from the same request id, so a retried submission
+ * reuses it rather than adding a second contact.
+ */
+export async function newRecordContact(db: Database, actor: Actor, record: RecordItem, requestId: string) {
+  if (!["customers", "suppliers"].includes(record.kind) || !record.contact?.trim()) return null;
+  const details = contactInput.parse({
+    name: record.contact.trim(),
+    email: record.email || "",
+    phone: record.phone || "",
+    country: String(record.attributes?.country || ""),
+  });
+  const contactId = await stableId(actor.id, `primary:${record.kind}:${requestId}`);
+  const now = new Date(record.createdAt);
+  const linked = { ...record, primaryContactId: contactId } as RecordItem;
+  // Same order as quickCustomer: the record exists before its contact, and
+  // is linked to it as primary last (the database checks the link).
+  return {
+    record: linked,
+    statements: [
+      db.insert(contacts).values({
+        id: contactId,
+        parentId: record.id,
+        company: record.company,
+        branch: record.branch,
+        details,
+        active: true,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      db.update(businessRecords).set({ payload: linked }).where(eq(businessRecords.id, record.id)),
+    ] as const,
+  };
+}
+
 export async function quickCustomer(
   db: Database,
   actor: Actor,
@@ -659,7 +699,14 @@ export async function duplicates(
     .map((r) => ({
       id: r.id,
       title: r.title,
-      reasons: duplicateReasons(input, r),
+      place: [r.destination, r.attributes?.country].filter(Boolean).join(", "),
+      reasons: (() => {
+        const reasons = duplicateReasons(input, r);
+        const core = companyCore(input.title || "");
+        if (!reasons.includes("Same normalized name") && core.length >= 3 && core === companyCore(r.title))
+          reasons.unshift("Same name apart from legal form");
+        return reasons;
+      })(),
     }))
     .filter((r) => r.reasons.length)
     .slice(0, 20);

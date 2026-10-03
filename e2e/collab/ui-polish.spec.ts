@@ -31,9 +31,14 @@ test("dashboard: an empty Needs attention keeps the grid, and the skeleton has t
   // Hold the records response so the skeleton can be measured.
   let release!: () => void;
   const gate = new Promise<void>((r) => (release = r));
+  // The all-clear is an explicit fixture: the workspace answer arrives with
+  // no business records, whatever other tests or review data have written to
+  // the admin's companies. Everything else in the response is real.
   await page.route("**/api/records*", async (route) => {
     await gate;
-    await route.continue();
+    const response = await route.fetch();
+    const body = await response.json();
+    await route.fulfill({ response, json: { ...body, records: [] } });
   });
   await page.goto("/");
   await expect(page.locator(".skeleton-region")).toBeVisible();
@@ -41,7 +46,7 @@ test("dashboard: an empty Needs attention keeps the grid, and the skeleton has t
   expect(skeleton).toHaveLength(2);
   release();
 
-  // No business records in the admin's companies here: the all-clear.
+  // No business records (the fixture above): the all-clear.
   const panel = page.locator(".attention-clear");
   await expect(panel).toContainText("Needs attention");
   await expect(panel).toContainText("Nothing needs your attention right now.");

@@ -14,6 +14,7 @@ import { PageTitle } from "../workspace-pages";
 import { phase7Call, TextField, Choice, Field } from "./execution-panel";
 import { RecordPicker } from "./relationship-picker";
 import { openReference } from "@/lib/ai/client";
+import { alreadyAdded, prospectState } from "@/lib/prospecting/review-state";
 type Page = ProspectPage & { stageId: string; cached: boolean };
 type Review = Awaited<ReturnType<typeof importReview>>;
 export function ProspectReview({
@@ -35,11 +36,16 @@ export function ProspectReview({
 }) {
   const formId = useId();
   const [review, setReview] = useState(initial),
-    [customerId, setCustomer] = useState(""),
+    // A prospect already added from Apollo starts on its customer.
+    [customerId, setCustomer] = useState(
+      () => alreadyAdded(initial.customers),
+    ),
     [contactId, setContact] = useState(""),
     [productId, setProduct] = useState(initialProduct || ""),
     [createContact, setCreateContact] = useState(true),
     [createLead, setCreateLead] = useState(false),
+    // "Create separate company" chosen over the possible matches.
+    [separate, setSeparate] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [requestId] = useState(() => crypto.randomUUID());
@@ -93,172 +99,84 @@ export function ProspectReview({
     }
   }
   const customer = review.customers.find((c) => c.id === customerId);
+  // What this prospect is, in the words a salesperson uses. Matching itself
+  // is the server's (authorized, deterministic); this only presents it.
+  const exact = review.customers.find((c) => c.id === alreadyAdded(review.customers));
+  const state = prospectState(review.customers, customerId, separate);
+  const companyName = p.companyName || (p.kind === "company" ? p.name : "");
+  const place = [p.country, p.domain].filter(Boolean).join(" · ");
+  const choose = (id: string) => {
+    setCustomer(id);
+    setContact("");
+    setEnrichment(null);
+    setSeparate(false);
+  };
+  // Only fields where Apollo offers something different from Enercore.
+  const changes = enrichment
+    ? Object.entries(enrichment.suggested).filter(([key, value]) => {
+        const current = String((enrichment.current as Record<string, unknown>)[key] ?? "").trim();
+        return value && String(value).trim() !== current;
+      })
+    : [];
   return (
-    <Dialog
-      className="execution-editor"
-      title="Review Apollo prospect"
-      onClose={onClose}
-    >
-      <h3>Review {p.name}</h3>
-      <p className="muted">
-        Apollo · {p.domain} · {p.country}. {review.coverage}
-      </p>
-      {p.description && (
-        <p>
-          <strong>Apollo-supplied description</strong>
-          <br />
-          {p.description}
-        </p>
-      )}
-      <h3>Possible existing relationships</h3>
-      {!review.customers.length && (
-        <p>
-          No likely match in the checked records. Confirm identity before
-          creating a customer.
-        </p>
-      )}
-      {review.customers.map((c) => (
-        <article className="execution-card" key={c.id}>
-          <h4>{c.title}</h4>
-          <p>{c.reasons.join(" · ")}</p>
-          <Button
-            className="secondary"
-            disabled={busy}
-            onClick={() => {
-              setCustomer(c.id);
-              setContact("");
-              setEnrichment(null);
-            }}
-          >
-            Use {c.title}
-          </Button>
-        </article>
-      ))}
-      <RecordPicker
-        kind="customers"
-        company={company}
-        branch={branch}
-        label="Find another existing customer"
-        onSelect={(id) => {
-          setCustomer(id);
-          setContact("");
-          setEnrichment(null);
-        }}
-      />
-      {customerId && (
-        <p>
-          Existing customer selected {customer?.title || customerId}.{" "}
-          <Button
-            className="secondary compact"
-            onClick={() => {
-              setCustomer("");
-              setContact("");
-              setEnrichment(null);
-            }}
-          >
-            Choose a new customer
-          </Button>
-        </p>
-      )}
-      {p.kind === "person" && customerId && (
-        <Field label="Existing Contact">
-          <Select
-            value={contactId || "new"}
-            onChange={(e) => {
-              setContact(e.target.value === "new" ? "" : e.target.value);
-              setEnrichment(null);
-            }}
-          >
-            <option value="new">Create a new Contact after review</option>
-            {selectedContacts
-              .filter((c) => c.active)
-              .map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} · {c.email}
-                </option>
-              ))}
-          </Select>
-        </Field>
-      )}
-      <details>
-        <summary>Optional enrichment</summary>
-        <p>
-          Enrichment is an explicit paid action with a separate credit
-          confirmation. Existing CRM fields remain unchanged until you select
-          fields below.
-        </p>
-        <Button
-          className="secondary compact"
-          disabled={busy}
-          onClick={() =>
-            onEnrich({ stageId: review.stageId, providerId: p.id })
-          }
-        >
-          Review enrichment cost
-        </Button>
-        {(p.kind === "company" ? customerId : contactId) && (
-          <Button
-            className="secondary"
-            disabled={busy}
-            onClick={() => void reviewFields()}
-          >
-            Review enriched fields for existing record
-          </Button>
+    <Dialog className="execution-editor prospect-review" title="Add to Enercore" description={place ? `${p.name} · ${place}` : p.name} onClose={onClose}>
+      <section className={`prospect-status is-${state}`} aria-live="polite">
+        {state === "ready" && (
+          <>
+            <p className="prospect-status-title">Ready to add</p>
+            <p>New company in Enercore.{separate && " Created separately from the possible matches."}</p>
+            {separate && (
+              <Button className="ghost compact" onClick={() => setSeparate(false)}>
+                Show possible matches again
+              </Button>
+            )}
+          </>
         )}
-      </details>
-      {enrichment && (
-        <section>
-          <h3>Choose fields to apply</h3>
-          {Object.entries(enrichment.suggested).map(([key, value]) => (
-            <label className="execution-check" key={key}>
-              <input
-                type="checkbox"
-                disabled={!value || busy}
-                checked={fields.includes(key)}
-                onChange={(e) =>
-                  setFields((f) =>
-                    e.target.checked ? [...f, key] : f.filter((k) => k !== key),
-                  )
-                }
-              />
-              <span>
-                {key}:{" "}
-                {String(
-                  (enrichment.current as Record<string, unknown>)[key] ||
-                    "Empty",
-                )}{" "}
-                → {value || "Not available"}
-              </span>
-            </label>
-          ))}
-          <Button
-            className="secondary compact"
-            disabled={busy || !fields.length}
-            onClick={async () => {
-              setBusy(true);
-              setError("");
-              try {
-                await phase7Call("prospecting", {
-                  action: "apply-enrichment",
-                  stageId: review.stageId,
-                  providerId: p.id,
-                  targetId: enrichment.targetId,
-                  kind: enrichment.kind,
-                  version: enrichment.version,
-                  fields,
-                });
-                setEnrichment(null);
-              } catch (e) {
-                setError((e as Error).message);
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            Apply selected fields
-          </Button>
-        </section>
-      )}
+        {state === "existing" && (
+          <>
+            <p className="prospect-status-title">{exact?.id === customerId ? "Already in Enercore" : "Adding to an existing customer"}</p>
+            <p>
+              <b>{customer?.title || "Selected customer"}</b>
+            </p>
+            <div className="prospect-status-actions">
+              <Button
+                className="secondary compact"
+                onClick={() => {
+                  onClose();
+                  window.dispatchEvent(new CustomEvent("enercore:open-record", { detail: { kind: "customers", id: customerId } }));
+                }}
+              >
+                Open existing
+              </Button>
+              <Button className="ghost compact" onClick={() => choose("")}>
+                Change
+              </Button>
+            </div>
+          </>
+        )}
+        {state === "review" && (
+          <>
+            <p className="prospect-status-title">Needs review</p>
+            <p>This company may already be in Enercore.</p>
+            <ul className="prospect-matches">
+              {review.customers.map((c) => (
+                <li key={c.id}>
+                  <span>
+                    <b>{c.title}</b>
+                    <small>{c.reasons.map((r) => REASONS[r] || r).join(" · ")}</small>
+                  </span>
+                  <Button className="secondary compact" disabled={busy} onClick={() => choose(c.id)}>
+                    Use existing
+                  </Button>
+                </li>
+              ))}
+            </ul>
+            <Button className="ghost compact" disabled={busy} onClick={() => setSeparate(true)}>
+              Create separate company
+            </Button>
+          </>
+        )}
+      </section>
       <form
         id={formId}
         key={review.stageId}
@@ -278,15 +196,17 @@ export function ProspectReview({
               requestId,
               customerId: customerId || undefined,
               contactId: contactId || undefined,
-              companyName: f.get("companyName"),
+              companyName: f.get("companyName") || customer?.title || companyName,
               contactName: f.get("contactName") || undefined,
               email: f.get("email") || "",
               phone: f.get("phone") || "",
-              createAnyway: f.get("createAnyway") === "on",
-              createLead: f.get("createLead") === "on",
-              createDeal: f.get("createDeal") === "on",
-              createContact: f.get("createContact") !== null,
-              productId: productId || undefined,
+              createAnyway: separate,
+              createLead,
+              // One Deal per lead: set up with the lead, as the server
+              // does by default; no separate step for the salesperson.
+              createDeal: createLead,
+              createContact: p.kind === "person" ? createContact : undefined,
+              productId: createLead ? productId || undefined : undefined,
             });
             onImported(ids);
           } catch (err) {
@@ -297,76 +217,126 @@ export function ProspectReview({
         }}
       >
         <div className="execution-fields">
-          <TextField
-            label="Reviewed company name"
-            name="companyName"
-            value={
-              customer?.title ||
-              p.companyName ||
-              (p.kind === "company" ? p.name : "")
-            }
-            required
-          />
+          {!customerId && <TextField label="Company name" name="companyName" value={companyName} required />}
           {p.kind === "person" && (
             <>
-              <TextField
-                label="Verified full contact name"
-                name="contactName"
-                value={p.nameComplete ? p.name : ""}
-                required={createContact}
-              />
-              <TextField
-                label="Reviewed business email"
-                name="email"
-                value={p.email}
-              />
-              <TextField
-                label="Reviewed business phone"
-                name="phone"
-                value={p.phone}
-              />
+              {customerId && (
+                <Field label="Contact">
+                  <Select
+                    value={contactId || "new"}
+                    onChange={(e) => {
+                      setContact(e.target.value === "new" ? "" : e.target.value);
+                      setEnrichment(null);
+                    }}
+                  >
+                    <option value="new">Add {p.name} as a new contact</option>
+                    {selectedContacts
+                      .filter((c) => c.active)
+                      .map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {[c.name, c.email].filter(Boolean).join(" · ")}
+                        </option>
+                      ))}
+                  </Select>
+                </Field>
+              )}
+              {!contactId && (
+                <>
+                  <TextField label="Contact name" name="contactName" value={p.nameComplete ? p.name : ""} required={createContact} />
+                  {p.email && <TextField label="Email" name="email" value={p.email} />}
+                  {p.phone && <TextField label="Phone" name="phone" value={p.phone} />}
+                </>
+              )}
             </>
           )}
         </div>
-        <label className="execution-check">
-          <input type="checkbox" name="createAnyway" />
-          <span>
-            I reviewed possible matches; create a separate record where I have
-            not selected an existing one.
-          </span>
-        </label>
-        <label className="execution-check">
-          <input
-            type="checkbox"
-            name="createLead"
-            checked={createLead}
-            onChange={(e) => setCreateLead(e.target.checked)}
-          />
-          <span>Also create a Lead</span>
-        </label>
-        <label className="execution-check">
-          <input type="checkbox" name="createDeal" disabled={!createLead} />
-          <span>Open a Deal Room for the new Lead (requires Create Lead)</span>
-        </label>
-        {p.kind === "person" && (
+        {p.kind === "person" && !contactId && (
           <label className="execution-check">
-            <input
-              type="checkbox"
-              name="createContact"
-              checked={createContact}
-              onChange={(e) => setCreateContact(e.target.checked)}
-            />
-            <span>Create or link this Contact</span>
+            <input type="checkbox" checked={createContact} onChange={(e) => setCreateContact(e.target.checked)} />
+            <span>Add {p.name} as a contact</span>
           </label>
         )}
-        <RecordPicker
-          kind="products"
-          company={company}
-          branch={branch}
-          label="Optional Lead product"
-          onSelect={(id) => setProduct(id)}
-        />
-        {productId && <p>Product selected for the new Lead.</p>}
+        <label className="execution-check">
+          <input type="checkbox" checked={createLead} onChange={(e) => setCreateLead(e.target.checked)} />
+          <span>Also create a lead</span>
+        </label>
+        {createLead && (
+          <RecordPicker kind="products" company={company} branch={branch} label="Product needed (optional)" onSelect={(id) => setProduct(id)} />
+        )}
+        <details className="form-more">
+          <summary>
+            Contact details from Apollo <span className="muted">(uses Apollo credits)</span>
+          </summary>
+          <p className="exec-caption">Nothing changes in Enercore until you choose which details to use.</p>
+          <div className="prospect-status-actions">
+            <Button className="secondary compact" disabled={busy} onClick={() => onEnrich({ stageId: review.stageId, providerId: p.id })}>
+              Find contact details
+            </Button>
+            {(p.kind === "company" ? customerId : contactId) && (
+              <Button className="ghost compact" disabled={busy} onClick={() => void reviewFields()}>
+                Compare with Enercore
+              </Button>
+            )}
+          </div>
+          {state === "ready" && !separate && (
+            <RecordPicker kind="customers" company={company} branch={branch} label="Or add to another existing customer" onSelect={(id) => choose(id)} />
+          )}
+          {p.description && <p className="exec-caption">{p.description}</p>}
+        </details>
+        {enrichment && (
+          <section className="prospect-changes" aria-label="Details that differ">
+            {!changes.length ? (
+              <p className="exec-caption">Apollo has nothing different from what Enercore already holds.</p>
+            ) : (
+              <>
+                <p className="prospect-status-title">Different in Apollo</p>
+                {changes.map(([key, value]) => (
+                  <label className="execution-check prospect-change" key={key}>
+                    <input
+                      type="checkbox"
+                      disabled={busy}
+                      checked={fields.includes(key)}
+                      onChange={(e) => setFields((f) => (e.target.checked ? [...f, key] : f.filter((k) => k !== key)))}
+                    />
+                    <span>
+                      <b>{FIELD_LABELS[key] || key}</b>
+                      <small>
+                        Enercore: {String((enrichment.current as Record<string, unknown>)[key] || "empty")} · Apollo: {String(value)}
+                      </small>
+                    </span>
+                  </label>
+                ))}
+                <Button
+                  className="secondary compact"
+                  disabled={busy || !fields.length}
+                  onClick={async () => {
+                    setBusy(true);
+                    setError("");
+                    try {
+                      await phase7Call("prospecting", {
+                        action: "apply-enrichment",
+                        stageId: review.stageId,
+                        providerId: p.id,
+                        targetId: enrichment.targetId,
+                        kind: enrichment.kind,
+                        version: enrichment.version,
+                        fields,
+                      });
+                      setEnrichment(null);
+                    } catch (e) {
+                      setError((e as Error).message);
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                >
+                  Use Apollo for selected
+                </Button>
+              </>
+            )}
+          </section>
+        )}
+        <p className="prospect-source">Source: Apollo</p>
         {error && (
           <p role="alert" className="form-error">
             {error}
@@ -374,10 +344,11 @@ export function ProspectReview({
         )}
         <DialogActions
           primary={{
-            label: "Import prospect",
+            label: customerId ? "Add to existing customer" : "Add to Enercore",
             type: "submit",
             form: formId,
             pending: busy,
+            disabled: state === "review",
           }}
           pending={busy}
           onCancel={onClose}
@@ -386,3 +357,23 @@ export function ProspectReview({
     </Dialog>
   );
 }
+
+const REASONS: Record<string, string> = {
+  "Same normalized name": "Same company name",
+  "Same business domain": "Same business domain",
+  "Same business email domain": "Same email domain",
+  "Same Apollo company reference": "Already added from Apollo",
+  "Matching existing Contact evidence": "Same contact email or phone",
+  "Same email": "Same email",
+  "Same phone": "Same phone",
+};
+const FIELD_LABELS: Record<string, string> = {
+  email: "Email",
+  phone: "Phone",
+  jobTitle: "Job title",
+  website: "Website",
+  country: "Country",
+  city: "City",
+  industry: "Industry",
+  linkedin: "LinkedIn",
+};

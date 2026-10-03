@@ -169,7 +169,7 @@ const icons: Record<Module, LucideIcon> = {
 };
 const subtitles: Record<Module, string> = {
   overview: "What needs attention across your companies.",
-  leads: "Open opportunities by stage.",
+  leads: "Open leads by stage.",
   quotations: "Quotations in draft, awaiting approval, sent and accepted.",
   orders: "Confirmed orders handed over to operations.",
   logistics: "Shipments in progress and expected arrivals.",
@@ -433,7 +433,7 @@ export default function Workspace({
    */
   const executive = ["MD", "Group Manager", "Branch Manager"].includes(actor.role);
   const [mutationError, setMutationError] = useState("");
-  useEffect(() => { if (!form) { setEditing(null); setMutationError(""); } }, [form]);
+  useEffect(() => { if (!form) { setEditing(null); setMutationError(""); setMutationFields({}); } }, [form]);
   // "n" opens quick add, the way a mail client opens a compose window. Ignored
   // while typing, so it never swallows a character mid-field.
   useEffect(() => {
@@ -456,6 +456,16 @@ export default function Workspace({
   const createKey = useRef("");
   useEffect(() => { if (form && !editing) createKey.current = crypto.randomUUID(); }, [form, editing]);
   const [quoteSource, setQuoteSource] = useState<RecordItem | null>(null);
+  // What a lead form was started from, shown at the top of the form.
+  const [leadContext, setLeadContext] = useState("");
+  const [mutationFields, setMutationFields] = useState<Record<string, string>>({});
+  // A starting record belongs to one form opening only.
+  useEffect(() => {
+    if (!form) {
+      setQuoteSource(null);
+      setLeadContext("");
+    }
+  }, [form]);
   const [selected, setSelected] = useState<RecordItem | null>(null);
   // The meeting screens cover the workspace. A record is a page, not a modal,
   // so it simply stays underneath — on the same tab and scroll — and is there
@@ -1021,6 +1031,7 @@ export default function Workspace({
     >,
   ) {
     setBusy(true);
+    setMutationFields({});
     try {
       if (isCashEntry(values)) {
         const error = cashEntryError(values);
@@ -1062,8 +1073,19 @@ export default function Workspace({
           body: JSON.stringify({ ...values, requestId: createKey.current }),
         });
         const result = await response.json();
-        if (!response.ok) throw new Error(result.error);
+        if (!response.ok) {
+          if (result.fields) setMutationFields(result.fields);
+          throw new Error(result.error);
+        }
         await reload();
+        // Go where the work continues: the new customer, supplier, product or
+        // lead opens, instead of a message about having saved it.
+        if (["customers", "suppliers", "products", "leads"].includes(values.kind) && result.record) {
+          setForm(null);
+          setSelected(result.record as RecordItem);
+          setToast(values.kind === "customers" && values.contact ? "Customer and main contact added." : `${recordProfiles[values.kind].noun} added.`);
+          return;
+        }
       }
       setForm(null);
       setToast("Saved to your workspace.");
@@ -1126,6 +1148,25 @@ export default function Workspace({
         <List size={16} />
       </Button>
     </div>
+  );
+  // An empty list names what is missing and offers the one action that fills it.
+  const addKind = (module === "hr" ? (hrTab === "people" ? "hr" : "leave") : module) as Kind;
+  const canAdd = Boolean(newLabels[module]) && canWrite(actor, {
+    kind: addKind,
+    company: company === "All companies" ? actor.companies[0] : company,
+    branch: actor.branches[0] || "Main",
+    ownerId: actor.id,
+  } as RecordItem);
+  const emptyList = (
+    <>
+      <p><b>No {({ leads: "leads", orders: "sales orders", hr: hrTab === "people" ? "employees" : "leave requests", it: "tickets", marketing: "campaigns", accounts: "invoices" } as Partial<Record<Module, string>>)[module] || (labels[module] || "records").toLowerCase()} yet.</b></p>
+      {canAdd && (
+        <Button className="primary" onClick={() => setForm(addKind)}>
+          <Plus size={16} aria-hidden="true" />
+          {module === "hr" && hrTab === "leave" ? "Request leave" : newLabels[module]}
+        </Button>
+      )}
+    </>
   );
   return (
     <div className={`app-shell ${collapsed ? "is-collapsed" : ""}`}>
@@ -1274,6 +1315,54 @@ export default function Workspace({
                 setQuoteSource(selectedCurrent);
                 setForm("quotations");
               }}
+              onNewLead={
+                (selectedCurrent.kind === "customers" || selectedCurrent.kind === "products") &&
+                canWrite(actor, { kind: "leads", company: selectedCurrent.company, branch: selectedCurrent.branch || actor.branches[0] || "Main", ownerId: actor.id } as RecordItem)
+                  ? (contact) => {
+                      // Never ask twice: a lead started here already knows the
+                      // customer (and contact), or the product. The server
+                      // still checks every link.
+                      const from = selectedCurrent;
+                      if (from.kind === "customers") {
+                        setQuoteSource({
+                          ...from,
+                          customerId: from.id,
+                          contactId: contact?.id || from.primaryContactId || null,
+                          ...(contact ? { contact: contact.name, email: contact.email || "", phone: contact.phone || "" } : {}),
+                          productId: null,
+                          dealId: null,
+                          due: "",
+                          detail: "",
+                          amount: 0,
+                          quantity: 0,
+                        });
+                        setLeadContext(contact ? `${from.title} · ${contact.name}` : from.title);
+                      } else {
+                        setQuoteSource({
+                          ...from,
+                          title: "",
+                          contact: "",
+                          email: "",
+                          phone: "",
+                          destination: "",
+                          customerId: null,
+                          contactId: null,
+                          primaryContactId: null,
+                          productId: from.id,
+                          product: from.title,
+                          dealId: null,
+                          due: "",
+                          detail: "",
+                          amount: 0,
+                          quantity: 0,
+                          attributes: {},
+                        });
+                        setLeadContext(`Product: ${from.title}`);
+                      }
+                      setForm("leads");
+                    }
+                  : undefined
+              }
             />
           )}
           <div className="page-under-record" hidden={!!selectedCurrent}>
@@ -1624,7 +1713,7 @@ export default function Workspace({
                             ))}
                           </Select>
                         </Field>
-                        <span className="list-count">{visible.length} {visible.length === 1 ? "opportunity" : "opportunities"}</span>
+                        <span className="list-count">{visible.length} {visible.length === 1 ? "lead" : "leads"}</span>
                         <div className="list-query-trailing">{viewToggle}</div>
                       </div>
                       <div className="kanban">
@@ -1698,16 +1787,16 @@ export default function Workspace({
                                 onClick={() => setForm("leads")}
                               >
                                 <Plus size={13} />
-                                Add opportunity
+                                Add lead
                               </Button>
                             </section>
                           ))}
                       </div>
                       </>
                     ) : cardModules.includes(module) && board ? (
-                      <RecordCards toolbar={viewToggle} shared={sharedQuery} records={visible} onSelect={setSelected} actor={actor} onEdit={r => { setMutationError(""); setEditing(r); setForm(r.kind); }} onDelete={r => { setMutationError(""); setDeleting(r); }} onLog={setLogging} onStatus={(r, status) => { void update(r, status).then(() => setPrompt({ record: r, status })); }} onImport={isImportable(module) ? () => setImporting(true) : undefined} />
+                      <RecordCards toolbar={viewToggle} shared={sharedQuery} empty={emptyList} records={visible} onSelect={setSelected} actor={actor} onEdit={r => { setMutationError(""); setEditing(r); setForm(r.kind); }} onDelete={r => { setMutationError(""); setDeleting(r); }} onLog={setLogging} onStatus={(r, status) => { void update(r, status).then(() => setPrompt({ record: r, status })); }} onImport={isImportable(module) ? () => setImporting(true) : undefined} />
                     ) : (
-                      <RecordTable toolbar={viewToggle} shared={sharedQuery} records={visible} onSelect={setSelected} actor={actor} onEdit={r => { setMutationError(""); setEditing(r); setForm(r.kind); }} onDelete={r => { setMutationError(""); setDeleting(r); }} onLog={setLogging} onStatus={(r, status) => { void update(r, status).then(() => setPrompt({ record: r, status })); }} onImport={isImportable(module) ? () => setImporting(true) : undefined} />
+                      <RecordTable toolbar={viewToggle} shared={sharedQuery} empty={emptyList} records={visible} onSelect={setSelected} actor={actor} onEdit={r => { setMutationError(""); setEditing(r); setForm(r.kind); }} onDelete={r => { setMutationError(""); setDeleting(r); }} onLog={setLogging} onStatus={(r, status) => { void update(r, status).then(() => setPrompt({ record: r, status })); }} onImport={isImportable(module) ? () => setImporting(true) : undefined} />
                     )}
                   </section>
                   {["orders", "accounts", "logistics"].includes(module) && (
@@ -1734,9 +1823,11 @@ export default function Workspace({
           <RecordForm
             live={!preview}
             records={scoped.records}
-            initial={editing || (form === "quotations" ? quoteSource : null)}
+            initial={editing || (form === "quotations" || form === "leads" ? quoteSource : null)}
             editing={Boolean(editing)}
             saveError={mutationError}
+            serverFieldErrors={mutationFields}
+            context={form === "leads" ? leadContext : ""}
             kind={form}
             actor={actor}
             company={company}
@@ -2067,12 +2158,15 @@ function RecordCards({
   onImport,
   toolbar,
   shared,
+  empty,
   ...actions
 }: {
   records: RecordItem[];
   onSelect: (r: RecordItem) => void;
   toolbar?: React.ReactNode;
   shared?: { query: ListQuery; setQuery: (query: ListQuery) => void };
+  /** What an empty list says, and the one action that fills it. */
+  empty?: React.ReactNode;
 } & RecordActionsProps) {
   const pagination = usePagination(records, "", shared);
   return (
@@ -2140,7 +2234,7 @@ function RecordCards({
           );
         })}
       </div>
-      <ListEmpty {...pagination} label="records" />
+      <ListEmpty {...pagination} label="records" empty={empty} />
       <Pagination {...pagination} label="records" />
     </>
   );
@@ -2151,12 +2245,15 @@ function RecordTable({
   onImport,
   toolbar,
   shared,
+  empty,
   ...actions
 }: {
   records: RecordItem[];
   onSelect: (r: RecordItem) => void;
   toolbar?: React.ReactNode;
   shared?: { query: ListQuery; setQuery: (query: ListQuery) => void };
+  /** What an empty list says, and the one action that fills it. */
+  empty?: React.ReactNode;
 } & RecordActionsProps) {
   const pagination = usePagination(records, "", shared);
   // Money is a column only where the records carry money.
@@ -2234,7 +2331,7 @@ function RecordTable({
           </tbody>
         </table>
       </div>}
-      <ListEmpty {...pagination} label="records" />
+      <ListEmpty {...pagination} label="records" empty={empty} />
       <Pagination {...pagination} label="records" />
     </>
   );
@@ -2334,7 +2431,7 @@ function Overview({
     leads: [{
       label: "Open pipeline",
       value: shortMoney(pipeline),
-      sub: `${leads.filter((r) => !["Won", "Lost"].includes(r.status)).length} active opportunities · USD value only`,
+      sub: `${leads.filter((r) => !["Won", "Lost"].includes(r.status)).length} open leads · USD value only`,
       icon: Target, to: "leads", accent: "mint",
     }],
     orders: [{
@@ -2635,7 +2732,7 @@ function Overview({
           <div className="chart-summary">
             <strong>{shortMoney(usd(orders) + pipeline)}</strong>
             <span>
-              Orders + open opportunities
+              Orders + open leads
               <br />
               <small>Current workspace snapshot</small>
             </span>

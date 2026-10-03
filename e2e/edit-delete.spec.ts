@@ -11,7 +11,7 @@ test("edit existing customer, cancel deletion and confirm deletion", async ({ pa
   await page.goto("/?module=customers");
   await page.getByRole("button", { name: /Gulf Industrial Trading/ }).first().click();
   await page.getByRole("button", { name: "Edit record", exact: true }).click();
-  const name = page.getByRole("textbox", { name: "Customer / Business name", exact: true });
+  const name = page.getByRole("textbox", { name: "Company name", exact: true });
   await expect(name).toHaveValue("Gulf Industrial Trading");
   await name.fill("Edited customer QA");
   await page.getByRole("button", { name: "Save changes", exact: true }).click();

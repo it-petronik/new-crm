@@ -1096,3 +1096,114 @@ html[data-theme="dark"] .theme-toggle .theme-icon-sun { display: inline-block; }
   .access-actions { max-width: 15rem; }
   .access-actions > .ui-button { white-space: nowrap; }
 }
+
+/* ------------------------------------------------------ form: more details */
+/* Everyday fields stay visible; the rest open on request. */
+.record-form-dialog .dialog-body .form-grid > .form-more, .form-grid > .form-more, .form-more { grid-column: 1 / -1; border-top: 1px solid var(--e-border); padding-top: 4px; }
+.form-more > summary {
+  display: flex; align-items: center; gap: 8px;
+  min-height: 44px; cursor: pointer; list-style: none;
+  font-size: 14px; font-weight: 600; color: var(--e-text);
+}
+.form-more > summary::-webkit-details-marker { display: none; }
+.form-more > summary::before {
+  content: ""; width: 7px; height: 7px; margin: 0 4px 0 2px;
+  border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg); transition: transform var(--e-transition);
+}
+.form-more[open] > summary::before { transform: rotate(45deg); }
+.form-more > summary .muted { font-weight: 400; }
+.form-more > .form-grid { margin-top: 8px; }
+.form-more > summary:focus-visible { outline: none; box-shadow: var(--e-focus-ring); border-radius: 6px; }
+
+/* Deal Room: the one next step, read from where the Deal stands. */
+.deal-next {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px;
+  margin-top: 12px; padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--e-accent) 30%, var(--e-border));
+  border-radius: var(--e-radius);
+  background: color-mix(in srgb, var(--e-accent) 6%, var(--e-surface));
+}
+.deal-next-label { font-size: 12px; font-weight: 650; color: var(--e-accent-strong); }
+.deal-next-text { flex: 1 1 16rem; font-size: 14px; color: var(--e-text); }
+.exec-add-costs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 10px; }
+
+/* ------------------------------------------------------------ type floor */
+/* One readable minimum: metadata at 12px, anything you press or type into at
+   13px, on every screen size. (Initials inside small avatars and the ⌘K hint
+   are decorative and stay small.) */
+.app-shell :is(
+  .e-row-meta, .e-row-owner, .cell-date, .company-label, .record-reference,
+  .record-timestamps, .rw-footnote, .e-caption, .e-operation-title,
+  .nav-group-title, .ai-fineprint, .copilot-eyebrow, .eyebrow,
+  .ui-tab-count, .nav-count, .collab-count, .action-count,
+  .profile small, .business-clock small, .collab-row time, .collab-msg time
+) { font-size: 12px !important; }
+.app-shell .lead-card :is(p, span, b, small):not(.tiny-avatar):not(.entity-avatar),
+.app-shell .kanban-column summary { font-size: 12px !important; }
+.app-shell :is(.e-record-table, .rtable) thead th,
+.app-shell .column-sort { font-size: 12px !important; }
+.app-shell :is(.text-button, .add-column, .action-groups .ui-button, .page-heading .ui-button.primary, .heading-actions .ui-button),
+.app-shell .top-search span { font-size: 13px !important; }
+.app-shell :is(.missing-record-fields, .missing-record-fields summary, .missing-record-fields p),
+.app-shell .kanban-column :is(h2, h3) b,
+.app-shell .period-switch :is(span, button),
+.app-shell [aria-label="Whose work"] .ui-button { font-size: 12px !important; }
+.app-shell [aria-label="Whose work"] .ui-button { font-size: 13px !important; }
+.app-shell .segmented > .ui-button { font-size: 13px !important; }
+.app-shell .kanban-title b { font-size: 12px !important; }
+
+/* ------------------------------------------------ form: duplicate guidance */
+.form-guidance {
+  grid-column: 1 / -1;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--e-warning) 40%, var(--e-border));
+  border-radius: var(--e-radius);
+  background: color-mix(in srgb, var(--e-warning) 7%, var(--e-surface));
+}
+.record-form-dialog .dialog-body .form-grid > .form-guidance { grid-column: 1 / -1; }
+.form-guidance-title { margin: 0 0 8px; font-size: 14px; font-weight: 650; color: var(--e-text); }
+.form-guidance ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.form-guidance li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; }
+.form-guidance-name { display: grid; gap: 2px; min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
+.form-guidance-name small { font-size: 12px; color: var(--e-text-secondary); }
+.form-guidance-confirm { display: flex; align-items: flex-start; gap: 8px; margin-top: 10px; font-size: 13px; cursor: pointer; }
+.form-guidance-confirm input { margin-top: 2px; width: 16px; height: 16px; }
+.form-guidance-note { margin: 8px 0 0; font-size: 12px; color: var(--e-text-secondary); }
+.form-context { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: baseline; margin: 0 0 12px; padding: 8px 12px; border-radius: var(--e-radius-sm); background: var(--e-surface-sunken); font-size: 13px; color: var(--e-text-secondary); }
+.form-context b { color: var(--e-text); font-weight: 600; overflow-wrap: anywhere; }
+
+/* ------------------------------------------------- Apollo: add to Enercore */
+.prospect-status { display: grid; gap: 6px; margin-bottom: 16px; padding: 12px 14px; border-radius: var(--e-radius); border: 1px solid var(--e-border); background: var(--e-surface-sunken); }
+.prospect-status p { margin: 0; font-size: 14px; }
+.prospect-status.is-ready { border-color: color-mix(in srgb, var(--e-success) 40%, var(--e-border)); background: color-mix(in srgb, var(--e-success) 6%, var(--e-surface)); }
+.prospect-status.is-review { border-color: color-mix(in srgb, var(--e-warning) 45%, var(--e-border)); background: color-mix(in srgb, var(--e-warning) 7%, var(--e-surface)); }
+.prospect-status-title { font-weight: 650; color: var(--e-text); }
+.prospect-status-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.prospect-matches { list-style: none; margin: 4px 0; padding: 0; display: grid; gap: 8px; }
+.prospect-matches li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; }
+.prospect-matches li > span, .prospect-change span { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.prospect-matches small, .prospect-change small { font-size: 12px; color: var(--e-text-secondary); }
+.prospect-changes { display: grid; gap: 8px; margin-top: 12px; }
+.prospect-source { margin: 12px 0 0; font-size: 12px; color: var(--e-text-muted); }
+.bulk-summary { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0 0 14px; font-size: 14px; color: var(--e-text-secondary); }
+.bulk-summary b { color: var(--e-text); }
+.bulk-summary .is-attention, .bulk-effect .is-attention { color: var(--e-warning); font-weight: 600; }
+.bulk-group { margin-bottom: 12px; }
+.bulk-group > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; }
+.bulk-group h3 { margin: 0 0 8px; font-size: 15px; }
+.bulk-issues, .bulk-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.bulk-issues > li { display: grid; gap: 6px; padding: 12px; border: 1px solid color-mix(in srgb, var(--e-warning) 40%, var(--e-border)); border-radius: var(--e-radius); }
+.bulk-issue-name, .bulk-issue-why { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
+.bulk-issue-name small, .bulk-issue-why { font-size: 13px; color: var(--e-text-secondary); }
+.bulk-row, .bulk-rows > li { display: flex; align-items: flex-start; gap: 10px; }
+.bulk-row input { width: 18px; height: 18px; margin-top: 2px; }
+.bulk-rows span { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; font-size: 14px; }
+.bulk-rows small { font-size: 12px; color: var(--e-text-secondary); }
+.bulk-effect { margin-top: 12px; padding: 10px 12px; border-radius: var(--e-radius-sm); background: var(--e-surface-sunken); font-size: 14px; }
+.bulk-effect p { margin: 2px 0; }
+/* A short question, not a form: a small dialog at every width. */
+.modal.ui-dialog.discard-dialog { width: min(420px, calc(100vw - 32px)) !important; max-width: min(420px, calc(100vw - 32px)) !important; }
+/* It opens over another dialog: its own overlay dims that dialog. */
+.ui-dialog-overlay:has(+ .discard-dialog) { z-index: 110 !important; }
+.modal.ui-dialog.discard-dialog { z-index: 111 !important; }

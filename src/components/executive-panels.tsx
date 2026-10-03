@@ -36,7 +36,7 @@ export function KpiStrip({ records, onGo }: { records: RecordItem[]; onGo: (m: s
     {
       label: "Open pipeline",
       value: describeTotals(totalsByCurrency(pipeline)),
-      context: `${pipeline.length} open ${pipeline.length === 1 ? "opportunity" : "opportunities"}`,
+      context: `${pipeline.length} open ${pipeline.length === 1 ? "lead" : "leads"}`,
       to: "leads",
     },
     {
@@ -115,7 +115,7 @@ export function PipelineHealth({
     return (
       <section className="panel e-pipeline">
         <div className="panel-heading"><h2 className="e-section-title">Pipeline health</h2></div>
-        <p className="e-empty">No open opportunities yet. Added leads will appear here by stage.</p>
+        <p className="e-empty">No open leads yet. New leads appear here by stage.</p>
       </section>
     );
 

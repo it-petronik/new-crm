@@ -55,7 +55,7 @@ test("quick add is reachable from anywhere and creates a record in seconds", asy
 
   const name = `Quick Lead ${Date.now()}`;
   await dialog.getByLabel(/Company \/ Record name|Customer|Supplier|Product/i).first().fill(name);
-  await dialog.getByRole("button", { name: /^Save (opportunity|customer|supplier|product)$/i }).click();
+  await dialog.getByRole("button", { name: /^Save (lead|customer|supplier|product)$/i }).click();
 
   await expect(page.getByRole("dialog")).toHaveCount(0);
   // The record exists in the workspace without navigating anywhere to make it.

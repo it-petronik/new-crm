@@ -67,6 +67,17 @@ export const normalizedName = (s: string) =>
     .toLowerCase()
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
+const legalSuffixes = new Set(["llc", "l l c", "ltd", "limited", "fze", "fzco", "fz", "fzc", "fzllc", "inc", "co", "company", "corp", "corporation", "plc", "pte", "pvt", "private", "gmbh", "sa", "bv", "srl", "spa", "llp", "est", "establishment"]);
+/**
+ * A company name without its legal form ("Petrochem Trading LLC" and
+ * "Petrochem Trading" share "petrochem trading"). Deterministic: no fuzzy
+ * scoring, only trailing legal-form words are removed.
+ */
+export function companyCore(name: string) {
+  const words = normalizedName(name.replace(/\./g, "")).split(" ").filter(Boolean);
+  while (words.length > 1 && legalSuffixes.has(words[words.length - 1])) words.pop();
+  return words.join(" ");
+}
 export function duplicateReasons(
   a: { title?: string; name?: string; email?: string; phone?: string },
   b: typeof a,

@@ -105,3 +105,41 @@ Local, fictional data only: the preview (`APP_MODE=preview`) and an isolated bui
 - Worker suite: every UI-relevant file passes on fresh state (commercial, ai-ui, ai-sales-ui, notifications, proactive, proactive-ui, apollo-workspace, ui-polish, meetings-v31, and phase7 except as below). Media tests (meeting-chat, meeting-link, meeting-media, meetings-v31 guest) match a build of `HEAD` exactly: the same six pass and `meetings.spec`'s room-meeting test fails on both, because "Send message" matches the hub composer and the meeting chat.
 - Failures not caused by this pass: R2-dependent attachment and voice tests (R2 is off, as in live); `phase7.spec`'s per-width test, which waits for the "Apollo credit review" dialog removed in 0f82e7c; login rate limits (429) and fake-Apollo enrichment limits when many files share one local database; relative-date expectations when seed data is a day old; `ai.spec`'s AiUsage check, which assumes only its own features are in that table.
 - Sweeps: 26 widths from 320 to 1920px × 13 screens in light and dark (676 checks; the one real finding, Sourcing-tab overflow at 768–1024px, is fixed), plus continuous resize from 320 to 1920px and back, short heights (600px and 560px), keyboard and focus, long content, empty and many-record lists, and print.
+
+## Simplification pass (frontend only)
+
+The software carries the complexity; the employee should not have to. No schema, API, permission, calculation or workflow-state change. Every payload is the same as before.
+
+- **Forms show everyday fields first.** A field spec can be `advanced` (see `more()` in `record-profiles.ts`), and `RecordForm` puts those under a "More details (optional)" disclosure. The fields stay in the form, so their values are always saved. The section opens by itself when an edited record already uses those fields, or when validation finds an error inside it. Quotations (sectioned editor), HR and locked order corrections are unchanged.
+  - Lead: customer, contact, product needed, quantity, unit, destination, next follow-up. Value, currency, source, email, phone and country are under More details.
+  - Customer and supplier: name, country, main contact, email, phone. Address, tax, codes, segment and terms are under More details.
+  - Product: grade, unit, packaging.
+- **Plain names.** Lead, Customer, Supplier and Product (not "Opportunity", "Customer profile", "Supplier profile", "Product specification"). "Company name", "Next follow-up", and "Pricing" instead of "Commercial scenario". "Find contact details" instead of "Enrich".
+- **Never ask twice.** A customer's primary action is "New lead", which opens the lead form with the customer linked and the name, contact, email, phone and destination filled in. Zero numbers are not carried over. A new pricing is named after the offer.
+- **Pricing.** It shows Freight and Insurance plus any costs already used; the rest are behind "Add a cost". Costs that aren't shown are still sent as zero in the pricing currency, as before. Exchange rates appear only for currencies actually in use ("Convert AED to USD"). The sell side is labelled "Our selling price to the customer". Saving switches to the Pricing tab.
+- **Deal Room "Next step".** One line, derived from existing state: find suppliers, prepare an RFQ, record an offer, compare offers, select pricing, prepare the quotation. Its button opens the right tab or editor; nothing is saved until the person saves it. It never picks a supplier, price or pricing.
+- **Empty lists** name what is missing and offer the add action ("No customers yet. + Add customer"), with the same permission check as the page header.
+- **Type floor.** Metadata is at least 12px, and buttons and inputs at least 13px, at every width. Only avatar initials and the ⌘K hint are smaller.
+
+## One business intent (simplification pass 2)
+
+- **Customer or supplier with a main contact is one write.** `POST /api/records` passes a new customer or supplier with a main contact to `newRecordContact` (commercial store). It writes the record, the Contact and the primary-contact link in one D1 batch, in the same order as `quickCustomer`, because the database checks the link. The contact id is derived from the request id, so a retry or double click returns the same customer and never adds a second contact. The route also returns field-level errors (`fields`) in plain words, and the form shows each beside its field.
+- **Duplicates while typing.** `GET /api/commercial?view=duplicates` is debounced (450 ms) and reuses `duplicates()`. It only reads records the person may already read, in the target company and branch, and returns at most 5. Matching is deterministic: same name, same name without its legal form (`companyCore`: LLC, Ltd, FZE…), same email, same phone, same business email domain. A strong match (same name or same email) needs "Use existing" or an explicit "different company" confirmation before creating.
+- **Active-lead notice.** It is shown when the same customer (and product, once entered) already has an open lead. It uses records the person already sees, and only informs.
+- **Earlier errors.** Each field is checked when you leave it (email, phone, numbers, dates, options) with the same words as on submit. Errors under More details open it and take focus.
+- **After creating**, a customer, supplier, product or lead opens its own page.
+
+## Leads in context, Apollo review, unsaved changes (simplification pass 3)
+
+- **New lead from where you are.**
+  - A customer's page: "New lead" is the primary action.
+  - Each active contact on the customer's Contacts tab: "New lead with …".
+  - A product's page: "New lead" is the primary action.
+
+  The form shows "Started from …" and arrives with the customer, contact or product already set. The server still checks every link through `resolveLinks`: customer access, the contact belongs to that customer and is active, and the product is in the same scope. It takes the contact's name, email and phone from the stored contact rather than from the browser. Plain-language link errors now reach the form; "not found" and "not permitted" read the same.
+- **Active-lead notice.** It matches the same customer and product, by id when both leads have one. A lead with another contact is shown as related, not as a duplicate. Each lead shows its stage, owner and follow-up, with "Open existing" or "Create another lead".
+- **Apollo "Add to Enercore".**
+  - Single prospect: Ready to add, Already in Enercore, or Needs review, with plain reasons and Use existing / Create separate. An optional "Also create a lead" sets up the Deal with the lead, as the server already does by default. Apollo details are in a secondary section, and only the fields that differ are offered.
+  - Bulk: a summary, only the items that need review laid out, the effect before confirming, and "Added / Already existed / Skipped / Failed" afterwards.
+  - The import operation (`importProspect`, `bulkImport`) and the matching are unchanged. The state rules are in `src/lib/prospecting/review-state.ts`.
+- **Unsaved changes** (`useUnsavedChanges`, in the record form, contact editor and RFQ/offer/pricing drawer). Only the person's own input counts. An untouched form closes quietly. Closing an edited one asks "Discard changes?" (Keep editing / Discard), and leaving the page warns only while edits exist.

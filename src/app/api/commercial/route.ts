@@ -91,6 +91,23 @@ export async function GET(request: Request) {
     const db = await getDb();
     if (!db) return reply({ error: "Database unavailable." }, 503);
     const p = new URL(request.url).searchParams;
+    // Possible existing customers while a new one is being typed. Reads only
+    // what this person may read (readRecords applies their scope first), in
+    // the one company and branch the new customer would belong to.
+    if (p.get("view") === "duplicates") {
+      const q = z
+        .object({
+          company: z.string().min(1).max(80),
+          branch: z.string().min(1).max(80),
+          title: z.string().max(160).default(""),
+          email: z.string().max(160).default(""),
+          phone: z.string().max(50).default(""),
+        })
+        .parse(Object.fromEntries(p.entries()));
+      if (q.title.trim().length < 3 && !q.email.includes("@") && q.phone.replace(/\D/g, "").length < 7)
+        return reply({ duplicates: [] });
+      return reply({ duplicates: (await duplicates(db, actor, q)).slice(0, 5) });
+    }
     if (p.has("q")) {
       const kind = z
         .enum(["customers", "suppliers", "products", "leads"])

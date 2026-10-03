@@ -126,7 +126,7 @@ test("sidebar preference and accessible custom controls", async ({ page }) => {
     page.getByRole("combobox", { name: "Business entity", exact: true }),
   ).toHaveText("Afrilube");
   await page
-    .getByRole("button", { name: "Next action / Due date", exact: true })
+    .getByRole("button", { name: "Next follow-up", exact: true })
     .click();
   await expect(
     page.getByRole("dialog", { name: "Choose a date", exact: true }),
@@ -148,7 +148,7 @@ test("company filter, lead creation and persistence", async ({ page }) => {
     .getByRole("button", { name: "Sales pipeline", exact: true })
     .click();
   await page.getByRole("button", { name: "New lead", exact: true }).click();
-  await page.getByLabel("Company / Record name").fill("Test customer");
+  await page.getByLabel("Customer / company").fill("Test customer");
   await page.getByLabel("Contact person").fill("Test contact");
   await page.getByRole("button", { name: "Create lead", exact: true }).click();
   await expect(

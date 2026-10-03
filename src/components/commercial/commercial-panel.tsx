@@ -1,4 +1,5 @@
 "use client";
+import { useUnsavedChanges } from "../use-unsaved";
 import Prospecting from "./prospecting";
 import { canProspect } from "@/lib/execution/model";
 import { useCallback, useEffect, useId, useState } from "react";
@@ -173,7 +174,18 @@ export function useCommercial(record: RecordItem, actor: Actor, onChanged: () =>
 const companyKinds = ["customers", "suppliers"];
 
 /** Everyone the company works with, with the primary and the Lead's contact marked. */
-export function ContactsSection({ c, title = "Contacts", limit }: { c: Commercial; title?: string; limit?: number }) {
+export function ContactsSection({
+  c,
+  title = "Contacts",
+  limit,
+  onNewLead,
+}: {
+  c: Commercial;
+  title?: string;
+  limit?: number;
+  /** A lead for this customer, starting from one of its contacts. */
+  onNewLead?: (contact: Contact) => void;
+}) {
   const { view, record, writable } = c;
   if (!view) return null;
   const company = companyKinds.includes(record.kind);
@@ -220,12 +232,19 @@ export function ContactsSection({ c, title = "Contacts", limit }: { c: Commercia
                   </p>
                 )}
               </div>
-              {writable && company && (
+              {((writable && company) || (onNewLead && p.active)) && (
                 <div className="exec-row-actions">
+                  {onNewLead && p.active && (
+                    <Button className="secondary compact" onClick={() => onNewLead(p)} aria-label={`New lead with ${p.name}`}>
+                      New lead
+                    </Button>
+                  )}
+                  {writable && company && (
                   <Button className="ghost compact" onClick={() => c.editContact(p)}>
                     Edit contact
                   </Button>
-                  {p.active && record.primaryContactId !== p.id && (
+                  )}
+                  {writable && company && p.active && record.primaryContactId !== p.id && (
                     <Button className="ghost compact" onClick={() => c.makePrimary(p)}>
                       Make primary
                     </Button>
@@ -592,15 +611,19 @@ export function ContactEditor({
   const [requestId] = useState(() => crypto.randomUUID());
   const [email, setEmail] = useState(contact?.email || "");
   const [phone, setPhone] = useState(contact?.phone || "");
+  const unsaved = useUnsavedChanges(busy);
+  const close = unsaved.guard(onClose);
   const duplicates = people.filter(
     (c) =>
       c.id !== contact?.id &&
       duplicateReasons({ email, phone }, c, false).length,
   );
   return (
-    <Dialog variant="drawer" className="commercial-editor" title={contact ? "Edit contact" : "Add contact"} description={record.title} onClose={onClose}>
+    <Dialog variant="drawer" className="commercial-editor" title={contact ? "Edit contact" : "Add contact"} description={record.title} onClose={close}>
       <form
         id={formId}
+        onChange={unsaved.markDirty}
+        onInput={unsaved.markDirty}
         onSubmit={async (e) => {
           e.preventDefault();
           const d = new FormData(e.currentTarget);
@@ -701,7 +724,7 @@ export function ContactEditor({
           </p>
         )}
         <DialogActions
-          onCancel={onClose}
+          onCancel={close}
           pending={busy}
           primary={{
             label: "Save contact",
@@ -711,6 +734,7 @@ export function ContactEditor({
           }}
         />
       </form>
+      {unsaved.confirm}
     </Dialog>
   );
 }

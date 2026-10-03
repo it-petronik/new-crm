@@ -2,8 +2,10 @@
 import { CustomerSelection } from "./commercial/relationship-picker";
 import { companyName } from "@/lib/company-name";
 import { specError } from "@/lib/validation";
+import { useUnsavedChanges } from "./use-unsaved";
+import { CustomerMatches, LeadMatches, activeLeadMatches, isStrongMatch, openExisting, useCustomerMatches } from "./form-guidance";
 import { commercialLocked, correctionFields } from "@/lib/record-mutations";
-import { Fragment, useState, useId } from "react";
+import { Fragment, useEffect, useState, useId } from "react";
 import { ArrowRight, ShieldCheck, X } from "lucide-react";
 import {
   Button,
@@ -24,7 +26,7 @@ import {
   money,
 } from "@/lib/domain";
 import { quotationSources } from "@/lib/sales-prefill";
-import { recordProfiles, recordFieldValue } from "@/lib/record-profiles";
+import { recordProfiles, recordFieldValue, type FieldSpec } from "@/lib/record-profiles";
 import { amountInWords, quotationError } from "@/lib/quotation";
 import { fieldWidth, quoteSection, quoteSections } from "@/lib/form-layout";
 import { cashEntryProfile } from "@/lib/record-profiles";
@@ -59,11 +61,18 @@ export default function RecordForm({
   onSave,
   editing = false,
   saveError,
+  serverFieldErrors,
+  context,
 }: {
   initial: RecordItem | null;
   live?: boolean;
   editing?: boolean;
   saveError?: string;
+  /** The server's own per-field messages, shown beside each field. */
+  serverFieldErrors?: Record<string, string>;
+  /** What this form was started from ("Al Noor · Samira"), shown so the
+   *  pre-filled context is never a surprise. */
+  context?: string;
   kind: Kind;
   actor: Actor;
   company: string;
@@ -86,6 +95,10 @@ export default function RecordForm({
   // Per-field messages. They appear on submit and clear the moment the person
   // edits the field, so a corrected value never needs a second submit.
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  // Open when editing a record that already uses those fields.
+  const [moreOpen, setMoreOpen] = useState(() =>
+    Boolean(editing && initial && recordProfiles[kind]?.fields.some((f) => f.advanced && recordFieldValue(initial, f.name))),
+  );
   const clearFieldError = (name: string) =>
     setFieldErrors((prev) => (prev[name] ? { ...prev, [name]: "" } : prev));
   const [section, setSection] = useState(0);
@@ -103,6 +116,50 @@ export default function RecordForm({
   );
   const [quoteUnit, setQuoteUnit] = useState(initial?.unit || "MT");
   const [customerId, setCustomerId] = useState(initial?.customerId || "manual");
+  // What has been typed so far, for guidance while the form is filled in.
+  const [watch, setWatch] = useState({ title: initial?.title || "", email: initial?.email || "", phone: initial?.phone || "", product: initial?.product || "" });
+  const [separate, setSeparate] = useState(false);
+  const customerMatches = useCustomerMatches(live && !editing && kind === "customers", {
+    company: entity,
+    branch,
+    title: watch.title,
+    email: watch.email,
+    phone: watch.phone,
+  });
+  const strongMatch = customerMatches.some(isStrongMatch);
+  const leadMatches = () =>
+    !editing && kind === "leads"
+      ? activeLeadMatches(records, {
+          customerId: customerId === "manual" ? null : customerId,
+          contactId: linkedContactId,
+          productId: initial?.productId || null,
+          title: contactDraft.title,
+          product: watch.product,
+        })
+      : [];
+  const [leadNoticeDismissed, setLeadNoticeDismissed] = useState(false);
+  // Closing with real edits asks first; an untouched form just closes.
+  const unsaved = useUnsavedChanges(busy);
+  const close = unsaved.guard(onClose);
+  const useExisting = (record: { id: string; kind: string }) => {
+    onClose();
+    openExisting(record);
+  };
+  // Same wording as on submit, as soon as the person leaves a field.
+  const fieldMessage = (spec: FieldSpec | { name: string; label: string; required?: boolean }, value: string) =>
+    specError(spec as FieldSpec, value) ||
+    (spec.name === "phone" && value.trim() && !/^[+\d][\d\s().-]{5,}$/.test(value.trim())
+      ? "Use digits, spaces and + ( ) - only, e.g. +971 4 555 0142."
+      : "");
+  // The server's field messages land beside their fields, opening More
+  // details first when one is there, and focus the first of them.
+  useEffect(() => {
+    if (!serverFieldErrors || !Object.keys(serverFieldErrors).length) return;
+    setFieldErrors((prev) => ({ ...prev, ...serverFieldErrors }));
+    const first = Object.keys(serverFieldErrors)[0];
+    if (profile.fields.some((f) => f.name === first && f.advanced)) setMoreOpen(true);
+    setTimeout(() => document.querySelector<HTMLElement>(`#${CSS.escape(formId)} [name="${first}"]`)?.focus(), 0);
+  }, [serverFieldErrors]); // eslint-disable-line react-hooks/exhaustive-deps
   const [linkedContactId, setLinkedContactId] = useState(initial?.contactId || null);
   const [contactDraft, setContactDraft] = useState<Record<string, string>>({
     title: initial?.title || "",
@@ -146,228 +203,17 @@ export default function RecordForm({
         : [{ description: "", quantity: 1, unitPriceCents: 0 }],
   );
   const formId = useId();
-  return (
-    <Dialog
-      title={editing ? `Edit ${profile.noun.toLowerCase()}` : profile.title}
-      onClose={onClose}
-      className={`record-form-dialog ${profile.fields.length > 11 ? "dialog-wide" : "dialog-compact"} ${kind === "quotations" ? "quotation-form-dialog" : ""}`}
-    >
-      <div className="modal-header">
-        <span className="eyebrow">{profile.noun}</span>
-        <Button
-          className="icon-button"
-          aria-label="Close form"
-          onClick={onClose}
-        >
-          <X size={20} />
-        </Button>
-      </div>
-      <h2>{profile.title}</h2>
-      <p className="muted">{locked ? "Commercial values and links are protected. You can correct contact, delivery and notes fields." : profile.description}</p>
-      {quoteEditor && (
-        <nav className="form-sections" aria-label="Quotation sections">
-          {quoteSections.map((s, i) => (
-            <Button
-              key={s}
-              type="button"
-              aria-pressed={section === i}
-              onClick={() => setSection(i)}
-            >
-              <span>{i + 1}</span>
-              {s}
-            </Button>
-          ))}
-        </nav>
-      )}
-      <form
-        id={formId}
-        noValidate
-        // Editing any field clears that field's message immediately, so a
-        // correction never waits for another submit to be acknowledged.
-        onInput={(e) => {
-          const name = (e.target as HTMLElement & { name?: string }).name;
-          if (name) clearFieldError(name);
-        }}
-        onSubmit={(e) => {
-          e.preventDefault();
-          // Validate against the same field metadata the CSV importer uses, so
-          // the wording is ours and identical in both places. The API still
-          // re-checks everything; this only makes the feedback immediate.
-          const entered = new FormData(e.currentTarget);
-          const read = (name: string) => String(entered.get(name) ?? "");
-          const found: Record<string, string> = {};
-          const nameError = specError(
-            { name: "title", label: profile.nameLabel, required: true },
-            read("title"),
-          ) || (read("title").trim() && read("title").trim().length < 2
-            ? `${profile.nameLabel} needs at least 2 characters.`
-            : "");
-          if (nameError) found.title = nameError;
-          for (const spec of profile.fields) {
-            if (hiddenField(spec.name)) continue;
-            const message = specError(spec, read(spec.name));
-            if (message) found[spec.name] = message;
-          }
-          setFieldErrors(found);
-          const firstName = Object.keys(found)[0];
-          if (firstName) {
-            const el = e.currentTarget.querySelector<HTMLElement>(`[name="${firstName}"]`);
-            if (quoteEditor)
-              setSection(
-                el?.closest(".quotation-items-section, .line-editor") ? 1 : quoteSection(firstName),
-              );
-            setFormError("Check the highlighted fields.");
-            setTimeout(() => {
-              el?.focus();
-              el?.scrollIntoView({ block: "center", behavior: "smooth" });
-            }, 0);
-            return;
-          }
-          setFormError("");
-          const data = new FormData(e.currentTarget);
-          const str = (name: string) => data.has(name) ? String(data.get(name) || "") : editing && initial ? recordFieldValue(initial, name) : "";
-          const attributes = Object.fromEntries(
-            profile.fields
-              .filter((f) => f.name.startsWith("attributes."))
-              .map((f) => [f.name.slice(11), str(f.name)]),
-          );
-          // Preview shares the server's derivation and validation rather than
-          // repeating the arithmetic with no checks.
-          if (kind === "hr") Object.assign(attributes, salaryAttributes(attributes));
-          const error =
-            quoteEditor
-              ? quotationError(lines, attributes.issuedDate, str("due"))
-              : "";
-          setFormError(error);
-          if (error) {
-            setSection(error.includes("Validity") ? 0 : 1);
-            return;
-          }
-          void onSave({
-            kind,
-            ...(live && ["leads", "quotations"].includes(kind) ? {customerId: customerId === "manual" ? null : customerId, contactId: linkedContactId, productId: initial?.productId || null, dealId: initial?.dealId || null} : {}),
-            company: entity,
-            branch,
-            title: str("title"),
-            contact: str("contact"),
-            product:
-              kind === "quotations"
-                ? lines
-                    .map((l) => l.description)
-                    .join(", ")
-                    .slice(0, 160)
-                : str("product"),
-            email: str("email"),
-            phone: str("phone"),
-            destination: str("destination"),
-            quantity:
-              kind === "quotations"
-                ? lines.reduce((sum, l) => sum + l.quantity, 0)
-                : Number(str("quantity") || 0),
-            unit:
-              kind === "quotations" ? quoteUnit : str("unit") || profile.unit,
-            amount:
-              kind === "quotations"
-                ? totalCents(lines) / 100
-                : Number(str("amount") || 0),
-            currency:
-              kind === "quotations" ? quoteCurrency : str("currency") || "USD",
-            due: str("due") || new Date().toISOString().slice(0, 10),
-            source: editing ? str("source") : str("source") || "Manual",
-            detail: str("detail"),
-            attributes,
-            ...(kind === "quotations" ? { lines, parentId: editing ? initial?.parentId : initial?.id } : {}),
-          });
-        }}
-      >
-        <div className="form-grid">
-          {live && !editing && ["leads", "quotations"].includes(kind) && <div className={"field-wide" + hiddenField("customer")}><CustomerSelection company={entity} branch={branch} customerId={customerId === "manual" ? null : customerId} customerName={contactDraft.title} contactId={linkedContactId} onChange={(id, contact, title) => {setCustomerId(id || "manual");setLinkedContactId(contact);if(title)setContactDraft(prev=>({...prev,title}));}} /></div>}
-          <Field className={"field-wide" + hiddenField("title")} error={fieldErrors.title}>
-            {profile.nameLabel}
-            <Input
-              name="title"
-              // Marks the field required (the shared Field draws the *);
-              // validation itself stays the form's own check (noValidate).
-              required={!locked}
-              readOnly={locked}
-              maxLength={160}
-              onInput={() => clearFieldError("title")}
-              {...(["quotations", "leads"].includes(kind)
-                ? {
-                    value: contactDraft.title,
-                    onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                      setContactDraft({
-                        ...contactDraft,
-                        title: e.target.value,
-                      }),
-                  }
-                : { defaultValue: initial?.title })}
-              placeholder={profile.nameLabel}
-            />
-          </Field>
-          <Field className={hiddenField("company")}>
-            Business entity
-            <Select
-              name="company"
-              value={entity}
-              disabled={Boolean(initial)}
-              onChange={(e) => {
-                setEntity(e.target.value);
-                setCustomerId("manual");
-                setContactDraft({
-                  title: "",
-                  contact: "",
-                  email: "",
-                  phone: "",
-                });
-                setLines([{ description: "", quantity: 1, unitPriceCents: 0 }]);
-              }}
-            >
-              {actor.companies.map((c) => (
-                <option key={c} value={c}>
-                  {companyName(c)}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <input type="hidden" name="branch" value={branch} />
-          {!live && kind === "quotations" && !initial && (
-            <Field className={hiddenField("customer")}>
-              Use saved customer details
-              <Select
-                value={customerId}
-                onChange={(e) => {
-                  setCustomerId(e.target.value);
-                  const customer = sources.customers.find(
-                    (r) => r.id === e.target.value,
-                  );
-                  if (customer)
-                    setContactDraft({
-                      title: customer.title,
-                      contact: customer.contact,
-                      email: customer.email || "",
-                      phone: customer.phone || "",
-                      "attributes.country": customer.attributes?.country || "",
-                      "attributes.customerAddress":
-                        customer.attributes?.address || "",
-                      "attributes.customerTaxNumber":
-                        customer.attributes?.taxNumber || "",
-                    });
-                }}
-              >
-                <option value="manual">Enter customer details manually</option>
-                {sources.customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.title}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          )}
-          {profile.fields.filter(field => !locked || correctionFields.includes(field.name)).map((field) => {
-            const initialValue = initial
-              ? recordFieldValue(initial, field.name)
-              : "";
+  // Everyday fields first; the rest wait under "More details" (still part
+  // of the form, so nothing is lost when it is closed).
+  const shownFields = profile.fields.filter((field) => !locked || correctionFields.includes(field.name));
+  const splitAdvanced = !quoteEditor && !locked;
+  const basicFields = shownFields.filter((f) => !(splitAdvanced && f.advanced));
+  const advancedFields = shownFields.filter((f) => splitAdvanced && f.advanced);
+  const renderField = (field: FieldSpec) => {
+            const rawInitial = initial ? recordFieldValue(initial, field.name) : "";
+            // A new record started from another one (a lead from a customer)
+            // does not inherit an empty 0 for numbers it has not been told.
+            const initialValue = !editing && field.type === "number" && Number(rawInitial) === 0 ? "" : rawInitial;
             const fallback =
               field.name === "attributes.signatoryName"
                 ? "Peiman Hussain"
@@ -471,7 +317,267 @@ export default function RecordForm({
                 </Field>
               </Fragment>
             );
-          })}
+  };
+  return (
+    <Dialog
+      title={editing ? `Edit ${profile.noun.toLowerCase()}` : profile.title}
+      onClose={close}
+      className={`record-form-dialog ${profile.fields.length > 11 ? "dialog-wide" : "dialog-compact"} ${kind === "quotations" ? "quotation-form-dialog" : ""}`}
+    >
+      <div className="modal-header">
+        <span className="eyebrow">{profile.noun}</span>
+        <Button
+          className="icon-button"
+          aria-label="Close form"
+          onClick={onClose}
+        >
+          <X size={20} />
+        </Button>
+      </div>
+      <h2>{profile.title}</h2>
+      <p className="muted">{locked ? "Commercial values and links are protected. You can correct contact, delivery and notes fields." : profile.description}</p>
+      {context && !editing && (
+        <p className="form-context">
+          <span>Started from</span> <b>{context}</b>
+        </p>
+      )}
+      {quoteEditor && (
+        <nav className="form-sections" aria-label="Quotation sections">
+          {quoteSections.map((s, i) => (
+            <Button
+              key={s}
+              type="button"
+              aria-pressed={section === i}
+              onClick={() => setSection(i)}
+            >
+              <span>{i + 1}</span>
+              {s}
+            </Button>
+          ))}
+        </nav>
+      )}
+      <form
+        id={formId}
+        noValidate
+        // Editing any field clears that field's message immediately, so a
+        // correction never waits for another submit to be acknowledged.
+        onChange={unsaved.markDirty}
+        onInput={(e) => {
+          unsaved.markDirty(e);
+          const target = e.target as HTMLInputElement;
+          const name = target.name;
+          if (name) clearFieldError(name);
+          if (name && name in watch) setWatch((prev) => ({ ...prev, [name]: target.value }));
+        }}
+        // Leaving a field checks it straight away, in the same words as submit.
+        onBlur={(e) => {
+          const target = e.target as unknown as HTMLInputElement;
+          const spec = profile.fields.find((f) => f.name === target.name);
+          if (!spec || !("value" in target) || !target.value) return;
+          const message = fieldMessage(spec, target.value);
+          if (message) setFieldErrors((prev) => ({ ...prev, [spec.name]: message }));
+        }}
+        onSubmit={(e) => {
+          e.preventDefault();
+          // Validate against the same field metadata the CSV importer uses, so
+          // the wording is ours and identical in both places. The API still
+          // re-checks everything; this only makes the feedback immediate.
+          const entered = new FormData(e.currentTarget);
+          const read = (name: string) => String(entered.get(name) ?? "");
+          const found: Record<string, string> = {};
+          const nameError = specError(
+            { name: "title", label: profile.nameLabel, required: true },
+            read("title"),
+          ) || (read("title").trim() && read("title").trim().length < 2
+            ? `${profile.nameLabel} needs at least 2 characters.`
+            : "");
+          if (nameError) found.title = nameError;
+          for (const spec of profile.fields) {
+            if (hiddenField(spec.name)) continue;
+            const message = fieldMessage(spec, read(spec.name));
+            if (message) found[spec.name] = message;
+          }
+          setFieldErrors(found);
+          const firstName = Object.keys(found)[0];
+          if (firstName) {
+            if (profile.fields.some((f) => f.name === firstName && f.advanced)) setMoreOpen(true);
+            const el = e.currentTarget.querySelector<HTMLElement>(`[name="${firstName}"]`);
+            if (quoteEditor)
+              setSection(
+                el?.closest(".quotation-items-section, .line-editor") ? 1 : quoteSection(firstName),
+              );
+            setFormError("Check the highlighted fields.");
+            setTimeout(() => {
+              el?.focus();
+              el?.scrollIntoView({ block: "center", behavior: "smooth" });
+            }, 0);
+            return;
+          }
+          if (strongMatch && !separate) {
+            setFormError("This customer may already exist. Use the existing one, or confirm it is a separate company.");
+            e.currentTarget.querySelector<HTMLElement>(".form-guidance button, .form-guidance input")?.focus();
+            return;
+          }
+          setFormError("");
+          const data = new FormData(e.currentTarget);
+          const str = (name: string) => data.has(name) ? String(data.get(name) || "") : editing && initial ? recordFieldValue(initial, name) : "";
+          const attributes = Object.fromEntries(
+            profile.fields
+              .filter((f) => f.name.startsWith("attributes."))
+              .map((f) => [f.name.slice(11), str(f.name)]),
+          );
+          // Preview shares the server's derivation and validation rather than
+          // repeating the arithmetic with no checks.
+          if (kind === "hr") Object.assign(attributes, salaryAttributes(attributes));
+          const error =
+            quoteEditor
+              ? quotationError(lines, attributes.issuedDate, str("due"))
+              : "";
+          setFormError(error);
+          if (error) {
+            setSection(error.includes("Validity") ? 0 : 1);
+            return;
+          }
+          void onSave({
+            kind,
+            ...(live && ["leads", "quotations"].includes(kind) ? {customerId: customerId === "manual" ? null : customerId, contactId: linkedContactId, productId: initial?.productId || null, dealId: initial?.dealId || null} : {}),
+            company: entity,
+            branch,
+            title: str("title"),
+            contact: str("contact"),
+            product:
+              kind === "quotations"
+                ? lines
+                    .map((l) => l.description)
+                    .join(", ")
+                    .slice(0, 160)
+                : str("product"),
+            email: str("email"),
+            phone: str("phone"),
+            destination: str("destination"),
+            quantity:
+              kind === "quotations"
+                ? lines.reduce((sum, l) => sum + l.quantity, 0)
+                : Number(str("quantity") || 0),
+            unit:
+              kind === "quotations" ? quoteUnit : str("unit") || profile.unit,
+            amount:
+              kind === "quotations"
+                ? totalCents(lines) / 100
+                : Number(str("amount") || 0),
+            currency:
+              kind === "quotations" ? quoteCurrency : str("currency") || "USD",
+            due: str("due") || new Date().toISOString().slice(0, 10),
+            source: editing ? str("source") : str("source") || "Manual",
+            detail: str("detail"),
+            attributes,
+            ...(kind === "quotations" ? { lines, parentId: editing ? initial?.parentId : initial?.id } : {}),
+          });
+        }}
+      >
+        <div className="form-grid">
+          {live && !editing && ["leads", "quotations"].includes(kind) && <div className={"field-wide" + hiddenField("customer")}><CustomerSelection company={entity} branch={branch} customerId={customerId === "manual" ? null : customerId} customerName={contactDraft.title} contactId={linkedContactId} onChange={(id, contact, title) => {setCustomerId(id || "manual");setLinkedContactId(contact);if(title)setContactDraft(prev=>({...prev,title}));}} /></div>}
+          <Field className={"field-wide" + hiddenField("title")} error={fieldErrors.title}>
+            {profile.nameLabel}
+            <Input
+              name="title"
+              // Marks the field required (the shared Field draws the *);
+              // validation itself stays the form's own check (noValidate).
+              required={!locked}
+              readOnly={locked}
+              maxLength={160}
+              onInput={() => clearFieldError("title")}
+              {...(["quotations", "leads"].includes(kind)
+                ? {
+                    value: contactDraft.title,
+                    onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                      setContactDraft({
+                        ...contactDraft,
+                        title: e.target.value,
+                      }),
+                  }
+                : { defaultValue: initial?.title })}
+              placeholder={profile.nameLabel}
+            />
+          </Field>
+          <CustomerMatches matches={customerMatches} acknowledged={separate} onAcknowledge={setSeparate} onOpen={(id) => useExisting({ id, kind: "customers" })} />
+          {!leadNoticeDismissed && (
+            <LeadMatches
+              leads={leadMatches()}
+              onOpen={(r) => useExisting(r)}
+              onDismiss={() => {
+                setLeadNoticeDismissed(true);
+                // Carry on where the form continues.
+                setTimeout(() => document.querySelector<HTMLElement>(`#${CSS.escape(formId)} [name="product"]`)?.focus(), 0);
+              }}
+            />
+          )}
+          <Field className={hiddenField("company")}>
+            Business entity
+            <Select
+              name="company"
+              value={entity}
+              disabled={Boolean(initial)}
+              onChange={(e) => {
+                setEntity(e.target.value);
+                setCustomerId("manual");
+                setContactDraft({
+                  title: "",
+                  contact: "",
+                  email: "",
+                  phone: "",
+                });
+                setLines([{ description: "", quantity: 1, unitPriceCents: 0 }]);
+              }}
+            >
+              {actor.companies.map((c) => (
+                <option key={c} value={c}>
+                  {companyName(c)}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <input type="hidden" name="branch" value={branch} />
+          {!live && kind === "quotations" && !initial && (
+            <Field className={hiddenField("customer")}>
+              Use saved customer details
+              <Select
+                value={customerId}
+                onChange={(e) => {
+                  setCustomerId(e.target.value);
+                  const customer = sources.customers.find(
+                    (r) => r.id === e.target.value,
+                  );
+                  if (customer)
+                    setContactDraft({
+                      title: customer.title,
+                      contact: customer.contact,
+                      email: customer.email || "",
+                      phone: customer.phone || "",
+                      "attributes.country": customer.attributes?.country || "",
+                      "attributes.customerAddress":
+                        customer.attributes?.address || "",
+                      "attributes.customerTaxNumber":
+                        customer.attributes?.taxNumber || "",
+                    });
+                }}
+              >
+                <option value="manual">Enter customer details manually</option>
+                {sources.customers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.title}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
+          {basicFields.map(renderField)}
+          {advancedFields.length > 0 && (
+            <details className="form-more" open={moreOpen} onToggle={(e) => setMoreOpen(e.currentTarget.open)}>
+              <summary>More details <span className="muted">(optional)</span></summary>
+              <div className="form-grid">{advancedFields.map(renderField)}</div>
+            </details>
+          )}
         </div>
         {quoteEditor && (
           <div
@@ -518,7 +624,7 @@ export default function RecordForm({
           </p>
         )}
         <DialogActions
-          onCancel={onClose}
+          onCancel={close}
           pending={busy}
           start={
             <span className="ui-dialog-note">
@@ -542,6 +648,7 @@ export default function RecordForm({
           }}
         />
       </form>
+      {unsaved.confirm}
     </Dialog>
   );
 }

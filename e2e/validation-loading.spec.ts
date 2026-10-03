@@ -34,7 +34,7 @@ test("a form opens neutral, then explains problems in plain language", async ({ 
   await expect(dialog.locator(".ui-field-message.is-error")).toHaveCount(0);
 
   // Submitting with nothing entered explains what is missing, in our words.
-  await dialog.getByRole("button", { name: /^Save (opportunity|customer|supplier|product)$/i }).click();
+  await dialog.getByRole("button", { name: /^Save (lead|customer|supplier|product)$/i }).click();
   const message = dialog.locator(".ui-field-message.is-error").first();
   await expect(message).toBeVisible();
   await expect(message).toContainText(/is required\.$/);

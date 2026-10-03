@@ -1,4 +1,5 @@
 "use client";
+import { bulkState } from "@/lib/prospecting/review-state";
 import { describeCriteria } from "@/lib/prospecting/filters";
 import { useState } from "react";
 import { Button, Dialog, DialogActions, Input, Select } from "../ui/controls";
@@ -33,7 +34,7 @@ export function CreditDialog({
     ).length;
   return (
     <Dialog
-      title="Review enrichment"
+      title="Find contact details"
       className="execution-editor apollo-dialog apollo-enrichment-dialog"
       onClose={onClose}
     >
@@ -261,257 +262,208 @@ export function BulkImportDialog({
       setBusy(false);
     }
   }
+  // Each prospect is ready, already in Enercore, or needs a decision. Only
+  // the last group asks anything of the person.
+  const [decided, setDecided] = useState<Record<string, "existing" | "separate" | "skip">>({});
+  const decide = (i: number, choice: "existing" | "separate" | "skip", customerId?: string) => {
+    setDecided((d) => ({ ...d, [review.items[i].prospect.id]: choice }));
+    patch(i, {
+      skip: choice === "skip",
+      customerId: choice === "existing" ? customerId : undefined,
+      contactId: undefined,
+      createAnyway: choice === "separate",
+    });
+  };
+  const groupOf = (i: number) => bulkState(review.items[i], !!decided[review.items[i].prospect.id], items[i].customerId);
+  const indexes = review.items.map((_, i) => i);
+  const reviewIdx = indexes.filter((i) => groupOf(i) === "review");
+  const readyIdx = indexes.filter((i) => groupOf(i) === "ready");
+  const existingIdx = indexes.filter((i) => groupOf(i) === "existing");
+  const included = indexes.filter((i) => groupOf(i) !== "review" && !items[i].skip);
+  const effect = {
+    customers: new Set(included.filter((i) => !items[i].customerId).map((i) => (items[i].groupCompany ? review.items[i].prospect.companyId || review.items[i].prospect.id : review.items[i].prospect.id))).size,
+    contacts: included.filter((i) => review.items[i].prospect.kind === "person" && items[i].createContact && !items[i].contactId).length,
+    leads: included.filter((i) => items[i].createLead).length,
+    existingCustomers: new Set(included.filter((i) => items[i].customerId).map((i) => items[i].customerId)).size,
+    existingContacts: included.filter((i) => items[i].contactId).length,
+  };
+  const allLeads = included.length > 0 && included.every((i) => items[i].createLead);
+  const goTo = (page: string) => {
+    const company = window.location.pathname.split("/")[2] || "all-companies";
+    window.history.pushState(null, "", `/workspace/${company}/${page}`);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    onClose();
+  };
+  const row = (i: number, toggle = true) => {
+    const r = review.items[i];
+    return (
+      <li key={r.prospect.id} className="bulk-row">
+        {toggle && (
+          <input
+            type="checkbox"
+            aria-label={`Include ${r.prospect.name}`}
+            checked={!items[i].skip}
+            disabled={busy || !!result}
+            onChange={(e) => patch(i, { skip: !e.target.checked })}
+          />
+        )}
+        <span>
+          <b>{r.prospect.name}</b>
+          <small>
+            {[
+              r.prospect.kind === "person" ? r.companyName : r.prospect.country,
+              items[i].customerId && `Uses ${r.customers.find((c) => c.id === items[i].customerId)?.title || "existing customer"}`,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </small>
+        </span>
+      </li>
+    );
+  };
   return (
-    <Dialog
-      title="Review bulk CRM import"
-      className="execution-editor apollo-dialog"
-      onClose={onClose}
-    >
-      <h2>Review {items.length} prospects</h2>
-      <p>{review.note}</p>
-      <div className="apollo-stat-grid">
-        <p>
-          New Customers <strong>{review.counts.newCustomers}</strong>
-        </p>
-        <p>
-          Existing Customers <strong>{review.counts.existingCustomers}</strong>
-        </p>
-        <p>
-          New Contacts <strong>{review.counts.newContacts}</strong>
-        </p>
-        <p>
-          Existing Contacts <strong>{review.counts.existingContacts}</strong>
-        </p>
-        <p>
-          Needs review <strong>{review.counts.needsReview}</strong>
-        </p>
-      </div>
-      <p>
-        No existing CRM fields are overwritten. New Customers with the same
-        exact Apollo company identity share a Customer when the grouping option
-        is checked. Review names before confirming.
-      </p>
-      <div className="execution-actions">
-        <Button
-          className="secondary compact"
-          disabled={busy || !!result}
-          onClick={() =>
-            setItems((items) => items.map((i) => ({ ...i, createLead: true })))
-          }
-        >
-          Add Leads to included prospects
-        </Button>
-        <Button
-          className="secondary compact"
-          disabled={busy || !!result}
-          onClick={() =>
-            setItems((items) =>
-              items.map((i) => ({
-                ...i,
-                createLead: false,
-                createDeal: false,
-              })),
-            )
-          }
-        >
-          Customers / Contacts only
-        </Button>
-      </div>
-      {review.items.map((r, i) => (
-        <details key={r.prospect.id} className="apollo-import-row">
-          <summary>
-            {r.prospect.name} ·{" "}
-            {items[i].skip
-              ? "Skipped"
-              : items[i].customerId
-                ? "Match existing"
-                : "Create after review"}
-          </summary>
-          <p>{r.match}</p>
-          <label className="execution-check">
-            <input
-              type="checkbox"
-              checked={!items[i].skip}
-              disabled={busy || !!result}
-              onChange={(e) => patch(i, { skip: !e.target.checked })}
-            />
-            Include this prospect
-          </label>
-          <Field label="Customer decision">
-            <Select
-              value={items[i].customerId || "new"}
-              disabled={busy || !!result}
-              onChange={(e) =>
-                patch(i, {
-                  customerId:
-                    e.target.value === "new" ? undefined : e.target.value,
-                  contactId: undefined,
-                })
-              }
-            >
-              <option value="new">Create reviewed Customer</option>
-              {r.customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.title} — {c.reasons.join(", ")}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Reviewed company name">
-            <Input
-              value={items[i].companyName}
-              maxLength={160}
-              disabled={busy || !!result}
-              onChange={(e) => patch(i, { companyName: e.target.value })}
-            />
-          </Field>
-          {r.prospect.kind === "person" && (
-            <>
-              <Field label="Complete Contact name">
-                <Input
-                  value={items[i].contactName}
-                  maxLength={160}
-                  disabled={busy || !!result}
-                  onChange={(e) => patch(i, { contactName: e.target.value })}
-                />
-              </Field>
-              <Field label="Reviewed business email">
-                <Input
-                  value={items[i].email}
-                  disabled={busy || !!result}
-                  onChange={(e) => patch(i, { email: e.target.value })}
-                />
-              </Field>
-              <Field label="Contact decision">
-                <Select
-                  value={items[i].contactId || "new"}
-                  disabled={busy || !!result}
-                  onChange={(e) =>
-                    patch(i, {
-                      contactId:
-                        e.target.value === "new" ? undefined : e.target.value,
-                    })
-                  }
-                >
-                  <option value="new">Create reviewed Contact</option>
-                  {r.customers
-                    .find((c) => c.id === items[i].customerId)
-                    ?.contacts.filter((c) => c.active)
-                    .map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} · {c.email}
-                      </option>
-                    ))}
-                </Select>
-              </Field>
-              <label className="execution-check">
-                <input
-                  type="checkbox"
-                  checked={items[i].createContact}
-                  disabled={busy || !!result}
-                  onChange={(e) =>
-                    patch(i, { createContact: e.target.checked })
-                  }
-                />
-                Create / link Contact
-              </label>
-            </>
+    <Dialog title="Add to Enercore" className="execution-editor apollo-dialog bulk-review" onClose={onClose}>
+      {!result ? (
+        <>
+          <p className="bulk-summary" aria-live="polite">
+            <b>{items.length} selected</b>
+            <span>{readyIdx.length} ready to add</span>
+            <span>{existingIdx.length} already in Enercore</span>
+            <span className={reviewIdx.length ? "is-attention" : ""}>{reviewIdx.length} need review</span>
+          </p>
+          {reviewIdx.length > 0 && (
+            <section className="bulk-group" aria-labelledby="bulk-review-title">
+              <h3 id="bulk-review-title">Needs review</h3>
+              <ul className="bulk-issues">
+                {reviewIdx.map((i) => {
+                  const r = review.items[i];
+                  const incomplete = r.prospect.kind === "person" && !r.prospect.nameComplete;
+                  return (
+                    <li key={r.prospect.id}>
+                      <p className="bulk-issue-name">
+                        <b>{r.prospect.name}</b> <small>{r.companyName}</small>
+                      </p>
+                      {r.customers.length > 0 && (
+                        <p className="bulk-issue-why">
+                          May already be in Enercore:{" "}
+                          {r.customers.map((c) => `${c.title} (${c.reasons.map((x) => BULK_REASONS[x] || x).join(", ")})`).join("; ")}
+                        </p>
+                      )}
+                      {incomplete && (
+                        <Field label="Full contact name">
+                          <Input value={items[i].contactName} maxLength={160} onChange={(e) => patch(i, { contactName: e.target.value })} />
+                        </Field>
+                      )}
+                      <div className="prospect-status-actions">
+                        {r.customers.map((c) => (
+                          <Button key={c.id} className="secondary compact" disabled={busy} onClick={() => decide(i, "existing", c.id)}>
+                            Use {c.title}
+                          </Button>
+                        ))}
+                        <Button
+                          className="secondary compact"
+                          disabled={busy || (incomplete && !(items[i].contactName || "").trim())}
+                          onClick={() => decide(i, "separate")}
+                        >
+                          {r.customers.length ? "Create separate" : "Add"}
+                        </Button>
+                        <Button className="ghost compact" disabled={busy} onClick={() => decide(i, "skip")}>
+                          Skip
+                        </Button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
+          {readyIdx.length > 0 && (
+            <details className="bulk-group">
+              <summary>Ready to add ({readyIdx.filter((i) => !items[i].skip).length})</summary>
+              <ul className="bulk-rows">{readyIdx.map((i) => row(i))}</ul>
+            </details>
+          )}
+          {existingIdx.length > 0 && (
+            <details className="bulk-group">
+              <summary>Already in Enercore ({existingIdx.filter((i) => !items[i].skip).length})</summary>
+              <p className="exec-caption">New contacts and leads are added to the existing customer; its details are not overwritten.</p>
+              <ul className="bulk-rows">{existingIdx.map((i) => row(i))}</ul>
+            </details>
           )}
           <label className="execution-check">
             <input
               type="checkbox"
-              checked={!!items[i].groupCompany}
-              disabled={busy || !!result}
-              onChange={(e) => patch(i, { groupCompany: e.target.checked })}
+              checked={allLeads}
+              disabled={busy || !included.length}
+              onChange={(e) => setItems((all) => all.map((x) => ({ ...x, createLead: e.target.checked, createDeal: e.target.checked })))}
             />
-            Share Customer with this exact Apollo company identity in this
-            import
+            <span>Also create a lead for each</span>
           </label>
-          <label className="execution-check">
-            <input
-              type="checkbox"
-              checked={!!items[i].createAnyway}
-              disabled={busy || !!result}
-              onChange={(e) => patch(i, { createAnyway: e.target.checked })}
-            />
-            I checked possible matches; create a separate record where none is
-            selected
-          </label>
-          <label className="execution-check">
-            <input
-              type="checkbox"
-              checked={!!items[i].createLead}
-              disabled={busy || !!result}
-              onChange={(e) =>
-                patch(i, {
-                  createLead: e.target.checked,
-                  createDeal: e.target.checked && items[i].createDeal,
-                })
-              }
-            />
-            Create Lead
-          </label>
-          <label className="execution-check">
-            <input
-              type="checkbox"
-              checked={!!items[i].createDeal}
-              disabled={busy || !!result || !items[i].createLead}
-              onChange={(e) => patch(i, { createDeal: e.target.checked })}
-            />
-            Open Deal Room for new Lead
-          </label>
-        </details>
-      ))}
-      <p>
-        {items.filter((i) => !i.skip).length} included · Up to{" "}
-        {items.filter((i) => !i.skip && i.createLead).length} Leads /{" "}
-        {items.filter((i) => !i.skip && i.createDeal && i.createLead).length}{" "}
-        Deal Rooms
-      </p>
+          <div className="bulk-effect">
+            <p>
+              <b>Will create:</b> {effect.customers} {effect.customers === 1 ? "customer" : "customers"}, {effect.contacts}{" "}
+              {effect.contacts === 1 ? "contact" : "contacts"}, {effect.leads} {effect.leads === 1 ? "lead" : "leads"}
+            </p>
+            <p>
+              <b>Will use existing:</b> {effect.existingCustomers} {effect.existingCustomers === 1 ? "customer" : "customers"},{" "}
+              {effect.existingContacts} {effect.existingContacts === 1 ? "contact" : "contacts"}
+            </p>
+            {reviewIdx.length > 0 && <p className="is-attention">Resolve or skip {reviewIdx.length} {reviewIdx.length === 1 ? "item" : "items"} above to continue.</p>}
+          </div>
+        </>
+      ) : (
+        <section className="bulk-result" aria-live="polite">
+          <p className="bulk-summary">
+            <b>Added {result.counts.created}</b>
+            <span>Already existed {result.counts.matched}</span>
+            <span>Skipped {result.counts.skipped + result.counts.needsReview}</span>
+            <span className={result.counts.failed ? "is-attention" : ""}>Failed {result.counts.failed}</span>
+          </p>
+          {result.results.some((r) => r.status === "Failed") && (
+            <ul className="bulk-rows">
+              {result.results
+                .filter((r) => r.status === "Failed")
+                .map((r) => (
+                  <li key={r.providerId}>
+                    <span>
+                      <b>{review.items.find((i) => i.prospect.id === r.providerId)?.prospect.name}</b>
+                      <small>{r.message}</small>
+                    </span>
+                  </li>
+                ))}
+            </ul>
+          )}
+          <div className="prospect-status-actions">
+            <Button className="secondary compact" onClick={() => goTo("customers")}>
+              View customers
+            </Button>
+            {result.counts.leads > 0 && (
+              <Button className="secondary compact" onClick={() => goTo("sales-pipeline")}>
+                View leads
+              </Button>
+            )}
+            {result.counts.failed > 0 && (
+              <Button className="ghost compact" disabled={busy} onClick={() => void submit(true)}>
+                Retry failed
+              </Button>
+            )}
+          </div>
+        </section>
+      )}
       {error && (
         <p role="alert" className="form-error">
           {error}
         </p>
-      )}
-      {result && (
-        <section aria-live="polite">
-          <h3>Import results</h3>
-          <p>
-            Created {result.counts.created} · Matched existing{" "}
-            {result.counts.matched} · Skipped {result.counts.skipped} · Needs
-            review {result.counts.needsReview} · Failed {result.counts.failed}
-          </p>
-          <p>
-            New records: {result.counts.customers} Customers,{" "}
-            {result.counts.contacts} Contacts, {result.counts.leads} Leads
-          </p>
-          <ul>
-            {result.results.map((r) => (
-              <li key={r.providerId}>
-                {
-                  review.items.find((i) => i.prospect.id === r.providerId)
-                    ?.prospect.name
-                }
-                : {r.status} — {r.message}
-              </li>
-            ))}
-          </ul>
-          {result.counts.failed > 0 && (
-            <Button className="secondary compact" disabled={busy} onClick={() => void submit(true)}>
-              Retry failed imports only
-            </Button>
-          )}
-        </section>
       )}
       <DialogActions
         onCancel={onClose}
         primary={
           !result
             ? {
-                label: "Confirm reviewed import",
+                label: "Add to Enercore",
                 onClick: () => void submit(),
                 pending: busy,
-                disabled: busy || !items.some((i) => !i.skip),
+                disabled: busy || reviewIdx.length > 0 || !included.length,
               }
             : undefined
         }
@@ -520,6 +472,15 @@ export function BulkImportDialog({
     </Dialog>
   );
 }
+const BULK_REASONS: Record<string, string> = {
+  "Same normalized name": "same company name",
+  "Same business domain": "same business domain",
+  "Same business email domain": "same email domain",
+  "Same Apollo company reference": "already added from Apollo",
+  "Matching existing Contact evidence": "same contact email or phone",
+  "Same email": "same email",
+  "Same phone": "same phone",
+};
 export function ReportDialog({
   report: r,
   onClose,

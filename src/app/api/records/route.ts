@@ -1,5 +1,6 @@
-import { resolveLinks, inheritLeadLinks, hasCommercialHistory, existingDealForQuote, resolveSnapshotEdit } from "@/lib/commercial/store";
+import { resolveLinks, inheritLeadLinks, hasCommercialHistory, existingDealForQuote, resolveSnapshotEdit, newRecordContact } from "@/lib/commercial/store";
 import { NextResponse } from "next/server";
+import { CommercialError } from "@/lib/commercial/model";
 import { z } from "zod";
 import { getDb, isPreview } from "@/lib/db";
 import {
@@ -44,6 +45,35 @@ const sha256Hex = async (value: string) =>
   [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)))]
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
+
+/**
+ * Field-level messages in plain words, keyed by field name, so the form can
+ * show each beside its own field instead of one generic failure.
+ */
+const fieldLabels: Record<string, string> = {
+  title: "Name", contact: "Contact", email: "Email", phone: "Phone", quantity: "Quantity",
+  amount: "Value", due: "Date", product: "Product", destination: "Destination", unit: "Unit", currency: "Currency",
+};
+function fieldErrors(error: z.ZodError) {
+  const fields: Record<string, string> = {};
+  for (const issue of error.issues) {
+    const key = issue.path.map(String).join(".");
+    if (!key || fields[key]) continue;
+    const label = fieldLabels[key] || (key.startsWith("attributes.") ? "This field" : key);
+    const numeric = "origin" in issue && issue.origin === "number";
+    const minimum = "minimum" in issue ? Number(issue.minimum) : 0;
+    fields[key] =
+      key === "email" ? "Enter a valid email address, like name@company.com."
+      : key === "due" ? "Choose a valid date."
+      : issue.code === "too_small" && numeric ? `${label} must be ${minimum} or more.`
+      : issue.code === "too_small" && minimum <= 1 ? `${label} is required.`
+      : issue.code === "too_small" ? `${label} needs at least ${minimum} characters.`
+      : issue.code === "too_big" && numeric ? `${label} is too large.`
+      : issue.code === "too_big" ? `${label} is too long.`
+      : `Check ${label.toLowerCase()}.`;
+  }
+  return fields;
+}
 
 const input = z.object({
   kind: z.enum([
@@ -197,7 +227,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Sign in required." }, { status: 401 });
     const db = await getDb();
     if (!db) return NextResponse.json({ error: "Database unavailable." }, { status: 503 });
-    const body = input.parse(await request.json());
+    const parsed = input.safeParse(await request.json());
+    if (!parsed.success) {
+      const fields = fieldErrors(parsed.error);
+      return NextResponse.json({ error: Object.values(fields)[0] || "Check the highlighted fields.", fields }, { status: 400 });
+    }
+    const body = parsed.data;
     if(body.kind === "hr") body.attributes = salaryAttributes(body.attributes);
     const quoteError =
       body.kind === "quotations"
@@ -264,6 +299,10 @@ export async function POST(request: Request) {
         { error: "Create this record through quotation acceptance." },
         { status: 400 },
       );
+    // One business action: a new customer or supplier with a main contact
+    // is written together with that contact, as its primary contact.
+    const mainContact = body.requestId && !importBatch ? await newRecordContact(db, actor, record, body.requestId) : null;
+    const created = mainContact ? mainContact.record : record;
     try {
       await createRecordWithAudit(
         db,
@@ -275,8 +314,9 @@ export async function POST(request: Request) {
           id: crypto.randomUUID(), actor: actor.name, actorId: actor.id,
           company: record.company,
           action: `Created ${record.kind}${importBatch ? ` (CSV import ${importBatch})` : ""}`,
-          recordId: record.id, after: record,
+          recordId: record.id, after: created,
         },
+        mainContact ? [...mainContact.statements] : [],
       );
     } catch (error) {
       // Two simultaneous submissions of the same key race past the read above;
@@ -291,9 +331,19 @@ export async function POST(request: Request) {
       }
       throw error;
     }
-    await notifyRecordChange(db, { actor, after: record, version: 1 });
-    return NextResponse.json({ record, duplicate: false }, { status: 201 });
-  } catch {
+    await notifyRecordChange(db, { actor, after: created, version: 1 });
+    return NextResponse.json({ record: created, duplicate: false }, { status: 201 });
+  } catch (error) {
+    // The commercial rules already speak plainly ("Choose an active contact
+    // belonging to this customer."); anything else stays generic.
+    if (error instanceof CommercialError)
+      return NextResponse.json(
+        {
+          // Not found and not permitted read the same, so nothing is revealed.
+          error: error.status === 404 ? "That customer, contact or product isn't available to you." : error.message,
+        },
+        { status: error.status },
+      );
     return NextResponse.json(
       { error: "Could not save. Check required fields and permissions." },
       { status: 400 },

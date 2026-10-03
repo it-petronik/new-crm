@@ -128,11 +128,11 @@ export function attentionItems(
     }
     // A valuable opportunity going cold.
     if (record.kind === "leads" && idle >= 14 && (record.amount || 0) > 0) {
-      add(record, "warning", "Opportunity", `No activity for ${idle} days`, "follow-up", idle);
+      add(record, "warning", "Lead", `No activity for ${idle} days`, "follow-up", idle);
       continue;
     }
     if (record.kind === "leads" && idle >= 30) {
-      add(record, "info", "Opportunity", `Untouched for ${idle} days`, "follow-up", idle);
+      add(record, "info", "Lead", `Untouched for ${idle} days`, "follow-up", idle);
     }
   }
 
@@ -345,7 +345,7 @@ export function morningBrief(
   const stale = staleRecords(records.filter((r) => r.kind === "leads"), today);
   if (stale.length)
     lines.push({
-      text: `${stale.length} ${stale.length === 1 ? "opportunity has" : "opportunities have"} gone quiet`,
+      text: `${stale.length} ${stale.length === 1 ? "lead has" : "leads have"} gone quiet`,
       tone: "warning",
       to: "leads",
     });

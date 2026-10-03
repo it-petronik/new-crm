@@ -861,7 +861,7 @@ export default function Prospecting({
                             void task(() => prepare("enrich", undefined, refs));
                           }}
                         >
-                          Enrich selected
+                          Find contact details
                         </Button>
                         <Button
                           className="secondary compact"
@@ -1098,8 +1098,9 @@ export default function Prospecting({
                                 prepare("enrich", undefined, [r.ref]),
                               );
                             }}
+                            aria-label={`Find contact details for ${r.prospect.name}`}
                           >
-                            Enrich
+                            Contact details
                           </Button>
                           <Button
                             className="secondary compact"

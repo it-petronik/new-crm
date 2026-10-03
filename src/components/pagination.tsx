@@ -163,7 +163,7 @@ export function SortHeader({
 }
 
 /** Shown in place of an empty list so a filtered-out view is never a blank panel. */
-export function ListEmpty({ total, sourceTotal, filtered, setQuery, label = "results" }: ListControls) {
+export function ListEmpty({ total, sourceTotal, filtered, setQuery, label = "results", empty }: ListControls & { empty?: ReactNode }) {
   if (total > 0) return null;
   return (
     <div className="list-empty" role="status">
@@ -174,7 +174,7 @@ export function ListEmpty({ total, sourceTotal, filtered, setQuery, label = "res
           <Button className="secondary" onClick={() => setQuery(emptyQuery)}>Reset filters</Button>
         </>
       ) : (
-        <p>No {label} to show yet.</p>
+        empty ?? <p>No {label} to show yet.</p>
       )}
     </div>
   );

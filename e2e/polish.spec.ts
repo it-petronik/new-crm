@@ -7,7 +7,7 @@ test("row and card overflow menus open the correct edit and delete dialogs", asy
   const more = page.getByRole("button", { name: "More actions for Gulf Industrial Trading", exact: true }).first();
   await more.click();
   await page.getByRole("button", { name: "Edit details", exact: true }).click();
-  await expect(page.getByRole("textbox", { name: "Customer / Business name", exact: true })).toHaveValue("Gulf Industrial Trading");
+  await expect(page.getByRole("textbox", { name: "Company name", exact: true })).toHaveValue("Gulf Industrial Trading");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeHidden();
   await more.click();

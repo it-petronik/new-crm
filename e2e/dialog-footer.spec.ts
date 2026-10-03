@@ -57,7 +57,8 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
         noDeleteInHeader: !buttons.some((b) => /^Delete/.test(b.innerText.trim())),
       };
     });
-    expect(order.primary).toBe("Edit record");
+    // A customer's next piece of work is a lead for them; Edit sits beside it.
+    expect(order.primary).toBe("New lead");
     expect(order.rightOfOthers).toBe(true);
     expect(order.noDeleteInHeader).toBe(true);
 

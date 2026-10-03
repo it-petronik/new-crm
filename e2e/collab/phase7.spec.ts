@@ -524,14 +524,14 @@ for (const width of [320, 360, 390, 430, 768, 820, 1024, 1280, 1440])
       .getByRole("button", { name: "Create scenario", exact: true })
       .click();
     await expect(
-      page.getByRole("dialog", { name: "Commercial scenario", exact: true }),
+      page.getByRole("dialog", { name: "Pricing", exact: true }),
     ).toBeVisible();
     await page
-      .getByRole("textbox", { name: "Scenario name", exact: true })
+      .getByRole("textbox", { name: "Name this pricing", exact: true })
       .fill("Browser reviewed case");
     await page
       .getByRole("textbox", {
-        name: "Reviewed selling unit price",
+        name: "Selling price per unit",
         exact: true,
       })
       .fill("650");
@@ -581,7 +581,8 @@ test("keyboard-friendly RFQ and offer editors save structured requests and immut
   const panel = page.getByRole("region", { name: "Deal Room", exact: true });
   await expect(panel).toBeVisible();
   await panel.getByRole("tab", { name: /^Sourcing/ }).click();
-  await panel.getByRole("button", { name: "Prepare RFQ", exact: true }).click();
+  // The Sourcing tab's own button; the Next step above offers the same editor.
+  await panel.getByRole("tabpanel").getByRole("button", { name: "Prepare RFQ", exact: true }).click();
   let dialog = page.getByRole("dialog", {
     name: "Supplier request",
     exact: true,
@@ -636,21 +637,21 @@ test("keyboard-friendly RFQ and offer editors save structured requests and immut
     .getByRole("button", { name: "Create scenario", exact: true })
     .click();
   dialog = page.getByRole("dialog", {
-    name: "Commercial scenario",
+    name: "Pricing",
     exact: true,
   });
   await dialog
-    .getByRole("textbox", { name: "Scenario name", exact: true })
+    .getByRole("textbox", { name: "Name this pricing", exact: true })
     .fill("Mobile case");
   await dialog
-    .getByRole("textbox", { name: "Reviewed selling unit price", exact: true })
+    .getByRole("textbox", { name: "Selling price per unit", exact: true })
     .fill("650");
   await dialog
-    .getByRole("button", { name: "Save scenario", exact: true })
+    .getByRole("button", { name: "Save pricing", exact: true })
     .click();
   await expect(dialog).toHaveCount(0);
   // Scenarios and margin live on the Commercial tab.
-  await panel.getByRole("tab", { name: /^Commercial/ }).click();
+  await panel.getByRole("tab", { name: /^Pricing/ }).click();
   await panel
     .getByRole("button", { name: "Mark reviewed", exact: true })
     .click();

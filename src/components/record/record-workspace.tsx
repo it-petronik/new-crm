@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, ArrowRight, Download, FileText, Phone, Pin, Trash2, UserPlus, Pencil } from "lucide-react";
+import { ArrowLeft, ArrowRight, Download, FileText, Phone, Pin, Plus, Trash2, UserPlus, Pencil } from "lucide-react";
 import type { Actor, RecordItem } from "@/lib/domain";
 import { canRead, canWrite, money, stages } from "@/lib/domain";
 import { companyName } from "@/lib/company-name";
@@ -29,6 +29,8 @@ import type { Suggestion } from "@/lib/ai/client";
    ------------------------------------------------------------------------ */
 
 export type AutoAi = "brief" | "draft" | "customer-brief";
+/** The contact a lead starts from, as the customer's page lists it. */
+export type LeadContact = { id: string; name: string; email?: string; phone?: string };
 
 /** Kinds where "I contacted them" is a real event. */
 const LOGGABLE = ["leads", "customers", "suppliers", "quotations", "orders"];
@@ -51,6 +53,7 @@ export default function RecordWorkspace({
   onClose,
   onUpdate,
   onQuote,
+  onNewLead,
   onAction,
   onEdit,
   onDelete,
@@ -71,6 +74,11 @@ export default function RecordWorkspace({
   onClose: () => void;
   onUpdate: (s: string) => void;
   onQuote: () => void;
+  /**
+   * A lead started from here, already filled in: from a customer (and one of
+   * its contacts) or from a product.
+   */
+  onNewLead?: (contact?: LeadContact) => void;
   onEdit: () => void;
   onDelete: () => void;
   pinned: boolean;
@@ -107,8 +115,10 @@ export default function RecordWorkspace({
       ? { label: "Create quotation", icon: <ArrowRight size={15} aria-hidden="true" />, run: onQuote }
       : approvedQuote
         ? { label: "Accept & create order", run: () => onUpdate("Accepted") }
-        : { label: "Edit record", run: onEdit };
-  const showEdit = writable && (r.kind === "leads" || approvedQuote);
+        : (r.kind === "customers" || r.kind === "products") && onNewLead
+          ? { label: "New lead", icon: <Plus size={15} aria-hidden="true" />, run: () => onNewLead() }
+          : { label: "Edit record", run: onEdit };
+  const showEdit = writable && (r.kind === "leads" || approvedQuote || ((r.kind === "customers" || r.kind === "products") && !!onNewLead));
   const loggable = LOGGABLE.includes(r.kind) && writable;
 
   const more: RowAction[] = [
@@ -198,6 +208,7 @@ export default function RecordWorkspace({
           key={`commercial-${r.id}`}
           record={r}
           actor={actor}
+          onNewLead={onNewLead}
           onChanged={onAiChanged}
           details={details}
           activity={activity}

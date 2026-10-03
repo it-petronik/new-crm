@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState, useId } from "react";
 import { ChevronRight } from "lucide-react";
+import { useUnsavedChanges } from "../use-unsaved";
 import type { ExecutionView } from "@/lib/execution/store";
 import {
   calculateScenario,
@@ -105,6 +106,15 @@ export function OpenRecord({
     </Button>
   );
 }
+const costLabels: Record<(typeof costKinds)[number], string> = {
+  freight: "Freight",
+  insurance: "Insurance",
+  handling: "Handling",
+  bank: "Bank charges",
+  commission: "Commission",
+  other: "Other costs",
+};
+
 export function TextField({
   label,
   name,
@@ -308,12 +318,12 @@ export function SourcingProgress({
 }) {
   const s = sourcingState(v);
   const steps: { label: string; value: string; note?: string; tab: "sourcing" | "commercial"; done: boolean }[] = [
-    { label: "Candidates", value: String(s.candidates), tab: "sourcing", done: s.candidates > 0 },
+    { label: "Suppliers", value: String(s.candidates), tab: "sourcing", done: s.candidates > 0 },
     { label: "RFQs", value: String(s.rfqs), note: s.sent ? `${s.sent} sent` : undefined, tab: "sourcing", done: s.sent > 0 },
     ...(v.canSeeCosts
       ? [
           { label: "Offers", value: String(s.offers), note: s.selectedOffer ? "1 selected" : undefined, tab: "sourcing" as const, done: s.offers > 0 },
-          { label: "Scenarios", value: String(s.scenarios), note: s.selectedScenario ? "1 selected" : undefined, tab: "commercial" as const, done: !!s.selectedScenario },
+          { label: "Pricing", value: String(s.scenarios), note: s.selectedScenario ? "1 selected" : undefined, tab: "commercial" as const, done: !!s.selectedScenario },
           { label: "Quotation", value: s.quoted ? "Prepared" : "Not yet", tab: "commercial" as const, done: !!s.quoted },
         ]
       : []),
@@ -851,7 +861,7 @@ export function ScenarioSection({ x, limit = 100 }: { x: Execution; limit?: numb
   const scenarios = [...v.scenarios].sort((a, b) => (SCENARIO_ORDER[a.status] ?? 3) - (SCENARIO_ORDER[b.status] ?? 3));
   return (
     <Section
-      title="Commercial scenarios"
+      title="Pricing"
       description={`${v.approvalPolicy} Reviewed scenarios keep their inputs; there is no automatic selection.`}
     >
       {!scenarios.length ? (
@@ -990,6 +1000,20 @@ function ExecutionEditor({
   ) as Record<string, unknown> | undefined;
   const val = (k: string, fallback = "") => String(initial?.[k] ?? fallback);
   const [scenarioCurrency, setScenarioCurrency] = useState(val("currency", e.offer?.details.currency || "USD"));
+  // Pricing shows the costs in use plus the two most common; the rest are
+  // one tap away. Costs not shown are sent exactly as before: zero.
+  const existingCosts = e.scenario?.details.costs || [];
+  const [shownCosts, setShownCosts] = useState<(typeof costKinds)[number][]>(() => {
+    const used = costKinds.filter((k) => existingCosts.some((c) => c.kind === k && Number(c.amount) !== 0));
+    return used.length ? used : ["freight", "insurance"];
+  });
+  const [costCurrency, setCostCurrency] = useState<Record<string, string>>(() =>
+    Object.fromEntries(costKinds.map((k) => [k, existingCosts.find((c) => c.kind === k)?.currency || val("currency", e.offer?.details.currency || "USD")])),
+  );
+  // Rates are asked for only when an amount is in another currency.
+  const fxNeeded = currencies.filter(
+    (c) => c !== scenarioCurrency && (c === e.offer?.details.currency || shownCosts.some((k) => costCurrency[k] === c)),
+  );
   const qty = val("quantity", e.offer?.details.quantity || String(v.lead.quantity || ""));
   const unit = val("unit", units.includes(v.lead.unit as (typeof units)[number]) ? v.lead.unit : "MT");
   const supplier =
@@ -1010,8 +1034,8 @@ function ExecutionEditor({
     const costs = costKinds.map((kind) => ({
       kind,
       amount: raw[`${kind}-amount`] || "0",
-      currency: raw[`${kind}-currency`] as ScenarioInput["currency"],
-      basis: raw[`${kind}-basis`] as "total" | "per-unit",
+      currency: (raw[`${kind}-currency`] || raw.currency) as ScenarioInput["currency"],
+      basis: (raw[`${kind}-basis`] || "total") as "total" | "per-unit",
       unit: raw.unit as ScenarioInput["unit"],
     }));
     const fx = currencies
@@ -1038,6 +1062,9 @@ function ExecutionEditor({
       notes: raw.notes,
     } as ScenarioInput;
   }
+  // Closing with real edits asks first; an untouched editor just closes.
+  const unsaved = useUnsavedChanges(busy);
+  const close = unsaved.guard(onClose);
   const group = (title: string, children: React.ReactNode, hint?: string) => (
     <fieldset className="editor-group">
       <legend>{title}</legend>
@@ -1049,21 +1076,25 @@ function ExecutionEditor({
     <Dialog
       variant="drawer"
       className="execution-editor"
-      title={e.type === "rfq" ? "Supplier request" : e.type === "offer" ? "Record supplier offer" : "Commercial scenario"}
+      title={e.type === "rfq" ? "Supplier request" : e.type === "offer" ? "Record supplier offer" : "Pricing"}
       description={[supplier, v.lead.product].filter(Boolean).join(" · ")}
-      onClose={onClose}
+      onClose={close}
       dismissOnOutside={!busy}
     >
       <p className="exec-editor-intro">
         {e.type === "scenario"
-          ? "Supplier BUY cost comes from the linked offer. Enter the reviewed customer SELL price; FX rates are manual."
+          ? "The supplier's price comes from the offer. Add your costs and your selling price to see the margin."
           : e.type === "offer"
             ? "Supplier-stated terms. Offer prices are BUY prices, not customer selling prices."
             : "Built from the Lead requirement. Review before saving."}
       </p>
       <form
         id={formId}
-        onChange={() => setPreview(null)}
+        onChange={(event) => {
+          setPreview(null);
+          unsaved.markDirty(event);
+        }}
+        onInput={unsaved.markDirty}
         onSubmit={async (event) => {
           event.preventDefault();
           setBusy(true);
@@ -1165,17 +1196,17 @@ function ExecutionEditor({
               </div>
             )}
             {group(
-              "Scenario and quantity",
+              "Quantity",
               <>
-                <TextField label="Scenario name" name="name" value={val("name")} required />
+                <TextField label="Name this pricing" name="name" value={val("name", e.offer ? `${e.offer.supplier} ${e.offer.details.incoterm || ""}`.trim().slice(0, 100) : "")} required />
                 <TextField label="Customer quotation valid until" name="quotationValidUntil" type="date" value={val("quotationValidUntil")} />
                 <TextField label="Quantity" name="quantity" value={qty} required />
                 <Choice label="Quantity unit" name="unit" value={unit} values={units} />
               </>,
             )}
             <fieldset className="editor-group">
-              <legend>Additional costs</legend>
-              <p className="exec-caption">Enter zero when a cost does not apply. Per-unit costs use the selected quantity unit.</p>
+              <legend>Your costs</legend>
+              <p className="exec-caption">Per-unit costs use the selected quantity unit.</p>
               <div className="exec-cost-table">
                 <div className="exec-cost-head" aria-hidden="true">
                   <span>Cost</span>
@@ -1183,49 +1214,57 @@ function ExecutionEditor({
                   <span>Currency</span>
                   <span>Basis</span>
                 </div>
-                {costKinds.map((kind) => {
-                  const c = e.scenario?.details.costs.find((c) => c.kind === kind);
+                {shownCosts.map((kind) => {
+                  const c = existingCosts.find((c) => c.kind === kind);
                   return (
                     <fieldset className="execution-cost" key={kind}>
-                      <legend>{kind}</legend>
-                      <TextField label={`${kind} amount`} name={`${kind}-amount`} value={c?.amount || "0"} />
+                      <legend>{costLabels[kind]}</legend>
+                      <TextField label={`${costLabels[kind]} amount`} name={`${kind}-amount`} value={c?.amount || "0"} />
                       <Choice
-                        label={`${kind} currency`}
+                        label={`${costLabels[kind]} currency`}
                         name={`${kind}-currency`}
-                        value={c?.currency || val("currency", e.offer?.details.currency || "USD")}
+                        value={costCurrency[kind]}
                         values={currencies}
+                        onChange={(cur) => setCostCurrency((prev) => ({ ...prev, [kind]: cur }))}
                       />
-                      <Choice label={`${kind} basis`} name={`${kind}-basis`} value={c?.basis || "total"} values={["total", "per-unit"]} />
+                      <Choice label={`${costLabels[kind]} basis`} name={`${kind}-basis`} value={c?.basis || "total"} values={["total", "per-unit"]} />
                     </fieldset>
                   );
                 })}
               </div>
-            </fieldset>
-            <fieldset className="editor-group">
-              <legend>Manual FX</legend>
-              <details className="exec-disclosure" open={!!e.scenario?.details.fx.length}>
-                <summary>Rates into {scenarioCurrency}</summary>
-                <p className="exec-caption">
-                  1 source currency = entered rate in {scenarioCurrency}. Leave unused rates empty. No live exchange rate is applied.
-                </p>
-                <div className="execution-fields">
-                  {currencies
-                    .filter((c) => c !== scenarioCurrency)
-                    .map((c) => (
-                      <TextField
-                        key={c}
-                        label={`From ${c} to ${scenarioCurrency} (manual)`}
-                        name={`fx-${c}`}
-                        value={e.scenario?.details.fx.find((f) => f.fromCurrency === c)?.rate || ""}
-                      />
+              {shownCosts.length < costKinds.length && (
+                <div className="exec-add-costs" role="group" aria-label="Add a cost">
+                  <span className="exec-caption">Add a cost:</span>
+                  {costKinds
+                    .filter((k) => !shownCosts.includes(k))
+                    .map((k) => (
+                      <Button key={k} type="button" className="ghost compact" onClick={() => setShownCosts((prev) => costKinds.filter((x) => prev.includes(x) || x === k))}>
+                        + {costLabels[k]}
+                      </Button>
                     ))}
                 </div>
-              </details>
+              )}
             </fieldset>
+            {fxNeeded.length > 0 && (
+              <fieldset className="editor-group">
+                <legend>Exchange rates</legend>
+                <p className="exec-caption">Enter today&apos;s rate yourself; no live rate is used.</p>
+                <div className="execution-fields">
+                  {fxNeeded.map((c) => (
+                    <TextField
+                      key={c}
+                      label={`Convert ${c} to ${scenarioCurrency} (1 ${c} =)`}
+                      name={`fx-${c}`}
+                      value={e.scenario?.details.fx.find((f) => f.fromCurrency === c)?.rate || ""}
+                    />
+                  ))}
+                </div>
+              </fieldset>
+            )}
             {group(
-              "Customer SELL price",
+              "Our selling price to the customer",
               <>
-                <TextField label="Reviewed selling unit price" name="sellPrice" value={val("sellPrice")} required />
+                <TextField label="Selling price per unit" name="sellPrice" value={val("sellPrice")} required />
                 <Choice
                   label="Currency"
                   name="currency"
@@ -1247,7 +1286,7 @@ function ExecutionEditor({
             )}
           </>
         )}
-        <Field label={e.type === "scenario" ? "Internal scenario notes" : "Notes"}>
+        <Field label={e.type === "scenario" ? "Internal notes (not shown to the customer)" : "Notes"}>
           <Textarea name="notes" defaultValue={val("notes")} maxLength={2000} />
         </Field>
         {error && (
@@ -1306,15 +1345,16 @@ function ExecutionEditor({
             )
           }
           primary={{
-            label: `Save ${e.type === "rfq" ? "request" : e.type}`,
+            label: `Save ${e.type === "rfq" ? "request" : e.type === "scenario" ? "pricing" : e.type}`,
             type: "submit",
             form: formId,
             pending: busy,
           }}
           pending={busy}
-          onCancel={onClose}
+          onCancel={close}
         />
       </form>
+      {unsaved.confirm}
     </Dialog>
   );
 }

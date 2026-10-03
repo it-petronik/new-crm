@@ -8,6 +8,8 @@ export type FieldSpec = {
   required?: boolean;
   placeholder?: string;
   min?: number;
+  /** Rarely needed now: shown under "More details" in create/edit forms. */
+  advanced?: boolean;
 };
 type Profile = {
   title: string;
@@ -53,6 +55,8 @@ const country: FieldSpec = {
   label: "Destination country",
   placeholder: "e.g. Vietnam (use the full country name)",
 };
+/** Rarely needed at creation: waits under "More details". */
+const more = (field: FieldSpec): FieldSpec => ({ ...field, advanced: true });
 const value: FieldSpec = {
   name: "amount",
   label: "Order value",
@@ -62,20 +66,21 @@ const value: FieldSpec = {
 export const recordProfiles: Record<Kind, Profile> = {
   leads: {
     title: "New lead",
-    noun: "Opportunity",
-    description: "Capture the enquiry and agree on the next follow-up.",
-    nameLabel: "Company / Record name",
-    notes: "Enquiry notes",
+    noun: "Lead",
+    description: "Who is asking, what they need, and when to follow up.",
+    nameLabel: "Customer / company",
+    notes: "Notes",
     unit: "MT",
     fields: [
       contact,
-      product,
-      { ...value, label: "Estimated value" },
-      currency,
+      { ...product, label: "Product needed" },
       quantity,
       units,
-      date("Next action / Due date"),
-      {
+      destination,
+      date("Next follow-up"),
+      more({ ...value, label: "Estimated value" }),
+      more(currency),
+      more({
         name: "source",
         label: "Lead source",
         options: [
@@ -88,11 +93,10 @@ export const recordProfiles: Record<Kind, Profile> = {
           "Distributor",
           "Trade event",
         ],
-      },
-      email,
-      phone,
-      destination,
-      country,
+      }),
+      more(email),
+      more(phone),
+      more(country),
     ],
   },
   quotations: {
@@ -177,22 +181,21 @@ export const recordProfiles: Record<Kind, Profile> = {
   },
   customers: {
     title: "Add customer",
-    noun: "Customer profile",
-    description:
-      "Keep the business identity, contacts and trading preferences together.",
-    nameLabel: "Customer / Business name",
-    notes: "Relationship notes",
+    noun: "Customer",
+    description: "A company you sell to. Only the name is required.",
+    nameLabel: "Company name",
+    notes: "Notes",
     unit: "",
     fields: [
-      contact,
+      { ...country, label: "Country", placeholder: "e.g. Vietnam" },
+      { ...contact, label: "Main contact" },
       email,
       phone,
-      { name: "destination", label: "City / Country" },
-      country,
-      { name: "attributes.address", label: "Billing address" },
-      { name: "attributes.taxNumber", label: "Tax / TRN number" },
-      { name: "product", label: "Products of interest" },
-      {
+      more({ name: "destination", label: "City" }),
+      more({ name: "attributes.address", label: "Billing address" }),
+      more({ name: "attributes.taxNumber", label: "Tax / TRN number" }),
+      more({ name: "product", label: "Products of interest" }),
+      more({
         name: "attributes.segment",
         label: "Customer segment",
         options: [
@@ -203,56 +206,55 @@ export const recordProfiles: Record<Kind, Profile> = {
           "End user",
           "Other",
         ],
-      },
-      {
+      }),
+      more({
         name: "attributes.paymentTerms",
         label: "Agreed payment terms",
         placeholder: "e.g. Net 30 — subject to credit approval",
-      },
+      }),
     ],
   },
   suppliers: {
     title: "Add supplier",
-    noun: "Supplier profile",
-    nameLabel: "Supplier legal name",
-    description:
-      "Keep supplier contacts and sourcing terms within the selected company. This does not create a purchase order or payment.",
-    notes: "Supply capabilities & relationship notes",
+    noun: "Supplier",
+    nameLabel: "Company name",
+    description: "A company you buy from. Only the name is required.",
+    notes: "Notes",
     unit: "",
     fields: [
-      contact,
+      { ...country, label: "Country", placeholder: "e.g. India" },
+      { ...contact, label: "Main contact" },
       email,
       phone,
-      { ...country, label: "Supplier country" },
-      { name: "attributes.address", label: "Business address" },
-      { name: "attributes.taxNumber", label: "Tax / TRN number" },
-      { name: "attributes.supplierCode", label: "Supplier code" },
-      { name: "attributes.website", label: "Website" },
       { name: "product", label: "Products supplied" },
-      { name: "attributes.paymentTerms", label: "Payment terms" },
-      { name: "attributes.leadTime", label: "Typical lead time" },
-      currency,
+      more({ name: "attributes.address", label: "Business address" }),
+      more({ name: "attributes.taxNumber", label: "Tax / TRN number" }),
+      more({ name: "attributes.supplierCode", label: "Supplier code" }),
+      more({ name: "attributes.website", label: "Website" }),
+      more({ name: "attributes.paymentTerms", label: "Payment terms" }),
+      more({ name: "attributes.leadTime", label: "Typical lead time" }),
+      more(currency),
     ],
   },
   products: {
     title: "Add product",
-    noun: "Product specification",
-    description: "Define a product, its selling unit and indicative price.",
+    noun: "Product",
+    description: "A product you trade, with its grade and selling unit.",
     nameLabel: "Product name",
     notes: "Specification notes",
     unit: "MT",
     fields: [
       { name: "product", label: "Grade / Specification", required: true },
-      { name: "attributes.sku", label: "SKU / Product code" },
+      units,
       {
         name: "attributes.packaging",
         label: "Packaging",
         options: ["Bulk", "Flexitank", "Drums", "Pails", "Bags", "Other"],
       },
-      units,
-      { ...quantity, label: "Recorded stock quantity" },
-      { ...value, label: "Indicative unit price" },
-      currency,
+      more({ name: "attributes.sku", label: "SKU / Product code" }),
+      more({ ...quantity, label: "Recorded stock quantity" }),
+      more({ ...value, label: "Indicative unit price" }),
+      more(currency),
     ],
   },
   hr: {
