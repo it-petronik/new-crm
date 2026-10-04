@@ -18,9 +18,22 @@ export const palettes = [
 export function usePalette() {
   return useSyncExternalStore(subscribe, () => document.documentElement.dataset.palette || "company", () => "company");
 }
+let appearanceFrame = 0;
+/** Change all inherited colours in one paint, without per-field cross-fades. */
+function withoutColourTransitions(change: () => void) {
+  const root = document.documentElement;
+  cancelAnimationFrame(appearanceFrame);
+  root.dataset.appearanceChanging = "true";
+  change();
+  // Flush the new tokens while transitions are disabled, including portals.
+  void root.offsetHeight;
+  appearanceFrame = requestAnimationFrame(() => {
+    appearanceFrame = requestAnimationFrame(() => delete root.dataset.appearanceChanging);
+  });
+}
 export function setPalette(palette: string) {
   if (!palettes.some(p => p.id === palette)) return;
-  document.documentElement.dataset.palette = palette;
+  withoutColourTransitions(() => { document.documentElement.dataset.palette = palette; });
   try { localStorage.setItem("enercore-palette", palette); } catch {}
   window.dispatchEvent(new Event("enercore-theme"));
 }
@@ -33,7 +46,7 @@ export function useTheme() {
   );
 }
 export function setTheme(theme: "light" | "dark") {
-  document.documentElement.dataset.theme = theme;
+  withoutColourTransitions(() => { document.documentElement.dataset.theme = theme; });
   try {
     localStorage.setItem("enercore-theme", theme);
   } catch {}

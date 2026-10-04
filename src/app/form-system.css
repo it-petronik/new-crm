@@ -11,38 +11,47 @@
    in the danger tone.
    ======================================================================== */
 
-:root {
-  --f-h: 40px;                 /* every text-like control */
-  --f-h-sm: 34px;              /* toolbars, filters, pagination */
-  --f-pad-x: 12px;
-  --f-radius: 8px;
-  --f-font: 0.875rem;
+/* Global tokens live in foundation.css. This file owns component rules only. */
 
-  --f-bg: var(--e-surface);
-  --f-bg-muted: var(--e-surface-sunken);
-  --f-border: var(--e-border);
-  --f-border-hover: color-mix(in srgb, var(--e-text) 22%, var(--e-border));
-  --f-text: var(--e-text);
-  --f-placeholder: var(--e-text-muted);
-
-  --f-accent: var(--brand-action, var(--e-accent));
-  --f-focus-border: color-mix(in srgb, var(--f-accent) 62%, var(--e-border));
-  --f-focus-ring: 0 0 0 3px color-mix(in srgb, var(--f-accent) 15%, transparent);
-  --f-error: var(--e-danger);
-  --f-error-ring: 0 0 0 3px color-mix(in srgb, var(--e-danger) 14%, transparent);
-
-  /* Spacing, used by every form. */
-  --f-label-gap: 6px;          /* label → control, control → message */
-  --f-field-gap: 16px;         /* field → field */
-  --f-section-gap: 24px;       /* section → section */
-}
-@media (max-width: 720px) {
-  /* A comfortable touch target, and 16px text so iOS does not zoom the page
-     on focus (which would be a layout jump). */
-  :root { --f-h: 44px; --f-h-sm: 40px; --f-font: 1rem; }
+@media screen {
+  .modal.ui-dialog .dialog-heading,
+  .modal.ui-dialog .dialog-body,
+  .modal.ui-dialog .ui-dialog-footer { padding-inline: var(--f-dialog-pad); }
+  .modal.ui-dialog .dialog-body { padding-block: var(--f-field-gap); scroll-padding-block: var(--f-field-gap); }
 }
 
 /* --------------------------------------------------------------- controls */
+/* Typed Button variants, shared by every module. Unstyled card/nav buttons
+   are intentionally excluded. Feature files must not redefine these roles. */
+:is(.primary, .secondary), .ui-button[data-variant] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--e-2);
+  min-height: var(--e-control-h);
+  padding: 0 var(--e-3);
+  border: 1px solid transparent;
+  border-radius: var(--e-radius-sm);
+  font-size: var(--e-secondary);
+  font-weight: var(--e-weight-medium);
+  line-height: 1.35;
+  white-space: nowrap;
+  box-shadow: none;
+  transition: background var(--e-transition), border-color var(--e-transition), box-shadow var(--e-transition);
+}
+.primary, .ui-button[data-variant="primary"] { background: var(--brand-action); border-color: var(--brand-action); color: var(--e-on-action); box-shadow: var(--e-shadow-raised); }
+.ui-button[data-variant="primary"]:hover { background: var(--brand-hover); border-color: var(--brand-hover); transform: none; }
+.secondary, .ui-button[data-variant="secondary"] { background: var(--e-surface); border-color: var(--e-border); color: var(--e-text); }
+.ui-button[data-variant="secondary"]:hover { background: var(--e-surface-sunken); border-color: var(--f-border-hover); }
+.ui-button[data-variant="ghost"] { background: transparent; color: var(--e-text-secondary); }
+.ui-button[data-variant="ghost"]:hover { background: var(--e-surface-sunken); color: var(--e-text); }
+.ui-button[data-variant="danger"] { background: var(--e-danger-soft); border-color: color-mix(in srgb, var(--e-danger) 24%, var(--e-border)); color: var(--e-danger); }
+.ui-button[data-variant="danger"]:hover { background: color-mix(in srgb, var(--e-danger) 18%, var(--e-surface)); }
+.ui-button[data-variant][data-size="small"] { min-height: var(--e-control-h-sm); padding-inline: var(--e-2); font-size: var(--e-meta); }
+.ui-button[data-variant][data-size="icon"] { width: var(--e-control-h); padding: 0; flex-shrink: 0; }
+.ui-button[data-variant]:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }
+.ui-button[data-variant]:focus-visible { outline: 2px solid var(--e-accent); outline-offset: 2px; }
+
 :is(.ui-input, .ui-textarea, .ui-select-trigger, .ui-date-trigger) {
   min-height: var(--f-h);
   padding: 0 var(--f-pad-x);
@@ -105,7 +114,7 @@
 }
 
 /* ------------------------------------------------------------------ fields */
-.ui-field { gap: var(--f-label-gap); }
+.ui-field { gap: var(--f-label-gap); min-width: 0; }
 .ui-field-label {
   min-height: 0;
   font-size: var(--e-meta);
@@ -197,7 +206,7 @@
 }
 .ui-dialog-actions-start { flex-wrap: wrap; flex: 1 1 auto; }
 .ui-dialog-actions-start:empty { display: none; }
-.ui-dialog-actions-end { flex: 0 0 auto; margin-left: auto; }
+.ui-dialog-actions-end { flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; margin-left: auto; max-width:100%; }
 .ui-dialog-footer :is(.ui-button.primary, .ui-button.secondary, .ui-button.danger-button) {
   min-height: var(--f-h);
   margin: 0;

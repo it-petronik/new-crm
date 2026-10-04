@@ -1,5 +1,7 @@
 "use client";
+import { StatusBadge } from "./ui/status-badge";
 import { companyName } from "@/lib/company-name";
+import { PageHeader } from "./ui/layout";
 import { check, required, minLength, number } from "@/lib/validation";
 import { Pagination, ListFilters, ListEmpty, usePagination } from "./pagination";
 import {
@@ -8,6 +10,8 @@ import {
   Select,
   Textarea,
   Field,
+  Dialog,
+  DialogActions,
 } from "@/components/ui/controls";
 import { useState, useEffect } from "react";
 import {
@@ -31,6 +35,7 @@ export default function MyRequests({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [kind, setKind] = useState<"leave" | "it">("leave");
   const [loaded, setLoaded] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
   const pagination = usePagination(records);
   useEffect(() => {
     if (preview) {
@@ -55,13 +60,7 @@ export default function MyRequests({
   }, [preview]);
   return (
     <div className="requests-content">
-      <div className="page-heading">
-        <div>
-          <span className="eyebrow">EMPLOYEE SELF-SERVICE</span>
-          <h1>My requests</h1>
-          <p>{actor.name} · Only your own requests appear here.</p>
-        </div>
-      </div>
+      <PageHeader className="page-heading" title="My requests" description="Your time off, support requests, and decisions — all in one place." actions={<Button variant="primary" onClick={() => { setError(""); setFieldErrors({}); setFormOpen(true); }}><Plus size={16}/>New request</Button>} />
       <div className="module-metrics">
         <div className="mini-stat">
           <CalendarDays size={18} />
@@ -70,7 +69,7 @@ export default function MyRequests({
         </div>
         <div className="mini-stat">
           <Clock3 size={18} />
-          <span>In progress</span>
+          <span>Awaiting action</span>
           <b>
             {
               records.filter((r) =>
@@ -91,15 +90,11 @@ export default function MyRequests({
           </b>
         </div>
       </div>
-      <div className="settings-grid requests-grid">
-        <section className="panel">
-          <div className="panel-heading">
-            <h2>Create a request</h2>
-            <Plus size={18} />
-          </div>
+      {formOpen && <Dialog title="New request" description="Choose what you need. We’ll send it to the right team." onClose={() => { if (!busy) setFormOpen(false); }} dismissOnOutside={false} className="request-create-dialog">
           <form
+            id="self-service-request"
             noValidate
-            className="settings-body request-form"
+            className="request-form"
             onInput={(e) => {
               const name = (e.target as HTMLElement & { name?: string }).name;
               if (name) setFieldErrors((prev) => (prev[name] ? { ...prev, [name]: "" } : prev));
@@ -181,6 +176,7 @@ export default function MyRequests({
                   );
                 setError("");
                 form.reset();
+                setFormOpen(false);
               } catch (e) {
                 setError(
                   e instanceof Error ? e.message : "Could not submit request.",
@@ -194,20 +190,22 @@ export default function MyRequests({
               <Button
                 type="button"
                 className={kind === "leave" ? "selected" : ""}
-                onClick={() => setKind("leave")}
+                aria-pressed={kind === "leave"}
+                onClick={() => { setKind("leave"); setError(""); setFieldErrors({}); }}
               >
                 <CalendarDays size={15} /> Leave
               </Button>
               <Button
                 type="button"
                 className={kind === "it" ? "selected" : ""}
-                onClick={() => setKind("it")}
+                aria-pressed={kind === "it"}
+                onClick={() => { setKind("it"); setError(""); setFieldErrors({}); }}
               >
                 <Monitor size={15} /> IT support
               </Button>
             </div>
             <div className="form-grid">
-              <Field className="full" error={fieldErrors.title}>
+              <Field className={kind === "it" ? "full" : undefined} error={fieldErrors.title}>
                 {kind === "leave" ? "Leave type" : "Issue summary"}
                 <Input
                   name="title"
@@ -244,7 +242,7 @@ export default function MyRequests({
               )}
               <Field className="full">
                 Details
-                <Textarea name="detail" maxLength={5000} rows={4} />
+                <Textarea name="detail" maxLength={5000} rows={3} placeholder={kind === "leave" ? "Anything your approver should know (optional)" : "What happened, and what help do you need?"} />
               </Field>
             </div>
             {error && (
@@ -252,16 +250,10 @@ export default function MyRequests({
                 {error}
               </p>
             )}
-            <Button
-              className="primary"
-              disabled={busy || !loaded}
-              style={{ marginTop: 20 }}
-            >
-              {busy ? "Submitting…" : "Submit request"}
-            </Button>
+            <DialogActions pending={busy} onCancel={() => setFormOpen(false)} start={<span className="muted small">{kind === "leave" ? "Sent for approval after you submit." : "Sent to IT after you submit."}</span>} primary={{label:busy ? "Submitting…" : kind === "leave" ? "Request leave" : "Send to IT",type:"submit",form:"self-service-request",disabled:busy || !loaded}}/>
           </form>
-        </section>
-        <section className="panel">
+        </Dialog>}
+        <section className="panel request-history-panel">
           <div className="panel-heading">
             <h2>Your request history</h2>
             <span className="count">{records.length}</span>
@@ -273,27 +265,23 @@ export default function MyRequests({
                 <span>
                   {r.title}
                   <small style={{ display: "block", marginTop: 6 }}>
-                    {companyName(r.company)} · {r.due} · {r.quantity} {r.unit}
+                    {r.kind === "leave" ? "Leave" : "IT support"} · {companyName(r.company)} · {r.due}{r.kind === "leave" ? ` · ${r.quantity} ${r.quantity === 1 ? "day" : "days"}` : ""}
                   </small>
                 </span>
-                <span
-                  className={`badge ${r.status === "Approved" ? "green" : "blue"}`}
-                >
-                  {r.status}
-                </span>
+                <StatusBadge status={r.status} />
               </div>
             ))
           ) : (
             <div className="empty">
               <CalendarDays />
               <h3>No requests yet</h3>
-              <p>Your submitted requests and decisions will appear here.</p>
+              <p>Need time off or a hand from IT? Create a request and follow its progress here.</p>
+              <Button variant="secondary" onClick={() => setFormOpen(true)}><Plus size={15}/>Create your first request</Button>
             </div>
           )}
           {records.length > 0 && <ListEmpty {...pagination} label="requests" />}
           <Pagination {...pagination} label="requests" />
         </section>
-      </div>
     </div>
   );
 }

@@ -15,54 +15,11 @@
      ROW       its own vertical rhythm
      COMPONENT only its content
 
-   A child never sets the space between itself and its siblings. This file is
-   imported last so it is authoritative over the older stylesheets, which are
-   left in place rather than rewritten wholesale.
+   The shell consumes these spacing tokens; later feature styles must stay
+   scoped to their own content rather than overriding shared geometry.
    ======================================================================== */
 
-:root {
-  /* --- breakpoints (documented; media queries cannot read variables) -----
-     mobile   ≤ 720px
-     tablet   ≤ 1024px
-     desktop  ≤ 1440px
-     wide     > 1440px
-     Everything below uses only these four. */
-
-  /* --- page ------------------------------------------------------------- */
-  --l-page-max: 1640px;
-  --l-gutter: 32px;
-  --l-page-top: 28px;
-  --l-page-bottom: 48px;
-  /* Room the floating Quick Add (52px, 16px from the edge) needs below the
-     last piece of content on phones, plus the device's safe area. Applied
-     once, by the page container, at the breakpoint where the button floats. */
-  --l-fab-clearance: calc(52px + 32px + env(safe-area-inset-bottom, 0px));
-
-  /* --- rhythm ----------------------------------------------------------- */
-  --l-section-gap: 20px;   /* between sibling sections on a page */
-  --l-grid-gap: 16px;      /* between panels inside a grid       */
-  --l-row-gap: 10px;       /* between rows inside a panel        */
-
-  /* --- panel ------------------------------------------------------------ */
-  --l-panel-pad: 20px;
-  --l-panel-pad-compact: 16px;
-  --l-panel-head-gap: 14px;  /* heading to body */
-  --l-row-pad-y: 10px;
-}
-
-@media (max-width: 1024px) {
-  :root { --l-gutter: 24px; --l-section-gap: 18px; --l-panel-pad: 18px; }
-}
-@media (max-width: 720px) {
-  :root {
-    --l-gutter: 16px;
-    --l-page-top: 18px;
-    --l-section-gap: 14px;
-    --l-grid-gap: 12px;
-    --l-panel-pad: 16px;
-    --l-panel-pad-compact: 14px;
-  }
-}
+/* Global tokens live in foundation.css. This file owns component rules only. */
 
 /* --------------------------------------------------------------- app shell */
 /* The shell is left as it was: a fixed sidebar with the main area offset by
@@ -77,6 +34,13 @@
  * already set. */
 
 /* ----------------------------------------------------------- page container */
+/* Standard record lists compose a Surface, toolbar, table and pagination.
+   Keeping the boundary here prevents each module inventing a different card. */
+.record-list-surface { overflow: hidden; }
+.app-shell .record-list-surface > .list-query-controls { margin: 0; padding: var(--e-3) var(--e-4); border-top: 0; border-bottom: 1px solid var(--e-border); }
+.app-shell .records-panel .record-list-surface > .table-scroll { border: 0; border-radius: 0; }
+.record-list-surface > .pagination { border-top: 1px solid var(--e-border); }
+
 /* One gutter, one max width, for every page. Pages must not redefine these. */
 .main-content {
   width: 100%;
@@ -202,6 +166,20 @@
   grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
 }
 .form-grid > * { min-width: 0; }
+.requests-content { display: grid; gap: var(--l-section-gap); min-width: 0; }
+.app-shell .requests-content > * { margin-block: 0; }
+.requests-content .requests-grid { gap: var(--l-grid-gap); }
+.requests-content .request-form {
+  display: grid;
+  gap: var(--f-field-gap, 16px);
+  padding: 0;
+  margin-top: var(--l-panel-head-gap, 16px);
+}
+.requests-content .request-form > * { margin-block: 0; }
+.requests-content .request-form > .ui-button { justify-self: start; }
+.requests-content .request-form .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.requests-content .request-form .full { grid-column: 1 / -1; }
+@media (max-width: 720px) { .requests-content .request-form .form-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 720px) { .form-grid { grid-template-columns: minmax(0, 1fr); } }
 
 /* ------------------------------------------------------------------ dialogs */
@@ -235,7 +213,7 @@
 .main-content { position: relative; z-index: 0; }
 /* Anything scrolled to lands below the header rather than behind it. */
 .main-content :is(h1, h2, h3, [id]) { scroll-margin-top: calc(var(--l-header-h) + var(--e-3, 12px)); }
-:root { --l-header-h: 64px; }
+/* Header dimension is a foundation token. */
 @media (max-width: 720px) { :root { --l-header-h: 56px; } }
 
 /* ===========================================================================
@@ -534,7 +512,7 @@
    both sides are pinned to one value rather than each inheriting a different
    default.
    ======================================================================== */
-:root { --l-cell-pad-x: 14px; }
+/* Cell padding is a foundation token. */
 
 .e-record-table thead th.e-col-value { text-align: right; padding-right: 0; }
 .e-record-table thead th.e-col-value .column-sort {

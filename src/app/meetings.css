@@ -2,10 +2,8 @@
    Collaboration Meetings (V3)
 
    Entry points inside Collaboration use the workspace tokens. The meeting
-   itself (pre-join and room) is a dark, full-viewport surface in every
-   theme, as video tools conventionally are: faces and screens read best on
-   a quiet dark ground. Colour is used only for state (muted, speaking,
-   leave), never decoration.
+   video stage uses a dark ground. Direct calls, incoming invitations and
+   terminal screens follow the selected workspace theme.
    --------------------------------------------------------------------- */
 
 :root {
@@ -112,6 +110,7 @@ html[data-meeting] body { overflow: hidden; }
 .meet-prejoin .ui-button:focus-visible,
 .meet-room .ui-button:focus-visible,
 .meet-room button:focus-visible { outline: 2px solid var(--meet-accent); outline-offset: 2px; box-shadow: none; }
+.meet-direct-room { background: var(--e-bg); color: var(--e-text); --meet-accent: var(--e-accent); }
 .meet-notice {
   margin: 0;
   padding: 10px 12px;
@@ -325,32 +324,42 @@ html[data-meeting] body { overflow: hidden; }
 .meet-chat-form textarea:focus { outline: 2px solid var(--meet-accent); outline-offset: 0; border-color: transparent; }
 
 /* Ended / removed / reconnect failed. */
-.meet-ended { display: grid; place-items: center; padding: 24px; }
-.meet-ended-card { max-width: 420px; text-align: center; display: grid; gap: 10px; }
+.meet-ended { --meet-accent: var(--e-accent); display: grid; place-items: center; padding: 24px; background: var(--e-bg); color: var(--e-text); overflow: auto; }
+.meet-ended-card { width: min(100%, 420px); padding: 36px 28px; border: 1px solid var(--e-border); border-radius: 24px; background: var(--e-surface); box-shadow: var(--e-shadow-raised); text-align: center; display: grid; gap: 12px; }
+.meet-ended-icon { display: grid; place-items: center; width: 68px; height: 68px; margin: 0 auto 10px; border-radius: 50%; background: var(--e-surface-sunken); color: var(--e-text-secondary); }
 .meet-ended-card h1 { margin: 0; font-size: 22px; }
-.meet-ended-card p { margin: 0; color: var(--meet-muted); }
+.meet-ended-card p { margin: 0; color: var(--e-text-secondary); line-height: 1.6; }
 .meet-ended-actions { display: flex; justify-content: center; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
 
 /* Incoming call. */
 .meet-incoming {
+  --meet-text: var(--e-text);
+  --meet-muted: var(--e-text-secondary);
+  --meet-surface: var(--e-surface);
+  --meet-control: 44px;
   position: fixed;
   z-index: 210;
   top: 16px;
   right: 16px;
-  display: flex;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 12px;
   width: min(380px, calc(100vw - 32px));
   padding: 12px 12px 12px 14px;
   border-radius: 18px;
+  border: 1px solid var(--e-border);
   background: var(--meet-surface);
   color: var(--meet-text);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--e-shadow-overlay);
   animation: meet-ring-in 220ms ease-out;
 }
 .meet-incoming-text { flex: 1; min-width: 0; display: grid; }
 .meet-incoming-text b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .meet-incoming-text span { color: var(--meet-muted); font-size: 13px; }
+.meet-incoming-sound { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 8px; border-top: 1px solid var(--e-border); font-size: 12px; color: var(--e-text-secondary); }
+.meet-incoming-sound .ui-button { font-size: 12px; }
+.meet-incoming-error { grid-column: 1 / -1; margin: 0; font-size: 12px; color: var(--e-danger); }
 @keyframes meet-ring-in { from { opacity: 0; transform: translateY(-8px); } }
 @media (prefers-reduced-motion: reduce) {
   .meet-incoming, .meet-banner.is-live .meet-banner-dot { animation: none; }
@@ -395,8 +404,9 @@ html[data-meeting] body { overflow: hidden; }
    ====================================================================== */
 
 /* Dialogs opened from inside a meeting (end, record) sit above it. */
-html[data-meeting] .ui-dialog-overlay { z-index: 220; }
-html[data-meeting] .ui-dialog { z-index: 221; }
+/* Dialog portals and nested confirmations must sit above the call (200).
+   The shared shell uses this base while preserving each nested layer. */
+html[data-meeting] { --dialog-layer-base: 220; }
 
 /* ------------------------------------------------------ device pickers */
 .device-select { display: grid; gap: 6px; min-width: 0; }

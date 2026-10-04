@@ -105,20 +105,20 @@ export default function ImportDialog({
     String(plan?.valid.find((v) => v.row === row)?.payload.title ?? "");
 
   return (
-    <Dialog onClose={onClose} title={`Import ${kind} from CSV`}>
+    <Dialog onClose={onClose} title={`Import ${kind} from CSV`} className="import-dialog simple-entry-dialog">
       {!plan && !result && (
         <div className="import-start">
           <p>
             Choose a CSV file. It is read in your browser and nothing is saved
             until you confirm. Up to {CSV_LIMITS.rows} rows per file.
           </p>
-          <input
+          <label className="import-file-zone"><Upload size={24} aria-hidden="true" /><strong>Choose your CSV file</strong><span className="muted small">Start with the template below if you are importing for the first time.</span><input
             ref={fileRef}
             type="file"
             accept=".csv,text/csv"
             aria-label="CSV file"
             onChange={(e) => { const f = e.target.files?.[0]; if (f) void choose(f); }}
-          />
+          /></label>
           <DialogActions
             start={
               <Button className="secondary" onClick={() => downloadCsv(exportFilename(company, `${kind}-template`), templateCsv(kind))}>
@@ -126,9 +126,9 @@ export default function ImportDialog({
               </Button>
             }
           />
-          <p className="muted small">
+          <details className="import-columns"><summary>Supported columns</summary><p className="muted small">
             Columns: {importColumns(kind).map((c) => c.key).join(", ")}
-          </p>
+          </p></details>
         </div>
       )}
 

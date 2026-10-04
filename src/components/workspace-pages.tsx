@@ -15,7 +15,7 @@ import {
 import { Button } from "./ui/controls";
 import { previewActorKey } from "@/lib/fixtures";
 import { AvatarEditor } from "./avatar-editor";
-import { useTheme, setTheme, usePalette, setPalette, palettes } from "./theme-toggle";
+import AppearanceSettings from "./appearance-settings";
 import {
   allowedModules,
   labels,
@@ -24,8 +24,9 @@ import {
   type RecordItem,
 } from "@/lib/domain";
 export type WorkspaceView =
-  "prospecting" | "collaboration" | "ai" | "actions" | "notifications" | "profile" | "appearance" | "access" | "shortcuts";
+  "mail" | "prospecting" | "collaboration" | "ai" | "actions" | "notifications" | "profile" | "appearance" | "access" | "shortcuts";
 export const viewLabels: Record<WorkspaceView, string> = {
+  mail: "Email",
   prospecting: "Prospecting",
   collaboration: "Collaboration",
   ai: "Enercore AI",
@@ -195,53 +196,7 @@ export function ProfilePage({
     </>
   );
 }
-export function AppearancePage() {
-  const theme = useTheme();
-  const palette = usePalette();
-  return (
-    <>
-      <PageTitle
-        title="Appearance"
-        subtitle="Choose a comfortable display. Your preference is remembered on this browser."
-      />
-      <section className="panel appearance-panel">
-        <h2>Display mode</h2>
-        <div className="theme-choices">
-          {(["light", "dark"] as const).map((t) => (
-            <Button
-              className={`theme-choice ${theme === t ? "selected" : ""}`}
-              key={t}
-              aria-pressed={theme === t}
-              onClick={() => setTheme(t)}
-            >
-              <span className={`theme-preview ${t}`}>
-                <i />
-                <span>
-                  <b />
-                  <b />
-                  <b />
-                </span>
-              </span>
-              <span>
-                {t === "light" ? <Sun size={18} /> : <Moon size={18} />}{" "}
-                {t === "light" ? "Light mode" : "Dark mode"}
-                {theme === t && <small>Selected</small>}
-              </span>
-            </Button>
-          ))}
-        </div>
-        <h2 className="palette-title">Colour palette</h2>
-        <p className="muted">Personalise your workspace accents. Company logos and quotation documents keep their original branding.</p>
-        <div className="palette-grid">
-          {palettes.map(p => <Button key={p.id} className={`palette-choice ${palette === p.id ? "selected" : ""}`} aria-pressed={palette === p.id} onClick={() => setPalette(p.id)}>
-            <span className="palette-swatches" aria-hidden="true">{p.colors.map(color => <i key={color} style={{ background: color }} />)}</span>
-            <span>{p.name}</span><small>{palette === p.id ? "Selected" : "Apply palette"}</small>
-          </Button>)}
-        </div>
-      </section>
-    </>
-  );
-}
+export function AppearancePage() { return <AppearanceSettings/>; }
 export function ShortcutsPage({ onCommand }: { onCommand: () => void }) {
   return (
     <>

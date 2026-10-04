@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createLocalAudioTrack, createLocalVideoTrack, type LocalAudioTrack, type LocalVideoTrack } from "livekit-client";
 import { ChevronDown, Loader2, Mic, MicOff, Phone, Video, VideoOff } from "lucide-react";
 import { Button } from "../ui/controls";
+import { deviceOptions, DEVICE_NOUN as NOUN, type DeviceInputKind as Kind } from "@/lib/device-labels";
+export { deviceOptions, cleanLabel } from "@/lib/device-labels";
 import {
   QUALITY_LABELS,
   QUALITY_PRESETS,
@@ -29,29 +31,6 @@ import {
  *
  * Only friendly device names are shown; ids are values, never text.
  */
-
-type Kind = "audioinput" | "videoinput";
-const NOUN: Record<Kind, string> = { audioinput: "microphone", videoinput: "camera" };
-
-export function cleanLabel(label: string) {
-  return label
-    .replace(/^(Default|Communications)\s*-\s*/i, "")
-    .replace(/\s*\([0-9a-f]{4}:[0-9a-f]{4}\)\s*$/i, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-/** The options to show: friendly, deduplicated, "System default" first. */
-export function deviceOptions(devices: MediaDeviceInfo[], kind: Kind) {
-  const real = devices.filter((d) => d.kind === kind && d.deviceId && d.deviceId !== "communications");
-  let n = 0;
-  return real.map((d) => {
-    const clean = cleanLabel(d.label);
-    if (d.deviceId === "default") return { id: d.deviceId, label: clean ? `System default (${clean})` : `Default ${NOUN[kind]}` };
-    n += 1;
-    return { id: d.deviceId, label: clean || (n === 1 ? `Default ${NOUN[kind]}` : `${NOUN[kind][0].toUpperCase()}${NOUN[kind].slice(1)} ${n}`) };
-  });
-}
 
 /**
  * One device picker. A native select underneath (keyboard, screen readers

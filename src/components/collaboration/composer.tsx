@@ -410,9 +410,8 @@ const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer({
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => chooseMention(m)}
                 >
-                  <Avatar name={m.name} size={22} />
-                  <span>{m.name}</span>
-                  <small>{m.role}</small>
+                  <Avatar name={m.name} size={32} />
+                  <span className="collab-mention-person"><strong>{m.name}</strong><small>{m.role}</small></span>
                 </button>
               </li>
             ))}

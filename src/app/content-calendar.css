@@ -1,0 +1,52 @@
+/* Calendar owns its grid; shared header and controls own their geometry. */
+.content-calendar { display:grid; gap:16px; min-width:0; }
+/* The shared PageHeader owns its spacing. */
+.content-toolbar,.content-month,.content-filters,.content-caption { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.content-toolbar,.content-caption { justify-content:space-between; }
+.content-month strong { min-width:145px; text-align:center; }
+.content-toolbar > .ui-select-trigger { width:120px; flex:none; }
+.content-filters > input { flex:1 1 200px; width:auto; min-width:0; }
+.content-filters > .ui-select-trigger { width:170px; flex:0 1 170px; }
+.content-caption { color:var(--e-text-secondary); font-size:12px; gap:6px 16px; }
+.content-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); border:1px solid var(--e-border); border-radius:12px; overflow:hidden; background:var(--e-surface); }
+.content-weekday,.content-day { border-right:1px solid var(--e-border); border-bottom:1px solid var(--e-border); padding:10px; min-width:0; }
+.content-grid > :nth-child(7n) { border-right:0; }
+.content-weekday { font-size:12px; color:var(--e-text-secondary); background:var(--e-surface-sunken); }
+.content-day { min-height:96px; }
+.content-day.is-outside { background:var(--e-bg); }
+.content-day.is-today { background:color-mix(in srgb,var(--e-accent-soft) 40%,var(--e-surface)); }
+.content-day-heading { display:flex; justify-content:space-between; align-items:center; font-size:12px; margin-bottom:6px; }
+.content-day-heading > span { display:grid; place-items:center; width:26px; height:26px; border-radius:50%; }
+.content-day.is-today .content-day-heading > span { background:var(--e-accent); color:var(--e-on-accent,#fff); font-weight:600; }
+.content-day-heading button { display:grid; place-items:center; width:28px; height:28px; border:0; border-radius:6px; background:transparent; color:var(--e-text-secondary); cursor:pointer; }
+.content-day-heading button:hover { background:var(--e-accent-soft); color:var(--e-accent-strong); }
+.content-post { display:grid; gap:5px; width:100%; text-align:left; border:1px solid var(--e-border); border-left:3px solid var(--e-accent); border-radius:7px; padding:9px; background:var(--e-accent-soft); color:var(--e-text); cursor:pointer; margin-bottom:7px; overflow-wrap:anywhere; transition:box-shadow .15s; }
+.content-post:hover { box-shadow:0 2px 8px #0001; }
+.content-post:focus-visible,.content-day-heading button:focus-visible { outline:2px solid var(--e-accent); outline-offset:2px; }
+.content-post span,.content-post small { font-size:11px; color:var(--e-text-secondary); }
+.content-post strong { font-size:12px; }
+.content-empty { padding:12px; margin:0; text-align:center; color:var(--e-text-secondary); font-size:13px; }
+.content-agenda > div { display:grid; grid-template-columns:110px 1fr; gap:14px; align-items:start; }
+.content-agenda time { font-size:13px; padding-top:10px; color:var(--e-text-secondary); }
+.mobile-agenda { display:none; }
+.content-form { border:0; padding:0; margin:0; display:grid; gap:16px; min-width:0; }
+.content-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.content-form small { color:var(--e-text-secondary); font-size:12px; line-height:1.5; }
+.content-campaigns { padding:18px; }
+.content-campaigns summary { cursor:pointer; font-weight:600; }
+.content-campaigns button { margin:12px 8px 0 0; }
+@media(max-width:900px) {
+  .content-grid-wrap { display:none; }
+  .mobile-agenda { display:block; }
+  .content-filters > input { flex-basis:100%; }
+  .content-filters > .ui-select-trigger { flex:1 1 130px; width:auto; }
+}
+@media(max-width:520px) {
+  .content-form-grid { grid-template-columns:minmax(0,1fr); }
+  .content-filters > .ui-select-trigger[aria-label="Content company"] { flex-basis:100%; }
+  .content-month { gap:6px; }
+  .content-month strong { min-width:120px; }
+  .content-agenda > div { grid-template-columns:1fr; gap:3px; }
+  .content-toolbar > .ui-select-trigger { width:100%; }
+}
+@media(prefers-reduced-motion:reduce) { .content-post { transition:none; } }

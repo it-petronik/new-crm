@@ -12,6 +12,7 @@ import {
 import { Button, Field, Select } from "./ui/controls";
 import { dashboardInsights, type Ranking } from "@/lib/dashboard-insights";
 import { money, type Actor, type RecordItem } from "@/lib/domain";
+import styles from "./studio/analysis.module.css";
 
 function RankingPanel({
   title,
@@ -95,7 +96,7 @@ export default function DashboardInsights({
     low = data.orders.at(-1);
   return (
     <section
-      className="business-insights"
+      className={`business-insights ${styles.analysis}`}
       aria-label="Sales and demand insights"
     >
       <div className="insights-heading">

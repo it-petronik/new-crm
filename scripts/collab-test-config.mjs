@@ -34,8 +34,11 @@ const test = {
     ? {}
     : { r2_buckets: live.r2_buckets ?? [{ binding: "COLLAB_FILES", bucket_name: "enercore-collab-files" }] }),
   vars: {
-    ...live.vars,
+    // Allowlist local runtime settings. Never copy future live credentials.
+    APP_MODE: "production",
+    NODE_ENV: "production",
     APP_URL: "http://localhost:8788",
+    MAIL_MODE: "sandbox",
     COLLAB_TEST_CONTROL: control,
     // Presence expiry in seconds rather than minutes, so the suite can watch
     // a dead tab expire. Production uses the defaults in collab-hub.ts.

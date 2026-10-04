@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlarmClock, ArrowRight, CalendarClock, CheckCircle2, Copy, EyeOff, FileText, ListChecks, MessageSquare, RotateCcw, Sparkles, Undo2, XCircle } from "lucide-react";
+import styles from "../studio/action-center.module.css";
+import { AlarmClock, ArrowRight, ArrowUpRight, CalendarClock, CheckCircle2, Copy, EyeOff, FileText, ListChecks, MessageSquare, RotateCcw, Sparkles, Undo2, XCircle, Target, Truck, Wallet, Database } from "lucide-react";
 import { Button, Dialog, DialogActions, DialogPresence, Field, Input } from "../ui/controls";
 import FollowUpControl from "../follow-up-control";
 import { AiAnswerView, AiLoading, useAiStatus } from "./ai-answer";
@@ -19,6 +20,7 @@ import { proactive, RECORDS_CHANGED, announceRecordsChanged, tomorrowMorning, ty
  */
 
 const GROUP_LABELS: Record<ActionGroup, string> = { all: "All", sales: "Sales", operations: "Operations", finance: "Finance", data: "Data quality" };
+const GROUP_ICONS = { all: ListChecks, sales: Target, operations: Truck, finance: Wallet, data: Database };
 const SECTIONS: { id: keyof ActionCenterView["sections"]; title: string; empty: string }[] = [
   { id: "needs_action", title: "Needs action", empty: "Nothing needs action right now." },
   { id: "today", title: "Today", empty: "Nothing else is due today." },
@@ -544,11 +546,11 @@ export default function ActionCenter() {
 
   const team = view?.scope === "team";
   return (
-    <div className="action-center">
+    <div className={`action-center ${styles.workspace}`}>
       <div className="page-heading">
         <div>
           <h1>Action Center</h1>
-          <p>What needs action now, from your CRM data. Every change is previewed and saved as your own edit.</p>
+          <p>Your next steps, in one place. Review, follow up, or complete the details.</p>
         </div>
       </div>
 
@@ -583,18 +585,18 @@ export default function ActionCenter() {
       {view?.summary && (
         <section className="panel action-summary" aria-label="Exceptions">
           <div className="action-tiles">
-            {view.summary.tiles.map((t) => (
-              <button key={t.id} type="button" className={`action-tile${t.count ? "" : " is-zero"}`} onClick={() => setGroup(t.group)}>
+            {view.summary.tiles.map((t) => {
+              const Icon = GROUP_ICONS[t.group];
+              return <button key={t.id} type="button" className={`action-tile${t.count ? "" : " is-zero"}`} onClick={() => setGroup(t.group)} aria-label={`${t.label}: ${t.count}. Show ${GROUP_LABELS[t.group].toLowerCase()}`}>
+                <span className={styles.tileHead}><span className={styles.tileIcon}><Icon size={17}/></span><ArrowUpRight size={14} aria-hidden="true"/></span>
                 <span className="action-tile-count">{t.count}</span>
                 <span className="action-tile-label">{t.label}</span>
                 {t.detail && <small>{t.detail}</small>}
-              </button>
-            ))}
+              </button>;
+            })}
           </div>
           {view.summary.overdueFollowUpsByOwner.length > 0 && (
-            <p className="muted small action-owner-counts">
-              Overdue follow-ups by owner: {view.summary.overdueFollowUpsByOwner.map((o) => `${o.owner} ${o.count}`).join(" · ")}
-            </p>
+            <details className={styles.owners}><summary>Overdue follow-ups by owner <span>{view.summary.overdueFollowUpsByOwner.length}</span></summary><ul>{view.summary.overdueFollowUpsByOwner.map(o => <li key={o.owner}><span>{o.owner}</span><b>{o.count}</b></li>)}</ul></details>
           )}
         </section>
       )}
@@ -646,14 +648,7 @@ export default function ActionCenter() {
                 </div>
                 {items.length ? (
                   <>
-                  <div className="action-columns" aria-hidden="true">
-                    <span />
-                    <span>What</span>
-                    <span>Why</span>
-                    <span>When</span>
-                    <span>Action</span>
-                  </div>
-                  <ul className="action-list">
+                  <ul className="action-list" tabIndex={0} aria-label={`${sec.title} items`}>
                     {items.map((s) => (
                       <SignalCard
                         key={s.key}

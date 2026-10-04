@@ -14,7 +14,7 @@ import {
   openPrejoin,
   startMeeting,
 } from "@/lib/meeting-client";
-import { durationLabel, joinable, type MeetingMedia, type MeetingView } from "@/lib/meetings";
+import { durationLabel, isDirectCall, joinable, type MeetingMedia, type MeetingView } from "@/lib/meetings";
 import { businessStamp, businessTime } from "@/lib/gst";
 
 /**
@@ -60,11 +60,11 @@ export function MeetingActions({ conversation, meetings }: { conversation: Conve
     <div className="meet-actions">
       {direct ? (
         <>
-          <Button className="icon-button" aria-label="Voice call" title="Voice call" disabled={busy} onClick={() => void start("voice")}>
-            <Phone size={17} />
+          <Button className="secondary compact meet-call" aria-label="Voice call" title="Voice call · check your microphone before joining" disabled={busy} onClick={() => void start("voice")}>
+            <Phone size={17} /><span className="meet-call-label">Voice</span>
           </Button>
-          <Button className="icon-button" aria-label="Video call" title="Video call" disabled={busy} onClick={() => void start("video")}>
-            <Video size={18} />
+          <Button className="secondary compact meet-call" aria-label="Video call" title="Video call · preview your camera before joining" disabled={busy} onClick={() => void start("video")}>
+            <Video size={18} /><span className="meet-call-label">Video</span>
           </Button>
         </>
       ) : live ? (
@@ -143,7 +143,7 @@ export function MeetingBanner({ meetings }: { meetings: MeetingView[] }) {
       <span className="meet-banner-text">
         {live ? (
           <>
-            <b>{m.media === "voice" ? "Voice meeting" : "Meeting"} in progress</b> · started by {m.createdBy.name}
+            <b>{isDirectCall(m) ? `${m.media === "voice" ? "Voice" : "Video"} call` : m.media === "voice" ? "Voice meeting" : "Meeting"} in progress</b> · started by {m.createdBy.name}
             {m.startedAt && ` · ${durationLabel(now - new Date(m.startedAt).getTime())}`}
             {inCall > 0 && ` · ${inCall} joined`}
           </>

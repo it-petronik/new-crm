@@ -5,9 +5,10 @@ import { isImportable, type ImportableKind } from "@/lib/import";
 import { attentionItems, isoDate, nextAction, operationalViews } from "@/lib/attention";
 import { businessStampShort, businessDateTimeLong } from "@/lib/gst";
 import LogActivity from "./log-activity";
-import MorningBrief from "./morning-brief";
-import BusinessClock from "./business-clock";
-import { KpiStrip, PipelineHealth, OperationsSnapshot } from "./executive-panels";
+import frame from "./studio/frame.module.css";
+import StudioDashboard from "./studio/dashboard";
+import WorkspaceSettings from "./workspace-settings";
+import recordStyles from "./studio/records.module.css";
 import MyDay from "./my-day";
 import QuickAdd from "./quick-add";
 import { SkeletonDashboard, SkeletonMyDay, SkeletonList } from "./ui/skeleton";
@@ -105,10 +106,14 @@ import { useAvatar } from "@/lib/avatar-store";
 import RecordForm from "./record-form";
 import { canProspect } from "@/lib/execution/model";
 import Prospecting from "./commercial/prospecting";
+import MailHub from "./mail-hub";
+import ContentCalendar, { type ContentValues } from "./content-calendar";
+import { contentError } from "@/lib/content-calendar";
 import RecordWorkspace from "./record/record-workspace";
 import { recordProfiles } from "@/lib/record-profiles";
 import UserAdmin from "./user-admin";
-import { PageHeader } from "./ui/layout";
+import { PageHeader, Surface } from "./ui/layout";
+import { moduleHelp } from "@/lib/workspace-help";
 import {
   ProfilePage,
   AppearancePage,
@@ -169,11 +174,11 @@ const icons: Record<Module, LucideIcon> = {
 };
 const subtitles: Record<Module, string> = {
   overview: "What needs attention across your companies.",
-  leads: "Open leads by stage.",
+  leads: "People interested in buying. Track what they need and when to follow up.",
   quotations: "Quotations in draft, awaiting approval, sent and accepted.",
   orders: "Confirmed orders handed over to operations.",
   logistics: "Shipments in progress and expected arrivals.",
-  accounts: "Invoices, receipts and the cashbook.",
+  accounts: "Track invoices, payments, company income and expenses.",
   customers: "Companies you sell to, with their contacts and deals.",
   suppliers: "Supply partners, what they can supply and their offers.",
   products: "Products, grades and recorded availability.",
@@ -456,6 +461,7 @@ export default function Workspace({
   const createKey = useRef("");
   useEffect(() => { if (form && !editing) createKey.current = crypto.randomUUID(); }, [form, editing]);
   const [quoteSource, setQuoteSource] = useState<RecordItem | null>(null);
+  const [mailSource, setMailSource] = useState<RecordItem | null>(null);
   // What a lead form was started from, shown at the top of the form.
   const [leadContext, setLeadContext] = useState("");
   const [mutationFields, setMutationFields] = useState<Record<string, string>>({});
@@ -463,6 +469,7 @@ export default function Workspace({
   useEffect(() => {
     if (!form) {
       setQuoteSource(null);
+      setMailSource(null);
       setLeadContext("");
     }
   }, [form]);
@@ -927,6 +934,9 @@ export default function Workspace({
   };
   async function update(r: RecordItem, status: string) {
     setBusy(true);
+    setError("");
+    setToast("");
+    setPrompt(null);
     try {
       if (preview) setData(transition(data, actor, r.id, status));
       else {
@@ -944,8 +954,10 @@ export default function Workspace({
           ? "Order, shipment and draft invoice created."
           : `Updated to ${status}.`,
       );
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unable to update.");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -1023,6 +1035,25 @@ export default function Workspace({
     } finally {
       setBusy(false);
     }
+  }
+  async function saveContent(values: ContentValues, existing: RecordItem | null, requestId: string) {
+    const problem = contentError(values);
+    if (problem) throw new Error(problem);
+    if (preview) {
+      if (existing) setData(mutateRecord(data, actor, existing.id, existing.updatedAt, values));
+      else {
+        const now = new Date().toISOString();
+        const record: RecordItem = {...values, id:`EC-${crypto.randomUUID().slice(0,8).toUpperCase()}`, status:'Planned', ownerId:actor.id, owner:actor.name, createdAt:now, updatedAt:now};
+        if (!canWrite(actor,record)) throw new Error('You cannot plan content for this company.');
+        setData({...data,records:[record,...data.records],audit:[{id:crypto.randomUUID(),actor:actor.name,recordId:record.id,company:record.company,action:'Created content plan',at:now},...data.audit]});
+      }
+    } else {
+      const response = await fetch('/api/records',{method:existing?'PATCH':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(existing?{action:'edit',id:existing.id,expectedUpdatedAt:existing.updatedAt,values}:{...values,requestId})});
+      const result = await response.json();
+      if(!response.ok) throw new Error(result.error || 'Unable to save post plan.');
+      await reload();
+    }
+    setToast('Post plan saved. Nothing was published.');
   }
   async function create(
     values: Omit<
@@ -1169,7 +1200,7 @@ export default function Workspace({
     </>
   );
   return (
-    <div className={`app-shell ${collapsed ? "is-collapsed" : ""}`}>
+    <div data-design="studio" className={`app-shell ${frame.frame} ${collapsed ? `is-collapsed ${frame.collapsed}` : ""}`}>
       <a className="skip-link" href="#main">
         Skip to content
       </a>
@@ -1188,11 +1219,11 @@ export default function Workspace({
         onMyRequests={openSelfService}
         onView={openView}
       />
-      <div className="main-shell">
-        <header className="topbar">
-          <div className="top-left">
+      <div className={frame.main}>
+        <header className={frame.topbar}>
+          <div className={frame.topLeft}>
             <Button
-              className="icon-button mobile-menu"
+              className={frame.mobileMenu}
               onClick={() => setMobile(true)}
               aria-label="Open navigation"
             >
@@ -1224,23 +1255,25 @@ export default function Workspace({
               )}
             </nav>
           </div>
-          <div className="top-right">
+          <div className={frame.topRight}>
+            <Button className={frame.aiAccess} aria-label="Open Enercore AI" title="Ask Enercore AI about your work" onClick={() => openView("ai")}><Sparkles size={16} /><span>Ask AI</span></Button>
             {/* One way to find anything: records, pages and commands. */}
             <Button
-              className="command-trigger top-search"
+              className={frame.search}
               aria-label="Quick actions: find anything or run a command"
               onClick={() => setCommandOpen(true)}
             >
               <Search size={15} aria-hidden="true" />
-              <span>Search or jump to…</span>
+              <span>Search records or actions…</span>
               <kbd>⌘ K</kbd>
             </Button>
-            <BusinessClock />
+
             {/* Always reachable, on every screen, so creating a record is
                 never a navigation task. The shortcut is a convenience on top
                 of this button, never a requirement. */}
             <Button
               className="primary quick-add-trigger"
+              aria-label="Quick add"
               onClick={() => setQuickAdd({ open: true })}
               title="Quick add (press n)"
             >
@@ -1272,7 +1305,7 @@ export default function Workspace({
           </div>
         </header>
         {preview && (
-          <div className="preview-bar">
+          <div className={frame.preview}>
             <Sparkles size={13} />
             <span>
               Interactive preview <b>·</b> Fictional data, saved only in this
@@ -1285,7 +1318,7 @@ export default function Workspace({
         )}
         <main
           id="main"
-          className={`main-content page-enter${view === "collaboration" && !selfService && !selectedCurrent ? " is-collaboration" : ""}${selectedCurrent ? " is-record" : ""}`}
+          className={`${frame.content} main-content page-enter${view === "collaboration" && !selfService && !selectedCurrent ? " is-collaboration" : ""}${selectedCurrent ? " is-record" : ""}`}
           key={selfService ? "my-requests" : view || `${module}-${company}`}
         >
           {/* An open record is a page of its own. The page it was opened from
@@ -1385,6 +1418,16 @@ export default function Workspace({
                 />
               )}
               {view === "prospecting" && <Prospecting actor={actor} preview={preview} />}
+              {view === "mail" && <MailHub preview={preview} records={scoped.records} onCreate={(kind, message, suggestion) => {
+                const entity = company === "All companies" ? actor.companies[0] : company;
+                const source: RecordItem = { id:"", kind, company:entity, branch:actor.branches[0] || "Main",
+                  title:kind === "it" ? suggestion.summary : suggestion.company, contact:suggestion.contact,
+                  product:suggestion.product, quantity:suggestion.quantity ?? 0, unit:suggestion.unit || "MT",
+                  amount:0, currency:"USD", status:"", ownerId:actor.id, owner:actor.name, due:"",
+                  detail:"", source:"Email", email:message.sender, createdAt:"", updatedAt:"" };
+                if (!canWrite(actor, source)) { setToast("Your role cannot create this type of record for this company."); return; }
+                setMailSource(source); setEditing(null); setMutationError(""); setForm(kind);
+              }}/>}
               {view === "ai" && <AiWorkspace actor={actor} preview={preview} />}
               {view === "actions" &&
                 (preview ? (
@@ -1426,6 +1469,7 @@ export default function Workspace({
           ) : (
             <>
               {(() => {
+                if (module === "marketing") return null;
                 const headingActions = (
                 <div className="heading-actions">
                   {module === "overview" && !selfService && !view && (
@@ -1519,6 +1563,7 @@ export default function Workspace({
                   return <div className="page-heading is-my-day"><div />{headingActions}</div>;
                 return (
                   <PageHeader
+                    guide={moduleHelp[module]}
                     className="page-heading"
                     kicker={module === "overview" ? `Welcome back, ${actor.name.split(" ")[0]}` : undefined}
                     title={
@@ -1662,7 +1707,12 @@ export default function Workspace({
                   />
                 </section>
               ) : module === "settings" ? (
-                <Settings actor={actor} preview={preview} />
+                <WorkspaceSettings actor={actor} preview={preview} onAppearance={() => openView("appearance")} onAccess={() => openView("access")} />
+              ) : module === "marketing" ? (
+                <>
+                  <ContentCalendar records={records} actor={actor} company={company} onSave={saveContent} onDelete={r=>{setMutationError('');setDeleting(r);}} onCampaign={()=>{setEditing(null);setForm('marketing');}} onCompany={c=>{setCompany(c);window.history.replaceState(null,'',workspaceUrl('marketing',c));}}/>
+                  <details className="panel content-campaigns"><summary>Campaigns & other marketing records</summary>{records.filter(r=>r.kind === 'marketing' && r.attributes?.contentType !== 'social-post').map(r=><Button key={r.id} className="secondary" onClick={()=>setSelected(r)}>{r.title}</Button>)}</details>
+                </>
               ) : (
                 <>
                   {module === "accounts" && <Cashbook records={records} actor={actor} company={company} onAdd={() => { setEditing(null); setForm("accounts"); }} onOpen={setSelected} />}
@@ -1755,20 +1805,12 @@ export default function Workspace({
                                     <strong>
                                       {money(r.amount, r.currency)}
                                     </strong>
-                                    <div className="lead-card-footer">
-                                      <span>
-                                        <Clock size={12} />
-                                        {r.due}
-                                      </span>
-                                      <span className="tiny-avatar">
-                                        {r.owner
-                                          .split(" ")
-                                          .map((x) => x[0])
-                                          .join("")}
-                                      </span>
-                                    </div>
                                   </Button>
-                                  <RecordIcons record={r} actor={actor} onEdit={r => { setMutationError(""); setEditing(r); setForm(r.kind); }} onDelete={r => { setMutationError(""); setDeleting(r); }} />
+                                  <div className="lead-card-footer">
+                                    <span><Clock size={12}/>{r.due || "No follow-up"}</span>
+                                    <Avatar name={r.owner} size={25}/>
+                                    <RecordIcons record={r} actor={actor} onEdit={r => { setMutationError(""); setEditing(r); setForm(r.kind); }} onDelete={r => { setMutationError(""); setDeleting(r); }} />
+                                  </div>
                                   </div>
                                 ))}
                               <Button
@@ -1794,9 +1836,9 @@ export default function Workspace({
                       </div>
                       </>
                     ) : cardModules.includes(module) && board ? (
-                      <RecordCards toolbar={viewToggle} shared={sharedQuery} empty={emptyList} records={visible} onSelect={setSelected} actor={actor} onEdit={r => { setMutationError(""); setEditing(r); setForm(r.kind); }} onDelete={r => { setMutationError(""); setDeleting(r); }} onLog={setLogging} onStatus={(r, status) => { void update(r, status).then(() => setPrompt({ record: r, status })); }} onImport={isImportable(module) ? () => setImporting(true) : undefined} />
+                      <RecordCards toolbar={viewToggle} shared={sharedQuery} empty={emptyList} records={visible} onSelect={setSelected} actor={actor} onEdit={r => { setMutationError(""); setEditing(r); setForm(r.kind); }} onDelete={r => { setMutationError(""); setDeleting(r); }} onLog={setLogging} onStatus={(r, status) => { void update(r, status).then((saved) => { if (saved && r.kind === "leads" && !["Won", "Lost"].includes(status)) setPrompt({ record: r, status }); }); }} onImport={isImportable(module) ? () => setImporting(true) : undefined} />
                     ) : (
-                      <RecordTable toolbar={viewToggle} shared={sharedQuery} empty={emptyList} records={visible} onSelect={setSelected} actor={actor} onEdit={r => { setMutationError(""); setEditing(r); setForm(r.kind); }} onDelete={r => { setMutationError(""); setDeleting(r); }} onLog={setLogging} onStatus={(r, status) => { void update(r, status).then(() => setPrompt({ record: r, status })); }} onImport={isImportable(module) ? () => setImporting(true) : undefined} />
+                      <RecordTable toolbar={viewToggle} shared={sharedQuery} empty={emptyList} records={visible} onSelect={setSelected} actor={actor} onEdit={r => { setMutationError(""); setEditing(r); setForm(r.kind); }} onDelete={r => { setMutationError(""); setDeleting(r); }} onLog={setLogging} onStatus={(r, status) => { void update(r, status).then((saved) => { if (saved && r.kind === "leads" && !["Won", "Lost"].includes(status)) setPrompt({ record: r, status }); }); }} onImport={isImportable(module) ? () => setImporting(true) : undefined} />
                     )}
                   </section>
                   {["orders", "accounts", "logistics"].includes(module) && (
@@ -1823,11 +1865,11 @@ export default function Workspace({
           <RecordForm
             live={!preview}
             records={scoped.records}
-            initial={editing || (form === "quotations" || form === "leads" ? quoteSource : null)}
+            initial={editing || (view === "mail" ? mailSource : null) || (form === "quotations" || form === "leads" ? quoteSource : null)}
             editing={Boolean(editing)}
             saveError={mutationError}
             serverFieldErrors={mutationFields}
-            context={form === "leads" ? leadContext : ""}
+            context={view === "mail" && mailSource ? "Reviewed email fields · full email remains private" : form === "leads" ? leadContext : ""}
             kind={form}
             actor={actor}
             company={company}
@@ -1836,6 +1878,7 @@ export default function Workspace({
               if (busy) return;
               setForm(null);
               setQuoteSource(null);
+              setMailSource(null);
             }}
             onSave={editing ? saveEdit : create}
           />
@@ -2089,6 +2132,12 @@ type RecordActionsProps = {
 const LOGGABLE = ["leads", "customers", "suppliers", "quotations", "orders"];
 /** The next action, with its date kept as secondary detail. */
 function NextActionCell({ record }: { record: RecordItem }) {
+  if (["products", "customers", "suppliers", "hr"].includes(record.kind)) {
+    return <span className="muted">{record.updatedAt ? `Updated ${record.updatedAt.slice(0, 10)}` : "No update recorded"}</span>;
+  }
+  if (record.kind === "accounts" && !["Paid", "Cancelled", "Overdue"].includes(record.status)) {
+    return <span className="next-action-cell"><span>Payment due</span><small className="muted">{record.due || "Not set"}</small></span>;
+  }
   const action = nextAction(record);
   return (
     <span className="next-action-cell">
@@ -2258,8 +2307,13 @@ function RecordTable({
   const pagination = usePagination(records, "", shared);
   // Money is a column only where the records carry money.
   const valued = records.some((r) => ["leads", "quotations", "orders", "accounts", "products", "marketing"].includes(r.kind));
+  const referenceList = ["products", "customers", "suppliers", "hr"].includes(records[0]?.kind);
   return (
-    <>
+    <Surface padding="none" className={`record-list-surface ${recordStyles.surface}`}>
+      {records.length > 0 && <div className={recordStyles.views} aria-label="Record views">
+        <button aria-pressed={pagination.query.status === "all"} onClick={() => pagination.setQuery({...pagination.query, status:"all"})}>All records <span>{records.length}</span></button>
+        {pagination.statuses.map(status => <button key={status} aria-pressed={pagination.query.status === status} onClick={() => pagination.setQuery({...pagination.query, status})}>{status}<span>{records.filter(record => record.status === status).length}</span></button>)}
+      </div>}
       <ListFilters
         {...pagination}
         label="records"
@@ -2270,7 +2324,7 @@ function RecordTable({
         trailing={toolbar}
       />
       {pagination.total > 0 && <div className="table-scroll">
-        <table className="e-record-table">
+        <table className={recordStyles.table}>
           <thead>
             <tr>
               {/* Six columns, not eight. Company and product are secondary
@@ -2278,11 +2332,11 @@ function RecordTable({
                   horizontal scroll without losing anything. */}
               {/* Columns are sized by class, not position: Value is absent
                   for kinds that carry no value. */}
-              <SortHeader className="e-col-record" sortKey="name" query={pagination.query} setQuery={pagination.setQuery}>Record / Customer</SortHeader>
+              <SortHeader className="e-col-record" sortKey="name" query={pagination.query} setQuery={pagination.setQuery}>{records[0]?.kind === "products" ? "Product" : records[0]?.kind === "hr" ? "Employee" : "Name / Company"}</SortHeader>
               <SortHeader className="e-col-status" sortKey="status" query={pagination.query} setQuery={pagination.setQuery}>Status</SortHeader>
-              <SortHeader className="e-col-owner" sortKey="owner" query={pagination.query} setQuery={pagination.setQuery}>Created by</SortHeader>
-              <SortHeader className="e-col-next" sortKey="due" query={pagination.query} setQuery={pagination.setQuery}>Next action</SortHeader>
-              {valued && <SortHeader className="e-col-value" sortKey="amount" query={pagination.query} setQuery={pagination.setQuery}>Value</SortHeader>}
+              <SortHeader className="e-col-owner" sortKey="owner" query={pagination.query} setQuery={pagination.setQuery}>Owner</SortHeader>
+              {referenceList ? <th className="e-col-next">Last updated</th> : <SortHeader className="e-col-next" sortKey="due" query={pagination.query} setQuery={pagination.setQuery}>{records[0]?.kind === "accounts" ? "Payment" : "Next action"}</SortHeader>}
+              {valued && <SortHeader className="e-col-value" sortKey="amount" query={pagination.query} setQuery={pagination.setQuery}>{records[0]?.kind === "products" ? "Unit price" : "Value"}</SortHeader>}
               <th className="e-col-actions">Actions</th>
             </tr>
           </thead>
@@ -2309,7 +2363,13 @@ function RecordTable({
                     </span>
                   </Button>
                 </td>
-                <td className="e-cell-status"><Badge status={r.status} /></td>
+                <td className="e-cell-status">
+                  {canWrite(actions.actor, r) && actions.onStatus && (stages[r.kind] || []).length > 1 ? (
+                    <Select className="record-status-select" aria-label={`Status for ${r.title}`} value={r.status} onChange={(e) => actions.onStatus?.(r, e.target.value)}>
+                      {(stages[r.kind] || []).map((status) => <option key={status}>{status}</option>)}
+                    </Select>
+                  ) : <Badge status={r.status} />}
+                </td>
                 <td className="e-cell-owner">
                   {r.owner ? (
                     <span className="avatar-name"><Avatar name={r.owner} size={24} /><span title={r.owner}>{r.owner}</span></span>
@@ -2324,7 +2384,7 @@ function RecordTable({
                   </td>
                 )}
                 <td className="e-col-actions">
-                  <RecordIcons record={r} onOpen={onSelect} {...actions} />
+                  <RecordIcons record={r} onOpen={onSelect} {...actions} onStatus={undefined} />
                 </td>
               </tr>
             ))}
@@ -2333,7 +2393,7 @@ function RecordTable({
       </div>}
       <ListEmpty {...pagination} label="records" empty={empty} />
       <Pagination {...pagination} label="records" />
-    </>
+    </Surface>
   );
 }
 function Overview({
@@ -2373,7 +2433,6 @@ function Overview({
   onQuickAdd: (kind?: Kind) => void;
   busy?: boolean;
 }) {
-  const [showAllAttention, setShowAllAttention] = useState(false);
   const [analysisOpen, setAnalysisOpen] = useState(false);
   useEffect(() => {
     try {
@@ -2578,14 +2637,6 @@ function Overview({
       </>
     );
 
-  // Exceptions first: the executive view leads with what needs a decision,
-  // then the numbers, then the analysis. Ranked by business impact so the
-  // most costly problem is the first thing read.
-  const rankedAll = attentionItems(actor, allRecords);
-  // Five is what fits the first screen beside the brief and the KPI strip.
-  // The rest are one click away rather than pushing the numbers off-screen.
-  const ranked = showAllAttention ? rankedAll : rankedAll.slice(0, 5);
-
   return (
     <>
       {/* The first screen answers four questions, in order: what needs me,
@@ -2596,113 +2647,7 @@ function Overview({
           {scopeNote}
         </p>
       )}
-      <KpiStrip records={records} onGo={(m) => go(m as Module)} />
-      <div className="dash-grid">
-        <div className="dash-main">
-          {ranked.length === 0 ? (
-            <section className="panel attention-section command-attention attention-clear">
-              <div className="panel-heading">
-                <h2><AlertTriangle size={16} aria-hidden="true" /> Needs attention</h2>
-              </div>
-              <p className="attention-clear-note">
-                <CheckCircle2 size={16} aria-hidden="true" /> Nothing needs your attention right now.
-              </p>
-            </section>
-          ) : (
-            <section className="panel attention-section tone-urgent command-attention">
-              <div className="panel-heading">
-                <h2><AlertTriangle size={16} /> Needs attention</h2>
-                <span className="attention-count">{rankedAll.length}</span>
-              </div>
-              <MorningBrief actor={actor} records={allRecords} onGo={(m) => go(m as Module)} />
-              <ul className="attention-list">
-                {ranked.map((item) => (
-                  <li key={item.id} className={`attention-row sev-${item.severity}`}>
-                    <Button className="record-link attention-open" onClick={() => onSelect(item.record)}>
-                      <span className="my-day-title">{item.record.title}</span>
-                      <small>
-                        <span className={`attention-tag sev-${item.severity}`}>{item.category}</span>
-                        {item.reason}
-                        {item.record.amount ? ` · ${money(item.record.amount, item.record.currency)}` : ""}
-                        {item.record.owner ? ` · ${item.record.owner}` : ""}
-                      </small>
-                    </Button>
-                    {item.action === "follow-up" && (
-                      <FollowUpMenu busy={busy} onChoose={(date) => void onFollowUp(item.record, date)} />
-                    )}
-                  </li>
-                ))}
-              </ul>
-              {rankedAll.length > ranked.length && (
-                <Button className="secondary compact attention-more" onClick={() => setShowAllAttention(true)}>
-                  View all {rankedAll.length} <ArrowRight size={14} />
-                </Button>
-              )}
-            </section>
-          )}
-          <section className="panel dash-changes">
-            <div className="panel-heading">
-              <h2>What changed</h2>
-              <span className="muted small">Latest updates in your scope</span>
-            </div>
-            <ActivityList
-              paginated={false}
-              events={audit.filter((a) => company === "All companies" || a.company === company).slice(0, 6)}
-            />
-          </section>
-        </div>
-        <div className="dash-side">
-          <OperationsSnapshot records={records} onGo={(m) => go(m as Module)} />
-          <PipelineHealth records={records} onGo={(m) => go(m as Module)} />
-        <section className="panel dash-watch">
-          <div className="panel-heading">
-            <div>
-              <h2>
-                {allowed.includes("logistics")
-                  ? "Shipment watch"
-                  : "Recent records"}
-              </h2>
-              <p>
-                {allowed.includes("logistics")
-                  ? "Active deliveries and expected arrival dates."
-                  : "Your latest workspace updates."}
-              </p>
-            </div>
-            {allowed.includes("logistics") && (
-              <Button className="text-button" onClick={() => go("logistics")}>
-                View all <ArrowRight size={14} />
-              </Button>
-            )}
-          </div>
-          {(allowed.includes("logistics") ? shipments : records)
-            .slice(0, 4)
-            .map((r) => (
-              <Button
-                key={r.id}
-                className="shipment-row"
-                onClick={() => onSelect(r)}
-              >
-                <span className="shipment-symbol">
-                  <Truck size={19} />
-                </span>
-                <span>
-                  <b>{r.title}</b>
-                  <small>{r.detail || r.product || r.kind}</small>
-                </span>
-                <Badge status={r.status} />
-                <span className="shipment-date">
-                  <small>EXPECTED</small>
-                  {r.due}
-                </span>
-                <ArrowUpRight size={16} />
-              </Button>
-            ))}
-          {!(allowed.includes("logistics") ? shipments : records).length && (
-            <Empty />
-          )}
-        </section>
-        </div>
-      </div>
+      <StudioDashboard actor={actor} records={records} currentRecords={allRecords} onSelect={onSelect} go={go} onQuickAdd={onQuickAdd} events={audit.filter(a=>company==="All companies" || a.company===company)} />
       <details
         className="dash-analysis"
         open={analysisOpen}
@@ -2719,101 +2664,6 @@ function Overview({
           <span className="muted small">Sales, demand and performance by company</span>
         </summary>
         {analysisOpen && commercial && <DashboardInsights actor={actor} records={records} onSelect={onSelect} />}
-        {analysisOpen && commercial && (
-          <div className="overview-grid">
-        {commercial && <section className="panel performance">
-          <div className="panel-heading">
-            <div>
-              <h2>Business performance</h2>
-              <p>Order value and open pipeline by company</p>
-            </div>
-            <span className="unit-tag">USD only</span>
-          </div>
-          <div className="chart-summary">
-            <strong>{shortMoney(usd(orders) + pipeline)}</strong>
-            <span>
-              Orders + open leads
-              <br />
-              <small>Current workspace snapshot</small>
-            </span>
-          </div>
-          <div
-            className="bar-chart"
-            role="img"
-            aria-label="Order and pipeline values by company"
-          >
-            {(company === "All companies" ? actor.companies : [company]).map(
-              (c) => {
-                const p = usd(
-                  leads.filter(
-                    (r) =>
-                      r.company === c && !["Won", "Lost"].includes(r.status),
-                  ),
-                );
-                const o = usd(orders.filter((r) => r.company === c));
-                const max = Math.max(
-                  1,
-                  ...actor.companies.map((c) =>
-                    usd(
-                      records.filter(
-                        (r) =>
-                          r.company === c &&
-                          ["orders", "leads"].includes(r.kind),
-                      ),
-                    ),
-                  ),
-                );
-                return (
-                  <div className="chart-column" key={c}>
-                    <div className="bar-pair">
-                      <div
-                        className="bar orders"
-                        role="button"
-                        tabIndex={0}
-                        aria-label={`${c} confirmed orders: ${money(o)}. Open orders`}
-                        onClick={() => go("orders", c)}
-                        onKeyDown={e => { if(e.key === "Enter" || e.key === " "){e.preventDefault();go("orders", c);} }}
-                        style={{
-                          height: `${Math.max(o ? 4 : 0, (o / max) * 100)}%`,
-                        }}
-                        title={`${c} orders: ${money(o)}`}
-                      >
-                        <span>{shortMoney(o)}</span>
-                      </div>
-                      <div
-                        className="bar pipeline"
-                        role="button"
-                        tabIndex={0}
-                        aria-label={`${c} pipeline: ${money(p)}. Open sales pipeline`}
-                        onClick={() => go("leads", c)}
-                        onKeyDown={e => { if(e.key === "Enter" || e.key === " "){e.preventDefault();go("leads", c);} }}
-                        style={{
-                          height: `${Math.max(p ? 4 : 0, (p / max) * 100)}%`,
-                        }}
-                        title={`${c} pipeline: ${money(p)}`}
-                      >
-                        <span>{shortMoney(p)}</span>
-                      </div>
-                    </div>
-                    <span className="chart-label">{companyName(c)}</span>
-                  </div>
-                );
-              },
-            )}
-          </div>
-          <div className="chart-legend">
-            <span>
-              <i />
-              Confirmed orders
-            </span>
-            <span>
-              <i />
-              Open pipeline
-            </span>
-          </div>
-        </section>}
-          </div>
-        )}
       </details>
     </>
   );
@@ -2962,68 +2812,5 @@ function ActivityList({
         )}
       </DialogPresence>
     </>
-  );
-}
-function Settings({ actor, preview }: { actor: Actor; preview: boolean }) {
-  return (
-    <div className="settings-grid">
-      <section className="panel">
-        <div className="panel-heading">
-          <div>
-            <h2>Connected companies</h2>
-            <p>Entities in your access scope</p>
-          </div>
-          <Building2 size={20} />
-        </div>
-        {actor.companies.map((c) => (
-          <div className="settings-row" key={c}>
-            <Company name={c} />
-
-            <Badge status="Active" />
-          </div>
-        ))}
-      </section>
-      <section className="panel">
-        <div className="panel-heading">
-          <div>
-            <h2>Your access</h2>
-            <p>Permissions are enforced on the server.</p>
-          </div>
-          <ShieldCheck size={20} />
-        </div>
-        <div className="settings-body">
-          <dl>
-            <dt>Name</dt>
-            <dd>{actor.name}</dd>
-            <dt>Role</dt>
-            <dd>{actor.role}</dd>
-            <dt>Company scope</dt>
-            <dd>{actor.companies.length} companies</dd>
-
-            <dt>Environment</dt>
-            <dd>{preview ? "Fictional preview" : "Cloudflare D1 workspace"}</dd>
-          </dl>
-          <p className="small muted">
-            MD and IT can provision accounts above. Leadership access requires
-            the MD. Deactivation revokes active sessions.
-          </p>
-        </div>
-      </section>
-      <section className="panel">
-        <div className="panel-heading">
-          <h2>Connection readiness</h2>
-          <Monitor size={20} />
-        </div>
-        <div className="settings-body">
-          <p>Database: {preview ? "Not connected" : "Configured"}</p>
-          <p>Email & WhatsApp: Not connected</p>
-          <p>Website enquiry integration: Not connected</p>
-          <p className="small muted">
-            External integrations are disabled until their credentials and
-            routing are configured.
-          </p>
-        </div>
-      </section>
-    </div>
   );
 }

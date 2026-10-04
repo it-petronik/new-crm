@@ -24,7 +24,7 @@ import {
 import { SECTION_TITLES, type SectionKey } from "@/lib/sales/sections";
 import { NEXT_ACTION_LABELS, type NextAction } from "@/lib/sales/signals";
 import type { Actor } from "@/lib/domain";
-import { AiLoading, RefChips, ReviewSuggestion, useAiStatus } from "./ai-answer";
+import { AiLoading, AiResultHeading, RefChips, ReviewSuggestion, useAiStatus } from "./ai-answer";
 
 /**
  * Sales Copilot UI. Deterministic facts (signals, next best action, missing
@@ -77,7 +77,8 @@ export function SectionsView({ result }: { result: SalesResult }) {
   const refs = new Map(result.references.map((r) => [r.id, r]));
   const a = result.answer;
   return (
-    <div className="ai-answer copilot-answer">
+    <div className="ai-answer copilot-answer" role="region" aria-label="AI result" tabIndex={0}>
+      <AiResultHeading />
       {result.scope && <p className="ai-scope">{result.scope}</p>}
       {a.summary && <p className="ai-summary">{a.summary}</p>}
       {result.nextAction && <NextActionCard next={result.nextAction} />}

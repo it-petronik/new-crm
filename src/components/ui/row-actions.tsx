@@ -32,8 +32,9 @@ export function MoreActions({ label, actions }: { label: string; actions: RowAct
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild>
-        <Button className="icon-button" aria-label={`More actions for ${label}`} title="More">
+        <Button className="row-labelled-action" aria-label={`More actions for ${label}`} help="Edit and other available actions for this record.">
           <MoreHorizontal size={16} />
+          <span>More</span>
         </Button>
       </PopoverPrimitive.Trigger>
       <PopoverPrimitive.Portal>
@@ -89,8 +90,9 @@ export function RowActions({
       )}
 
       {onOpen && (
-        <Button className="icon-button" aria-label={`Open ${label}`} title="Open" onClick={onOpen}>
+        <Button className="row-labelled-action" aria-label={`Open ${label}`} help="Open this record to see details and related work." onClick={onOpen}>
           <ArrowUpRight size={15} />
+          <span>Open</span>
         </Button>
       )}
 

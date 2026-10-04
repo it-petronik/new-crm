@@ -1,5 +1,6 @@
 const pages: Record<string,string> = { prospecting:"prospecting", overview:"overview", leads:"sales-pipeline", quotations:"quotations", orders:"sales-orders", logistics:"logistics", accounts:"accounts", customers:"customers", suppliers:"suppliers", products:"products", hr:"people-hr", marketing:"marketing", it:"it-support", approvals:"approvals", activity:"activity", settings:"settings", access:"access-control", profile:"profile", appearance:"appearance", notifications:"notifications", shortcuts:"shortcuts", collaboration:"collaboration", ai:"enercore-ai", actions:"action-center", "my-requests":"my-requests" };
 const companies: Record<string,string> = { "All companies":"all-companies", Petronik:"petronik", Afrilube:"afrilube", Petronex:"petronex", Istanegry:"istanergy" };
+pages.mail = "email";
 export function workspaceUrl(page:string, company:string) { return `/workspace/${companies[company] || "all-companies"}/${pages[page] || "overview"}`; }
 export function workspaceParams(path:string, search:string) {
   const params = new URLSearchParams(search);
@@ -7,7 +8,7 @@ export function workspaceParams(path:string, search:string) {
   if(parts[1] === "workspace") {
     params.set("company", Object.keys(companies).find(k=>companies[k] === parts[2]) || "All companies");
     const page = Object.keys(pages).find(k=>pages[k] === parts[3]) || "overview";
-    params.set(["prospecting","access","profile","appearance","notifications","shortcuts","collaboration","ai","actions"].includes(page) ? "view" : "module",page);
+    params.set(["mail","prospecting","access","profile","appearance","notifications","shortcuts","collaboration","ai","actions"].includes(page) ? "view" : "module",page);
   }
   return params;
 }

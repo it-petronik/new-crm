@@ -300,9 +300,9 @@ export function Lightbox({ items, index, onIndex, onClose }: { items: LightboxIt
               <Download size={18} />
             </a>
             <DialogPrimitive.Close asChild>
-              <Button className="icon-button" aria-label="Close image">
+              <button type="button" className="ui-button icon-button" aria-label="Close image">
                 <X size={20} />
-              </Button>
+              </button>
             </DialogPrimitive.Close>
           </header>
           <div className="collab-lightbox-stage">

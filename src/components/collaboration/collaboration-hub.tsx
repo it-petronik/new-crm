@@ -476,8 +476,8 @@ export default function CollaborationHub({
     return (
       <div className="collab collab-unavailable">
         <div className="collab-empty">
-          <p className="collab-empty-title">Collaboration is part of the live workspace.</p>
-          <p>The preview uses fictional data in your browser, so there is no one to talk to here.</p>
+          <p className="collab-empty-title">Collaboration needs a signed-in workspace.</p>
+          <p>This browser preview has no shared database. You can test locally without using production: run <code>npm run dev:review</code> and open <a href="http://localhost:8788/login">the local test workspace</a>.</p>
         </div>
       </div>
     );
@@ -485,7 +485,7 @@ export default function CollaborationHub({
   return (
     <div
       className={[
-        "collab",
+        "collab collab-refined",
         selectedId || meetingsPane ? "has-selection" : "",
         detailsOpen && selectedId ? "has-details" : "",
       ]
@@ -494,7 +494,7 @@ export default function CollaborationHub({
     >
       <aside className="collab-sidebar" aria-label="Conversations">
         <div className="collab-sidebar-head">
-          <h1>Collaboration</h1>
+          <div><h1>Collaboration</h1><p className="collab-subtitle">Your team, conversations and meetings</p></div>
           <div className="collab-sidebar-actions">
             <Button className="icon-button" aria-label="Browse rooms" title="Browse rooms" onClick={() => setDialog("browse")}>
               <Compass size={17} />
@@ -593,7 +593,7 @@ export default function CollaborationHub({
         </div>
       </aside>
 
-      <main className="collab-main">
+      <section className="collab-main" aria-label="Conversation workspace">
         {meetingsPane ? (
           <MeetingsPage
             meId={actor.id}
@@ -660,7 +660,7 @@ export default function CollaborationHub({
             </div>
           </div>
         )}
-      </main>
+      </section>
 
       {selected && detailsOpen && (
         <Details

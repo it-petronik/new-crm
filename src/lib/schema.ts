@@ -30,6 +30,17 @@ export const users = sqliteTable("User", {
   createdAt: integer("createdAt", { mode: "timestamp_ms" }).notNull(),
 });
 
+export const sharedOptions = sqliteTable("SharedOption", {
+  id: text("id").primaryKey(),
+  company: text("company").notNull(),
+  catalog: text("catalog").notNull(),
+  label: text("label").notNull(),
+  normalized: text("normalized").notNull(),
+  createdBy: text("createdBy").notNull().references(() => users.id),
+  version: integer("version").notNull().default(1),
+  updatedAt: integer("updatedAt").notNull(),
+}, t => [uniqueIndex("SharedOption_scope_key").on(t.company, t.catalog, t.normalized)]);
+
 export const sessions = sqliteTable(
   "Session",
   {

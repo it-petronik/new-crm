@@ -1,0 +1,18 @@
+.control { display: grid; gap: 5px; min-width: 0; }
+.manage { justify-self: start; display: inline-flex; align-items: center; gap: 5px; border: 0; padding: 3px 0; background: none; color: var(--e-text-secondary); font-size: 11px; }
+.manage:hover { color: var(--e-accent); }
+.manager { display: grid; gap: 16px; }
+.notice { display: flex; gap: 8px; padding: 12px; margin: 0; border-radius: 8px; background: var(--e-accent-soft); color: var(--e-accent); font-size: 13px; }
+.notice svg { flex: none; }
+.hint { margin: 0; font-size: 12px; color: var(--e-text-secondary); }
+.list { max-height: 250px; overflow-y: auto; border: 1px solid var(--e-border); border-radius: 10px; }
+.row { display: flex; align-items: center; gap: 12px; justify-content: space-between; min-height: 42px; padding: 6px 12px; border-bottom: 1px solid var(--e-border-muted); font-size: 13px; }
+.row:last-child { border: 0; }
+.row > span { overflow-wrap: anywhere; }
+.row > div { display: flex; flex: none; }
+.row small { color: var(--e-text-muted); white-space: nowrap; }
+.editor { display: flex; align-items: end; gap: 10px; flex-wrap: wrap; }
+.editor > :first-child { flex: 1 1 180px; }
+.confirm { padding: 16px; background: var(--e-surface-sunken); border-radius: 8px; }
+.confirm p { font-size: 13px; margin: 0 0 12px; }
+.confirm button + button { margin-left: 8px; }

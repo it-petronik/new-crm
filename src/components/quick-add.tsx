@@ -5,7 +5,7 @@ import { Button, Dialog, DialogActions, Field, Input } from "@/components/ui/con
 import { useForm } from "@/components/ui/use-form";
 import { required, email as emailRule, minLength, number } from "@/lib/validation";
 import { AlertCircle } from "lucide-react";
-import FollowUpControl from "./follow-up-control";
+import { companyName } from "@/lib/company-name";
 import { recordProfiles } from "@/lib/record-profiles";
 import { followUpPresets, isoDate } from "@/lib/attention";
 import { allowedModules, type Actor, type Kind, type Module, type RecordItem } from "@/lib/domain";
@@ -41,7 +41,6 @@ export default function QuickAdd({
   branch,
   onCreate,
   onClose,
-  onOpenFullForm,
   initialKind,
 }: {
   actor: Actor;
@@ -55,7 +54,7 @@ export default function QuickAdd({
   // Quick-add kinds are all modules too, so the module check is the access check.
   const permitted = QUICK_KINDS.filter((k) => allowedModules(actor).includes(k as Module));
   const [kind, setKind] = useState<QuickKind>(
-    initialKind && (QUICK_KINDS as string[]).includes(initialKind)
+    initialKind && (permitted as string[]).includes(initialKind)
       ? (initialKind as QuickKind)
       : permitted[0],
   );
@@ -84,7 +83,7 @@ export default function QuickAdd({
   if (!permitted.length) return null;
   const profile = recordProfiles[kind];
 
-  async function save(openFull: boolean) {
+  async function save() {
     // Client validation is for speed of feedback only; the API re-checks
     // everything and remains the authority.
     if (!submit(values)) return;
@@ -109,7 +108,6 @@ export default function QuickAdd({
         source: "Manual",
         ...(email.trim() ? { email: email.trim() } : {}),
       } as QuickAddValues);
-      if (openFull) onOpenFullForm(kind);
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save.");
@@ -118,14 +116,14 @@ export default function QuickAdd({
   }
 
   return (
-    <Dialog onClose={onClose} title="Quick add" className="quick-add-dialog">
+    <Dialog onClose={onClose} title="Quick add" className="quick-add-dialog simple-entry-dialog">
+      <p className="quick-add-intro">Add the essentials now. You can fill in more details later.</p>
       {permitted.length > 1 && (
-        <div className="quick-add-kinds" role="tablist" aria-label="Record type">
+        <div className="quick-add-kinds" role="group" aria-label="Record type">
           {permitted.map((k) => (
             <Button
               key={k}
-              role="tab"
-              aria-selected={k === kind}
+              aria-pressed={k === kind}
               className={`quick-add-kind${k === kind ? " is-active" : ""}`}
               onClick={() => setKind(k)}
             >
@@ -138,11 +136,11 @@ export default function QuickAdd({
       <form
         ref={form}
         noValidate
-        onSubmit={(e) => { e.preventDefault(); void save(false); }}
+        onSubmit={(e) => { e.preventDefault(); void save(); }}
         className="quick-add-form"
       >
         <Field error={errorFor("name")}>
-          {profile.nameLabel}
+          {profile.nameLabel} *
           <Input
             ref={nameRef}
             name="name"
@@ -156,7 +154,7 @@ export default function QuickAdd({
             Contact person
             <Input value={contact} onChange={(e) => setContact(e.target.value)} />
           </Field>
-          <Field error={errorFor("email")} hint={!email ? "Optional" : undefined}>
+          <Field error={errorFor("email")}>
             Email
             <Input
               name="email"
@@ -173,8 +171,8 @@ export default function QuickAdd({
             <Input value={product} onChange={(e) => setProduct(e.target.value)} />
           </Field>
           {kind === "leads" && (
-            <Field error={errorFor("amount")} hint={!amount ? "Optional" : undefined}>
-              Estimated value
+            <Field error={errorFor("amount")}>
+              Estimated value (USD)
               <Input
                 name="amount"
                 inputMode="decimal"
@@ -186,14 +184,9 @@ export default function QuickAdd({
           )}
         </div>
 
-        <FollowUpControl
-          compact
-          busy={busy}
-          onChoose={(date) => setDue(date)}
-          onClear={() => setDue(isoDate(new Date()))}
-        />
+        {kind === "leads" && <Field>Follow-up date<Input type="date" aria-label="Follow-up date" value={due} onChange={(e) => setDue(e.target.value)} /></Field>}
         <p className="muted small quick-add-note">
-          Saved to {company} as {actor.name} · follow-up {due}
+          Will save to {companyName(company)} · Owner: {actor.name}. Only the name is required.
         </p>
 
         {error && (
@@ -208,17 +201,12 @@ export default function QuickAdd({
             on an implicit submit. Enter still works: onSubmit is intact. */}
         <DialogActions
           pending={busy}
-          secondary={
-            <Button className="secondary" type="button" disabled={busy} onClick={() => void save(true)}>
-              Save and add details
-            </Button>
-          }
           primary={{
             label: `Save ${profile.noun.toLowerCase()}`,
             pendingLabel: "Saving…",
             icon: <Plus size={16} aria-hidden="true" />,
             pending: busy,
-            onClick: () => save(false),
+            onClick: () => save(),
           }}
         />
       </form>

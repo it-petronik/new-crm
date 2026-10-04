@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { configFrom, joinToken, signJwt, verifyJwt, verifyWebhook } from "../src/lib/livekit";
-import { joinable, providerRoomName, EARLY_JOIN_MS, STALE_AFTER_MS } from "../src/lib/meetings";
+import { callDuration, isDirectCall, joinable, providerRoomName, EARLY_JOIN_MS, STALE_AFTER_MS } from "../src/lib/meetings";
 import { businessInstant, businessClock } from "../src/lib/gst";
 import { targetFor } from "../src/lib/notification-types";
 
@@ -13,6 +13,22 @@ import { targetFor } from "../src/lib/notification-types";
 
 const config = { url: "wss://example.livekit.cloud", apiKey: "APIkey123", apiSecret: "a-long-test-secret-value-0123456789" };
 const decode = (jwt: string) => JSON.parse(Buffer.from(jwt.split(".")[1], "base64url").toString());
+
+test("only instant direct conversations use the simple call layout", () => {
+  assert.equal(isDirectCall({ scope: "direct", kind: "instant" }), true);
+  assert.equal(isDirectCall({ scope: "direct", kind: "scheduled" }), false);
+  assert.equal(isDirectCall({ scope: "room", kind: "instant" }), false);
+  assert.equal(isDirectCall({ scope: "standalone", kind: "instant" }), false);
+});
+
+test("live call timer shows elapsed seconds and hours without rounding up", () => {
+  assert.equal(callDuration(0), "00:00");
+  assert.equal(callDuration(1999), "00:01");
+  assert.equal(callDuration(65_000), "01:05");
+  assert.equal(callDuration(3_661_000), "1:01:01");
+  assert.equal(callDuration(-1), "00:00");
+  assert.equal(callDuration(Number.NaN), "00:00");
+});
 
 test("join tokens are short-lived, for one person and one room, and carry no secret", async () => {
   const now = Date.UTC(2026, 8, 25, 10, 0, 0);

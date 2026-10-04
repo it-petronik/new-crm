@@ -1,6 +1,10 @@
 "use client";
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type HTMLAttributes, type KeyboardEvent, type ReactNode } from "react";
+import { CircleHelp, X } from "lucide-react";
+import * as Popover from "@radix-ui/react-popover";
+import styles from "./layout.module.css";
 import { useOverflowFade } from "@/lib/use-overflow-fade";
+import { pageGuides, type PageHelp } from "@/lib/workspace-help";
 
 /* ---------------------------------------------------------------------------
    Layout primitives.
@@ -12,9 +16,12 @@ import { useOverflowFade } from "@/lib/use-overflow-fade";
      Tabs         switches between a record's areas (ARIA tabs, arrow keys)
      Metric       one figure with its label, for compact summaries
      EmptyState   what is empty, why, and what to do
+     Surface      a shared boundary with explicit padding
+     Toolbar      a wrapping row of related controls
+     FormGrid     responsive, equal-width form fields
 
-   None of these draw a card. A surface is added by the caller only where it
-   means something (a comparison card, a financial summary).
+   Only Surface draws a card. Add one where it means something, such as a
+   record list, comparison, or financial summary.
    ------------------------------------------------------------------------ */
 
 const cx = (...values: (string | false | null | undefined)[]) => values.filter(Boolean).join(" ");
@@ -25,23 +32,50 @@ export function PageHeader({
   actions,
   kicker,
   className,
+  guide,
 }: {
   title: ReactNode;
   description?: ReactNode;
   actions?: ReactNode;
   kicker?: ReactNode;
   className?: string;
+  guide?: PageHelp;
 }) {
+  const pageGuide = guide || (typeof title === "string" ? pageGuides[title] : undefined);
   return (
-    <header className={cx("ui-page-header", className)}>
-      <div className="ui-page-heading">
+    <header data-ui="page-header" className={cx("ui-page-header", styles.pageHeader, className?.split(" ").filter(name => name !== "page-heading").join(" "))}>
+      <div className={styles.heading}>
         {kicker && <p className="ui-page-kicker">{kicker}</p>}
-        <h1>{title}</h1>
-        {description && <p className="ui-page-description">{description}</p>}
+        <div className={styles.titleRow}><h1>{title}</h1>
+        {pageGuide && <Popover.Root>
+          <Popover.Trigger className={cx("ui-page-guide", styles.guide)} aria-label="How this page works"><CircleHelp size={15} aria-hidden="true"/><span>Guide</span></Popover.Trigger>
+          <Popover.Portal><Popover.Content className={cx("ui-guide-popover", styles.guideContent)} align="start" sideOffset={10} collisionPadding={16} aria-label="How this page works">
+            <div className={styles.guideHeading}><span><CircleHelp size={17} aria-hidden="true"/><strong>How this page works</strong></span><Popover.Close aria-label="Close guide"><X size={16}/></Popover.Close></div>
+            <p>{pageGuide.purpose}</p><ol>{pageGuide.steps.map((step) => <li key={step}>{step}</li>)}</ol>
+            <p className={styles.guideTip}>Open a name for details. A question mark explains an unfamiliar field.</p>
+          </Popover.Content></Popover.Portal>
+        </Popover.Root>}
+        </div>
+        {description && <p className={styles.description}>{description}</p>}
       </div>
-      {actions && <div className="ui-page-actions">{actions}</div>}
+      {actions && <div className={cx("ui-page-actions", styles.actions)}>{actions}</div>}
     </header>
   );
+}
+
+/** Shared boundaries: pages compose these, rather than adding another panel style. */
+export function Surface({ children, className, padding = "normal", ...props }: HTMLAttributes<HTMLDivElement> & { padding?: "none" | "normal" | "compact" }) {
+  return <div {...props} data-ui="surface" data-padding={padding} className={cx(styles.surface, className)}>{children}</div>;
+}
+
+/** Wraps naturally; do not use role=toolbar without implementing arrow-key navigation. */
+export function Toolbar({ children, className, ...props }: HTMLAttributes<HTMLDivElement>) {
+  return <div {...props} data-ui="toolbar" className={cx(styles.toolbar, className)}>{children}</div>;
+}
+
+/** Equal fields at desktop widths, one column at a usable field width. */
+export function FormGrid({ children, className, ...props }: HTMLAttributes<HTMLDivElement>) {
+  return <div {...props} data-ui="form-grid" className={cx(styles.formGrid, className)}>{children}</div>;
 }
 
 export function Section({

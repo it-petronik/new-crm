@@ -192,7 +192,7 @@ export function RecordActivity({
         )}
       </div>
       {!!record.notes?.length && (
-        <details className="note-history">
+        <details className="note-history" open={record.notes.length <= 3}>
           <summary>
             View {record.notes.length} previous{" "}
             {record.notes.length === 1 ? "update" : "updates"}
@@ -208,6 +208,7 @@ export function RecordActivity({
           ))}
         </details>
       )}
+      {!record.notes?.length && profile && !adding && <p className="muted small">No updates recorded yet. Add a call, message or progress update when something changes.</p>}
       {writable && profile && adding && (
         <form
           noValidate

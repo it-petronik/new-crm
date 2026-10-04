@@ -1,4 +1,5 @@
 "use client";
+import styles from "../studio/prospecting.module.css";
 import { useEffect, useState, useRef, useId } from "react";
 import {
   Search,
@@ -573,7 +574,7 @@ export default function Prospecting({
     return <p>Prospecting is unavailable for your role.</p>;
   return (
     <section
-      className="prospecting-workspace apollo-workspace apollo-search-first"
+      className={`prospecting-workspace apollo-workspace apollo-search-first ${styles.workspace}`}
       aria-busy={busy}
     >
       <PageTitle
@@ -616,9 +617,10 @@ export default function Prospecting({
       )}
       {tab === "results" && (
         <>
-          <div className="apollo-search-hero">
+          <div className={styles.search}>
+            <div className={styles.intro}><Search size={20} /><div><h2>Find your next customer</h2><p>Describe a market, product or job title. Review matches before adding them to your CRM.</p></div></div>
             <form
-              className="apollo-query-form"
+              className={styles.query}
               onSubmit={(e) => {
                 e.preventDefault();
                 void search();
@@ -687,7 +689,7 @@ export default function Prospecting({
             )}
             {!page && !active.length && (
               <div
-                className="apollo-query-examples"
+                className={styles.examples}
                 aria-label="Example searches"
               >
                 {[
@@ -777,9 +779,11 @@ export default function Prospecting({
           <div className="apollo-layout">
             <div className="apollo-results">
               {!page && !busy && !error && (
-                <p className="apollo-start-hint muted">
-                  Search a market or choose Filters to get started.
-                </p>
+                <div className={styles.start} aria-label="How prospecting works">
+                  <section><b>1</b><h3>Choose your market</h3><p>Start with a location, industry or product. Use filters to narrow the search.</p></section>
+                  <section><b>2</b><h3>Review the matches</h3><p>Check the company and contact details before spending reveal credits.</p></section>
+                  <section><b>3</b><h3>Start a conversation</h3><p>Save a prospect as a lead, choose an owner and set the next follow-up.</p></section>
+                </div>
               )}
               {page && (
                 <>

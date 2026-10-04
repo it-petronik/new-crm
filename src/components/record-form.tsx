@@ -2,11 +2,13 @@
 import { CustomerSelection } from "./commercial/relationship-picker";
 import { companyName } from "@/lib/company-name";
 import { specError } from "@/lib/validation";
+import { optionCatalog } from "@/lib/shared-options";
+import { SharedSelect } from "./ui/shared-select";
 import { useUnsavedChanges } from "./use-unsaved";
 import { CustomerMatches, LeadMatches, activeLeadMatches, isStrongMatch, openExisting, useCustomerMatches } from "./form-guidance";
 import { commercialLocked, correctionFields } from "@/lib/record-mutations";
 import { Fragment, useEffect, useState, useId } from "react";
-import { ArrowRight, ShieldCheck, X } from "lucide-react";
+import { ShieldCheck, X } from "lucide-react";
 import {
   Button,
   Dialog,
@@ -28,7 +30,8 @@ import {
 import { quotationSources } from "@/lib/sales-prefill";
 import { recordProfiles, recordFieldValue, type FieldSpec } from "@/lib/record-profiles";
 import { amountInWords, quotationError } from "@/lib/quotation";
-import { fieldWidth, quoteSection, quoteSections } from "@/lib/form-layout";
+import { fieldWidth } from "@/lib/form-layout";
+import { entryFields } from "@/lib/entry-layout";
 import { cashEntryProfile } from "@/lib/record-profiles";
 import { salaryAttributes } from "@/lib/salary";
 import { isCashEntry } from "@/lib/cashbook";
@@ -95,17 +98,13 @@ export default function RecordForm({
   // Per-field messages. They appear on submit and clear the moment the person
   // edits the field, so a corrected value never needs a second submit.
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [customChoices, setCustomChoices] = useState<Record<string, string[]>>({});
   // Open when editing a record that already uses those fields.
   const [moreOpen, setMoreOpen] = useState(() =>
-    Boolean(editing && initial && recordProfiles[kind]?.fields.some((f) => f.advanced && recordFieldValue(initial, f.name))),
+    Boolean(editing && kind !== "quotations" && initial && recordProfiles[kind]?.fields.some((f) => f.advanced && recordFieldValue(initial, f.name))),
   );
   const clearFieldError = (name: string) =>
     setFieldErrors((prev) => (prev[name] ? { ...prev, [name]: "" } : prev));
-  const [section, setSection] = useState(0);
-  const hiddenField = (name: string) =>
-    quoteEditor && quoteSection(name) !== section
-      ? " form-field-hidden"
-      : "";
   const [entity, setEntity] = useState(
     initial?.company ||
       (company === "All companies" ? actor.companies[0] : company),
@@ -147,7 +146,7 @@ export default function RecordForm({
   };
   // Same wording as on submit, as soon as the person leaves a field.
   const fieldMessage = (spec: FieldSpec | { name: string; label: string; required?: boolean }, value: string) =>
-    specError(spec as FieldSpec, value) ||
+    specError(customChoices[`${entity}:${spec.name}`] ? { ...spec, options: customChoices[`${entity}:${spec.name}`] } : spec as FieldSpec, value) ||
     (spec.name === "phone" && value.trim() && !/^[+\d][\d\s().-]{5,}$/.test(value.trim())
       ? "Use digits, spaces and + ( ) - only, e.g. +971 4 555 0142."
       : "");
@@ -157,7 +156,7 @@ export default function RecordForm({
     if (!serverFieldErrors || !Object.keys(serverFieldErrors).length) return;
     setFieldErrors((prev) => ({ ...prev, ...serverFieldErrors }));
     const first = Object.keys(serverFieldErrors)[0];
-    if (profile.fields.some((f) => f.name === first && f.advanced)) setMoreOpen(true);
+    setMoreOpen(true);
     setTimeout(() => document.querySelector<HTMLElement>(`#${CSS.escape(formId)} [name="${first}"]`)?.focus(), 0);
   }, [serverFieldErrors]); // eslint-disable-line react-hooks/exhaustive-deps
   const [linkedContactId, setLinkedContactId] = useState(initial?.contactId || null);
@@ -206,9 +205,7 @@ export default function RecordForm({
   // Everyday fields first; the rest wait under "More details" (still part
   // of the form, so nothing is lost when it is closed).
   const shownFields = profile.fields.filter((field) => !locked || correctionFields.includes(field.name));
-  const splitAdvanced = !quoteEditor && !locked;
-  const basicFields = shownFields.filter((f) => !(splitAdvanced && f.advanced));
-  const advancedFields = shownFields.filter((f) => splitAdvanced && f.advanced);
+  const { basic: basicFields, additional: advancedFields } = entryFields(kind, shownFields, editing && kind !== "quotations");
   const renderField = (field: FieldSpec) => {
             const rawInitial = initial ? recordFieldValue(initial, field.name) : "";
             // A new record started from another one (a lead from a customer)
@@ -237,11 +234,13 @@ export default function RecordForm({
             return (
               <Fragment key={entity + field.name}>
                 <Field
-                  className={fieldWidth(field.name) + hiddenField(field.name)}
+                  className={fieldWidth(field.name)}
                   error={fieldErrors[field.name]}
                 >
                   {field.label}
-                  {field.options ? (
+                  {field.options && optionCatalog(kind, field.name) ? (
+                    <SharedSelect data-field-control name={field.name} label={field.label} company={entity} catalog={optionCatalog(kind, field.name)!} live={live} options={field.options} defaultValue={initialValue || fallback} required={field.required} onOptions={options => setCustomChoices(prev => ({ ...prev, [`${entity}:${field.name}`]: options }))} {...(kind === "quotations" && field.name === "unit" ? { value: quoteUnit, disabled: lines.some(l => Boolean(l.description)), onChange: (e: React.ChangeEvent<HTMLSelectElement>) => setQuoteUnit(e.target.value) } : {})} />
+                  ) : field.options ? (
                     <Select
                       name={field.name}
                       defaultValue={initialValue || fallback}
@@ -274,7 +273,7 @@ export default function RecordForm({
                       type={field.type || "text"}
                       required={field.required}
                       placeholder={field.placeholder}
-                      {...(kind === "quotations" &&
+                      {...(["quotations", "leads"].includes(kind) &&
                       [
                         "contact",
                         "email",
@@ -322,14 +321,14 @@ export default function RecordForm({
     <Dialog
       title={editing ? `Edit ${profile.noun.toLowerCase()}` : profile.title}
       onClose={close}
-      className={`record-form-dialog ${profile.fields.length > 11 ? "dialog-wide" : "dialog-compact"} ${kind === "quotations" ? "quotation-form-dialog" : ""}`}
+      className={`record-form-dialog simple-entry-dialog ${quoteEditor || editing ? "dialog-wide" : "dialog-compact"} ${kind === "quotations" ? "quotation-form-dialog" : ""}`}
     >
       <div className="modal-header">
         <span className="eyebrow">{profile.noun}</span>
         <Button
           className="icon-button"
           aria-label="Close form"
-          onClick={onClose}
+          onClick={close}
         >
           <X size={20} />
         </Button>
@@ -341,21 +340,7 @@ export default function RecordForm({
           <span>Started from</span> <b>{context}</b>
         </p>
       )}
-      {quoteEditor && (
-        <nav className="form-sections" aria-label="Quotation sections">
-          {quoteSections.map((s, i) => (
-            <Button
-              key={s}
-              type="button"
-              aria-pressed={section === i}
-              onClick={() => setSection(i)}
-            >
-              <span>{i + 1}</span>
-              {s}
-            </Button>
-          ))}
-        </nav>
-      )}
+      {!editing && <p className="small muted">Start with the essentials. Add other details only when you need them.</p>}
       <form
         id={formId}
         noValidate
@@ -393,19 +378,15 @@ export default function RecordForm({
             : "");
           if (nameError) found.title = nameError;
           for (const spec of profile.fields) {
-            if (hiddenField(spec.name)) continue;
+            if (locked && !correctionFields.includes(spec.name)) continue;
             const message = fieldMessage(spec, read(spec.name));
             if (message) found[spec.name] = message;
           }
           setFieldErrors(found);
           const firstName = Object.keys(found)[0];
           if (firstName) {
-            if (profile.fields.some((f) => f.name === firstName && f.advanced)) setMoreOpen(true);
+            if (advancedFields.some((f) => f.name === firstName)) setMoreOpen(true);
             const el = e.currentTarget.querySelector<HTMLElement>(`[name="${firstName}"]`);
-            if (quoteEditor)
-              setSection(
-                el?.closest(".quotation-items-section, .line-editor") ? 1 : quoteSection(firstName),
-              );
             setFormError("Check the highlighted fields.");
             setTimeout(() => {
               el?.focus();
@@ -435,7 +416,7 @@ export default function RecordForm({
               : "";
           setFormError(error);
           if (error) {
-            setSection(error.includes("Validity") ? 0 : 1);
+            e.currentTarget.querySelector<HTMLElement>(".line-editor input")?.focus();
             return;
           }
           void onSave({
@@ -476,15 +457,26 @@ export default function RecordForm({
         }}
       >
         <div className="form-grid">
-          {live && !editing && ["leads", "quotations"].includes(kind) && <div className={"field-wide" + hiddenField("customer")}><CustomerSelection company={entity} branch={branch} customerId={customerId === "manual" ? null : customerId} customerName={contactDraft.title} contactId={linkedContactId} onChange={(id, contact, title) => {setCustomerId(id || "manual");setLinkedContactId(contact);if(title)setContactDraft(prev=>({...prev,title}));}} /></div>}
-          <Field className={"field-wide" + hiddenField("title")} error={fieldErrors.title}>
+          {live && !editing && ["leads", "quotations"].includes(kind) && <div className="full"><CustomerSelection company={entity} branch={branch} customerId={customerId === "manual" ? null : customerId} customerName={contactDraft.title} contactId={linkedContactId} onChange={(id, contact, title) => {
+            unsaved.markDirty({});
+            setCustomerId(id || "manual");
+            setLinkedContactId(contact);
+            const customer = records.find((r) => r.id === id && r.kind === "customers" && r.company === entity);
+            if (id !== customerId) setContactDraft({
+              title: title || "", contact: customer?.contact || "", email: customer?.email || "", phone: customer?.phone || "",
+              "attributes.country": customer?.attributes?.country || "",
+              "attributes.customerAddress": customer?.attributes?.address || "",
+              "attributes.customerTaxNumber": customer?.attributes?.taxNumber || "",
+            });
+          }} /></div>}
+          <Field className="field-wide" error={fieldErrors.title}>
             {profile.nameLabel}
             <Input
               name="title"
               // Marks the field required (the shared Field draws the *);
               // validation itself stays the form's own check (noValidate).
               required={!locked}
-              readOnly={locked}
+              readOnly={locked || (live && customerId !== "manual" && ["leads", "quotations"].includes(kind))}
               maxLength={160}
               onInput={() => clearFieldError("title")}
               {...(["quotations", "leads"].includes(kind)
@@ -512,7 +504,7 @@ export default function RecordForm({
               }}
             />
           )}
-          <Field className={hiddenField("company")}>
+          <Field>
             Business entity
             <Select
               name="company"
@@ -521,6 +513,7 @@ export default function RecordForm({
               onChange={(e) => {
                 setEntity(e.target.value);
                 setCustomerId("manual");
+                setLinkedContactId(null);
                 setContactDraft({
                   title: "",
                   contact: "",
@@ -539,7 +532,7 @@ export default function RecordForm({
           </Field>
           <input type="hidden" name="branch" value={branch} />
           {!live && kind === "quotations" && !initial && (
-            <Field className={hiddenField("customer")}>
+            <Field>
               Use saved customer details
               <Select
                 value={customerId}
@@ -572,22 +565,12 @@ export default function RecordForm({
             </Field>
           )}
           {basicFields.map(renderField)}
-          {advancedFields.length > 0 && (
-            <details className="form-more" open={moreOpen} onToggle={(e) => setMoreOpen(e.currentTarget.open)}>
-              <summary>More details <span className="muted">(optional)</span></summary>
-              <div className="form-grid">{advancedFields.map(renderField)}</div>
-            </details>
-          )}
         </div>
         {quoteEditor && (
-          <div
-            className={
-              section !== 1 ? "form-field-hidden" : "quotation-items-section"
-            }
-          >
+          <div className="quotation-items-section">
             <LineEditor
               lines={lines}
-              onChange={setLines}
+              onChange={(value) => { setLines(value); unsaved.markDirty({}); }}
               products={sources.products}
               currency={quoteCurrency}
               unit={quoteUnit}
@@ -602,7 +585,9 @@ export default function RecordForm({
             </div>
           </div>
         )}
-        <div className={"form-grid" + hiddenField("detail")}>
+        <details className="form-more" open={moreOpen} onToggle={(e) => setMoreOpen(e.currentTarget.open)}>
+          <summary>{editing && kind !== "quotations" ? "Notes" : "More details & notes"} <span className="muted">(optional)</span></summary>
+          <div className="form-grid">{advancedFields.map(renderField)}
           <Field className="full">
             {profile.notes}
             <Textarea
@@ -617,7 +602,8 @@ export default function RecordForm({
               placeholder={profile.notes}
             />
           </Field>
-        </div>
+          </div>
+        </details>
         {(formError || saveError) && (
           <p className="error" role="alert">
             {formError || saveError}
@@ -631,13 +617,6 @@ export default function RecordForm({
               <ShieldCheck size={14} aria-hidden="true" />
               {actor.name} · Recorded with your company access
             </span>
-          }
-          secondary={
-            quoteEditor && section < 2 && (
-              <Button type="button" className="secondary" onClick={() => setSection(section + 1)}>
-                Next section <ArrowRight size={14} />
-              </Button>
-            )
           }
           primary={{
             type: "submit",

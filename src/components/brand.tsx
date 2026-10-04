@@ -18,7 +18,7 @@ export function BrandLogo({
   return (
     <span className={`brand-logo logo-${brand.file} ${className}`}>
       <Image
-        src={`/brands/${brand.file}.png`}
+        src={`/brands/${brand.file}.${brand.file === "istanergy" ? "svg" : "png"}`}
         alt={brand.label}
         width={180}
         height={72}

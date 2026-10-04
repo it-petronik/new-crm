@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, SearchX, SlidersHorizontal, ArrowUp, ArrowDo
 import { Button, Select, Input } from "./ui/controls";
 import { emptyQuery, queryList, listStatus, mixedCurrencies, sortDirection, nextSort, type ListQuery } from "@/lib/list-query";
 import { pageWindow } from "@/lib/pagination";
+import { Toolbar } from "./ui/layout";
 
 export function usePagination<T extends { id: string }>(
   items: T[],
@@ -91,7 +92,7 @@ export function ListFilters({
     ...(valued ? [sortChoices.amountDesc, sortChoices.amountAsc] : []),
   ];
   return (
-    <div className="list-query-controls" role="search" aria-label={`Filter and sort ${label}`}>
+    <Toolbar className="list-query-controls" role="search" aria-label={`Filter and sort ${label}`}>
       <Input className="list-query-search" aria-label={`Search ${label}`} placeholder={`Search ${label}…`} value={query.search} onChange={e=>setQuery({...query,search:e.target.value})}/>
       <Button
         className={`secondary list-query-toggle${open ? " is-open" : ""}`}
@@ -137,7 +138,7 @@ export function ListFilters({
         {!sortable && <p className="list-query-message">Select a column heading to sort this table.</p>}
         {mixedCurrency && query.sort.includes("amount") && <p className="list-query-message" role="status">Amounts are grouped by currency; values in different currencies are not converted or ranked against each other.</p>}
       </div>
-    </div>
+    </Toolbar>
   );
 }
 

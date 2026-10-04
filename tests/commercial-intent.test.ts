@@ -138,7 +138,7 @@ test("duplicate suggestions: legal-form match, and nothing outside the person's 
 
 /* ------------------------------------------------ leads started in context */
 import { resolveLinks, saveContact } from "../src/lib/commercial/store";
-import { activeLeadMatches } from "../src/components/form-guidance";
+import { activeLeadMatches } from "../src/lib/commercial/lead-matches";
 import { alreadyAdded, bulkState, prospectState } from "../src/lib/prospecting/review-state";
 
 function insert(sqlite: DatabaseSync, r: RecordItem) {

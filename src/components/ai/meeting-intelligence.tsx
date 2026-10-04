@@ -7,7 +7,7 @@ import { MeetingIntelligencePrint } from "./meeting-intelligence-print";
 import { Button, DialogPresence, Textarea } from "../ui/controls";
 import { meetingIntelligence, sales, type MeetingReportView, type QuotePrepView } from "@/lib/ai/client";
 import { businessTime } from "@/lib/gst";
-import { AiLoading, useAiStatus } from "./ai-answer";
+import { AiLoading, AiResultHeading, useAiStatus } from "./ai-answer";
 import { DraftDialog, QuotePrepPanel, SuggestionChecklist } from "./sales-copilot";
 
 /**
@@ -154,7 +154,8 @@ export default function MeetingIntelligence({ meetingId, meeting }: { meetingId:
         </p>
       )}
       {report && !busy && (
-        <div className="ai-answer copilot-answer">
+        <div className="ai-answer copilot-answer" role="region" aria-label="AI meeting result" tabIndex={0}>
+          <AiResultHeading />
           {report.stale && (
             <p className="ai-flag" role="note">
               <AlertTriangle size={14} aria-hidden="true" /> The meeting chat or notes changed after this report was generated. Regenerate to include them.

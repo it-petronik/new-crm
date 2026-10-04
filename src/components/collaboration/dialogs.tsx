@@ -121,7 +121,7 @@ function PeoplePicker({
                   onClick={() => toggle(p)}
                 >
                   <PersonAvatar name={p.name} size={30} presence={presenceOf(p.id)} />
-                  <span>
+                  <span className="collab-picker-label">
                     {p.name}
                     <small>{p.role}</small>
                   </span>

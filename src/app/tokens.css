@@ -11,100 +11,7 @@
    [data-theme] primitives, so it follows the theme without a second palette.
    ------------------------------------------------------------------------ */
 
-:root {
-  /* --- surfaces and lines ------------------------------------------------ */
-  --e-bg: var(--bg);
-  --e-surface: var(--surface);
-  --e-surface-raised: var(--surface);
-  --e-surface-sunken: color-mix(in srgb, var(--ink) 3%, var(--surface));
-  --e-border: var(--line);
-  --e-border-muted: color-mix(in srgb, var(--line) 55%, transparent);
-
-  /* --- text -------------------------------------------------------------- */
-  --e-text: var(--ink);
-  --e-text-secondary: var(--muted);
-  --e-text-muted: var(--subtle);
-  --e-text-inverse: #fff;
-
-  /* --- meaning. Colour is only ever used to say something. --------------- */
-  --e-accent: var(--teal);
-  --e-accent-strong: var(--teal-dark);
-  --e-success: #1f7a4d;
-  --e-warning: #9a6512;
-  --e-danger: #b4372f;
-  --e-info: #1f5f8b;
-  --e-neutral: var(--muted);
-}
-
-/* The same meanings on a dark surface. The light values are dark text for a
-   light page and read as near-invisible on dark; the tints follow these. */
-:root[data-theme="dark"] {
-  --e-success: #5cc98f;
-  --e-warning: #e3a84a;
-  --e-danger: #f07b71;
-  --e-info: #72b6ea;
-}
-
-:root {
-  /* Tints for badges and rails; mixed so they follow the theme. */
-  --e-success-soft: color-mix(in srgb, var(--e-success) 12%, transparent);
-  --e-warning-soft: color-mix(in srgb, var(--e-warning) 13%, transparent);
-  --e-danger-soft: color-mix(in srgb, var(--e-danger) 12%, transparent);
-  --e-info-soft: color-mix(in srgb, var(--e-info) 12%, transparent);
-  --e-neutral-soft: color-mix(in srgb, var(--e-neutral) 11%, transparent);
-  --e-accent-soft: color-mix(in srgb, var(--e-accent) 12%, transparent);
-
-  /* --- type scale -------------------------------------------------------- */
-  --e-eyebrow: 0.7rem;
-  --e-title: 1.5rem;
-  --e-section: 1.0rem;
-  --e-card: 0.92rem;
-  --e-kpi: 1.55rem;
-  --e-body: 0.9rem;
-  --e-secondary: 0.82rem;
-  --e-meta: 0.76rem;
-  --e-caption: 0.7rem;
-
-  --e-weight-regular: 400;
-  --e-weight-medium: 500;
-  --e-weight-strong: 600;
-
-  --e-leading-tight: 1.25;
-  --e-leading-body: 1.5;
-
-  /* --- spacing, radius, elevation ---------------------------------------- */
-  --e-1: 4px;  --e-2: 8px;  --e-3: 12px; --e-4: 16px;
-  --e-5: 20px; --e-6: 24px; --e-8: 32px; --e-10: 40px;
-
-  --e-radius-sm: 6px;
-  --e-radius: 10px;
-  --e-radius-lg: 14px;
-  --e-radius-pill: 999px;
-
-  /* Elevation is used only where something genuinely floats. */
-  --e-shadow-none: none;
-  --e-shadow-raised: 0 1px 2px rgba(16, 42, 46, 0.04);
-  --e-shadow-overlay: 0 10px 30px rgba(16, 42, 46, 0.16);
-
-  --e-focus-ring: 0 0 0 3px color-mix(in srgb, var(--e-accent) 30%, transparent);
-
-  /* --- controls and density ---------------------------------------------- */
-  --e-control-h: 36px;
-  --e-control-h-sm: 28px;
-  --e-control-h-touch: 44px;
-  --e-row-h: 56px;
-
-  --e-transition: 140ms var(--ease, ease-out);
-}
-
-/* A compact row is still a comfortable target on a touch screen. */
-@media (max-width: 720px) {
-  :root {
-    --e-control-h: var(--e-control-h-touch);
-    --e-control-h-sm: 38px;
-    --e-row-h: auto;
-  }
-}
+/* Global tokens live in foundation.css. This file owns component rules only. */
 
 /* --- typography roles ---------------------------------------------------- */
 .e-eyebrow {
@@ -153,6 +60,8 @@
 
 .e-badge.tone-neutral { color: var(--e-neutral); background: var(--e-neutral-soft); }
 .e-badge.tone-info    { color: var(--e-info);    background: var(--e-info-soft); }
+.e-badge.tone-active .e-badge-dot { width:7px; height:7px; background:currentColor; border:0; box-shadow:0 0 0 2px var(--e-accent-soft); }
+.e-badge.tone-warning .e-badge-dot { border-radius:1px; transform:rotate(45deg); }
 .e-badge.tone-active  { color: var(--e-accent-strong); background: var(--e-accent-soft); }
 .e-badge.tone-success { color: var(--e-success); background: var(--e-success-soft); }
 .e-badge.tone-warning { color: var(--e-warning); background: var(--e-warning-soft); }

@@ -1,0 +1,42 @@
+/* Shared motion vocabulary. Animate feedback, never table geometry or scrolling
+   containers with transforms (which would change sticky/fixed positioning). */
+:is(button, a, .ui-select-trigger, .ui-input, .ui-textarea, .ui-date-trigger, .ui-time-trigger) {
+  transition:background-color var(--motion-fast) ease, color var(--motion-fast) ease, border-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease, opacity var(--motion-fast) ease;
+}
+:is(.ui-button[data-variant], .ui-button.primary, .ui-button.secondary, .icon-button):not(:disabled):active { scale:.97; }
+:is(.ui-button[data-variant], .ui-button.primary, .ui-button.secondary, .icon-button) { transition:background-color var(--motion-fast) ease, color var(--motion-fast) ease, border-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease, scale var(--motion-fast) var(--ease); }
+:is(.record-card-shell, .action-tile, .ai-example, .content-post) { transition:background-color var(--motion-fast) ease, border-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease; }
+:is(.segmented > .ui-button, .ui-tab):hover:not(:disabled):not(.selected):not([aria-selected="true"]) { color:var(--e-accent); background:var(--e-accent-soft); }
+:is(.segmented > .ui-button, .ui-tab):hover :is(.action-count,.ui-tab-count) { color:inherit; }
+.page-enter { animation:workspaceReveal var(--motion-enter) ease-out; }
+.table-scroll tbody tr, .action-card { transition:background-color var(--motion-fast) ease; }
+.table-scroll tbody tr:focus-within { background:var(--e-accent-soft); }
+.table-scroll tbody { animation:workspaceReveal var(--motion-enter) ease-out; }
+.chart-segment { transition:stroke-width var(--motion-fast) var(--ease), opacity var(--motion-fast) ease, stroke-dasharray var(--motion-chart) var(--ease); }
+.chart-segment[data-dimmed="true"] { opacity:.32; }
+.horizontal-chart-track span { transform-origin:left; transition:width var(--motion-chart) var(--ease), filter var(--motion-fast) ease; }
+.chart-interactive:hover .horizontal-chart-track span { filter:brightness(1.1); }
+[data-chart-entered="true"] .horizontal-chart-track span { animation:chartBarReveal var(--motion-chart) var(--ease) both; }
+[data-chart-entered="true"] .chart-segment { animation:chartRingReveal var(--motion-chart) var(--ease) both; }
+.chart-selection { transition:background-color var(--motion-fast) ease; }
+[data-chart-entered="false"] .horizontal-chart-track span { transform:scaleX(0); }
+[data-chart-entered="false"] .chart-segment { opacity:0; }
+@keyframes chartBarReveal { from { transform:scaleX(0); } to { transform:scaleX(1); } }
+@keyframes chartRingReveal { from { stroke-dasharray:0 100; opacity:0; } }
+:is(.ui-select-menu, .ui-calendar-popover, .ui-time-popover, .ui-help-popover, .ui-guide-popover)[data-state="open"] { animation:surfaceReveal var(--motion-enter) var(--ease); }
+:is(.ui-select-menu, .ui-calendar-popover, .ui-time-popover, .ui-help-popover, .ui-guide-popover)[data-state="closed"] { animation:surfaceHide var(--motion-fast) ease-in; }
+.ui-tooltip { max-width:min(260px,calc(100vw - 24px)); padding:9px 12px; color:var(--e-text); background:var(--e-surface); border:1px solid var(--e-border); border-radius:10px; box-shadow:var(--e-shadow-overlay); font-size:11px; line-height:1.55; font-weight:500; transform-origin:var(--radix-tooltip-content-transform-origin); }
+.ui-tooltip svg { fill:var(--e-surface); }
+.ui-tooltip[data-state="delayed-open"], .ui-tooltip[data-state="instant-open"] { animation:surfaceReveal var(--motion-fast) var(--ease); }
+.ui-tooltip[data-state="closed"] { animation:surfaceHide 100ms ease-in; }
+.ui-dialog-content[data-state="open"], .ui-dialog[data-state="open"] { animation:surfaceReveal var(--motion-enter) var(--ease); }
+@keyframes workspaceReveal { from { opacity:0; } to { opacity:1; } }
+@keyframes surfaceReveal { from { opacity:0; translate:0 4px; scale:.985; } to { opacity:1; translate:0 0; scale:1; } }
+@keyframes surfaceHide { to { opacity:0; translate:0 3px; } }
+/* Essential feedback remains immediate for reduced-motion users. Also keeps
+   legacy component animations from bypassing the shared motion preference. */
+@media(prefers-reduced-motion:reduce) {
+  [data-chart-entered="false"] .horizontal-chart-track span { transform:none; }
+  [data-chart-entered="false"] .chart-segment { opacity:1; }
+  *, *::before, *::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:0ms !important; scroll-behavior:auto !important; }
+}

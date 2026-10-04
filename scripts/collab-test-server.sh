@@ -24,6 +24,7 @@ node scripts/collab-test-config.mjs "$CONFIG"
 npx wrangler d1 migrations apply enercore-crm --local --config "$CONFIG" --persist-to "$PERSIST/state"
 npx tsx scripts/collab-test-seed.ts > "$PERSIST/seed.sql"
 npx wrangler d1 execute enercore-crm --local --config "$CONFIG" --persist-to "$PERSIST/state" --file "$PERSIST/seed.sql" > /dev/null
+npx wrangler d1 execute enercore-crm --local --config "$CONFIG" --persist-to "$PERSIST/state" --file scripts/mail-test-fixture.sql > /dev/null
 
 # A LiveKit dev server on this machine for the meeting tests (its webhook
 # calls the Worker below). Stopped with this script.

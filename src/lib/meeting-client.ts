@@ -69,6 +69,9 @@ export const closeMeeting = () => set({ phase: "idle" });
 
 /** An employee's grant, in the shape the meeting room uses. */
 export const sessionFromGrant = (grant: JoinGrant): RoomSession => ({
+  directCall: grant.meeting.scope === "direct" && grant.meeting.kind === "instant",
+  outgoingCall: grant.meeting.createdBy.id === grant.identity,
+  callName: grant.meeting.conversationTitle || grant.meeting.title,
   meetingId: grant.meeting.id,
   conversationId: grant.meeting.conversationId,
   title: grant.meeting.title,

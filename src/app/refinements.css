@@ -14,23 +14,18 @@
 [data-theme="dark"] .stat-card {
   background: var(--surface) !important;
 }
-[data-theme="dark"] .secondary {
-  background: #203733 !important;
-  color: var(--ink) !important;
-  border-color: #426056 !important;
-}
 [data-theme="dark"]
   :is(.icon-button:hover, .attention-item:hover, .shipment-row:hover) {
-  background: #29403b !important;
+  background: var(--e-surface-sunken) !important;
 }
 [data-theme="dark"] .rdp-chevron {
-  fill: #92dbbc !important;
+  fill: var(--e-accent) !important;
 }
 [data-theme="dark"] .insight-banner p {
   color: var(--muted);
 }
 [data-theme="dark"] .insight-banner > .ui-button {
-  color: #b0dec4;
+  color: var(--e-accent);
 }
 .modal {
   width: 1040px;
@@ -196,20 +191,7 @@
   }
 }
 
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --ink: #e4efee;
-  --muted: #a3b8b5;
-  --subtle: #8ca5a1;
-  --teal: #8fddc6;
-  --teal-dark: #aadfcd;
-  --mint: #1a3530;
-  --line: #2b4141;
-  --surface: #16282b;
-  --bg: #0e1c20;
-  --shadow: 0 4px 24px #00000016;
-  --focus: 0 0 0 4px #7edabd24;
-}
+/* Dark palette is owned by foundation.css. */
 [data-theme="dark"]
   :is(
     .topbar,
@@ -228,8 +210,8 @@
   color: var(--ink);
 }
 [data-theme="dark"] :is(.collection-card, .lead-card) {
-  background: var(--surface) !important;
-  border-color: var(--line) !important;
+  background: var(--surface);
+  border-color: var(--line);
   color: var(--ink);
 }
 [data-theme="dark"]
@@ -244,7 +226,7 @@
     .unit-tag,
     .global-search kbd
   ) {
-  background: #122226;
+  background: var(--soft);
   border-color: var(--line);
   color: var(--muted);
 }
@@ -256,24 +238,24 @@
     .ui-date-trigger,
     .secondary
   ) {
-  background: #102125;
-  border-color: #3a5353;
+  background: var(--surface);
+  border-color: var(--line);
   color: var(--ink);
 }
 [data-theme="dark"] :is(.ui-input, .ui-textarea)::placeholder {
-  color: #88a09d;
+  color: var(--subtle);
 }
 [data-theme="dark"]
   :is(.ui-input, .ui-textarea, .ui-select-trigger, .ui-date-trigger):hover {
-  border-color: #739c94;
+  border-color: var(--teal);
 }
 [data-theme="dark"] .ui-input:read-only {
-  background: #1d3335;
+  background: var(--soft);
 }
 [data-theme="dark"]
   :is(.ui-input, .ui-textarea, .ui-select-trigger, .ui-date-trigger):disabled {
-  background: #203032;
-  color: #8ea39f;
+  background: var(--soft);
+  color: var(--subtle);
 }
 [data-theme="dark"] .global-search .ui-input {
   background: transparent;
@@ -284,8 +266,8 @@
     .ui-select-option[data-state="checked"],
     .segmented > .ui-button.selected
   ) {
-  background: #28443e;
-  color: #d8f9ed;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
 }
 [data-theme="dark"]
   :is(
@@ -297,13 +279,13 @@
     .search-results button:hover,
     .table-scroll tbody tr:hover
   ) {
-  background: #203b39;
+  background: var(--accent-soft);
 }
 [data-theme="dark"]
   :is(.insight-banner, .preview-bar, .workflow-note, .balance) {
-  background: #19332f;
-  border-color: #2e4a43;
-  color: #b4d8c9;
+  background: var(--soft);
+  border-color: var(--line);
+  color: var(--muted);
 }
 [data-theme="dark"]
   :is(
@@ -316,9 +298,9 @@
     .company-emblem,
     .tiny-avatar
   ) {
-  background: #25433b;
-  border-color: #34564b;
-  color: #a0d9bf;
+  background: var(--accent-soft);
+  border-color: var(--line);
+  color: var(--accent-ink);
 }
 [data-theme="dark"]
   :is(
@@ -420,64 +402,57 @@
 }
 [data-theme="dark"]
   :is(.text-button, .add-column, .workflow-note > .ui-button) {
-  color: #9ed7ba !important;
+  color: var(--accent-ink) !important;
 }
 [data-theme="dark"] .add-column:hover {
-  background: #213a31 !important;
+  background: var(--accent-soft) !important;
 }
 [data-theme="dark"] :is(.mint, .badge.green) {
-  background: #254234;
-  color: #a8ddba;
+  background: var(--e-success-soft);
+  color: var(--e-success);
 }
 [data-theme="dark"] :is(.blue, .badge.blue) {
-  background: #203b50;
-  color: #aacfee;
+  background: var(--e-info-soft);
+  color: var(--e-info);
 }
 [data-theme="dark"] :is(.gold, .amber, .badge.amber) {
-  background: #403a24;
-  color: #e6ce91;
+  background: var(--e-warning-soft);
+  color: var(--e-warning);
 }
 [data-theme="dark"] :is(.purple) {
   background: #382d46;
   color: #d4b8eb;
 }
 [data-theme="dark"] .badge.red {
-  background: #482e30;
-  color: #f0b4ae;
+  background: var(--e-danger-soft);
+  color: var(--e-danger);
 }
 [data-theme="dark"] .error {
-  background: #422c29;
-  color: #f1c3b2;
-  border-color: #67443c;
+  background: var(--e-danger-soft);
+  color: var(--e-danger);
+  border-color: var(--e-danger);
 }
-[data-theme="dark"] .primary {
-  background: linear-gradient(160deg, #398574, #246959) !important;
-  color: #f0fff8 !important;
-  border-color: #508e7d !important;
-}
-[data-theme="dark"] .primary:hover {
-  background: #398c76 !important;
-}
+/* Shared component styling lives with its owning component. */
 [data-theme="dark"] .login-form {
   background:
     radial-gradient(ellipse at top right, #1c3730, transparent 65%), var(--bg);
 }
 [data-theme="dark"] .rdp-root {
-  --rdp-accent-color: #92dbbc;
-  --rdp-accent-background-color: #24493c;
+  --rdp-accent-color: var(--e-accent);
+  --rdp-accent-background-color: var(--e-accent-soft);
 }
 [data-theme="dark"] .rdp-day_button {
   color: var(--ink);
 }
 [data-theme="dark"] .rdp-day_button:hover {
-  background: #28453d;
+  background: var(--e-accent-soft);
 }
 [data-theme="dark"] .rdp-selected .rdp-day_button {
-  background: #92dbbc;
-  color: #10271c;
+  background: var(--brand-action);
+  color: var(--e-on-action);
 }
 [data-theme="dark"] .rdp-chevron {
-  fill: #92dbbc;
+  fill: var(--e-accent);
 }
 [data-theme="dark"] .bar-chart {
   background-image: repeating-linear-gradient(

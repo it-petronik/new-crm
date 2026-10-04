@@ -1,0 +1,31 @@
+/* Record workspace V2: identity, work surface, context. No dashboard cards. */
+.record { min-width: 0; }
+.record .header { padding: 0 0 20px; border: 0; border-bottom: 1px solid var(--e-border); border-radius: 0; background: transparent; margin: 0 0 20px; box-shadow: none; }
+.header :global(.rw-topline) { margin: 0 0 20px; padding: 0; font-size: 11px; }
+.header :global(.rw-titlebar) { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.header :global(.rw-identity) { gap: 12px; align-items: flex-start; }
+.header :global(.rw-identity > .entity-avatar) { border-radius: 12px; flex: none; }
+.header h1 { max-width: 38ch; font-size: clamp(22px, 2vw, 28px); line-height: 1.25; letter-spacing: -.035em; margin: 0 0 8px; overflow-wrap: anywhere; }
+.header :global(.rw-meta) { gap: 8px 14px; font-size: 11px; }
+.header :global(.rw-actions) { justify-content: flex-start; margin: 0; gap: 8px; flex-wrap: wrap; }
+.header :global(.rw-actions button) { min-height: 34px; font-size: 12px; }
+.commercial { min-width: 0; }
+.commercial :global(.rw-tabbar) { margin: 0 0 20px; padding: 0; background: var(--e-bg); z-index: 20; isolation: isolate; }
+.commercial :global(.rw-body) { margin: 0; gap: 20px; }
+.commercial :global(.rw-body.has-aside) { display: grid; grid-template-columns: minmax(0, 1fr) 280px; }
+.commercial :global(.rw-context) { align-self: start; border: 1px solid var(--e-border); border-radius: 12px; background: var(--e-surface); padding: 20px; min-width: 0; }
+.commercial :global(.rw-context)::before { content: 'Record details'; display: block; font-size: 12px; font-weight: 600; margin-bottom: 16px; color: var(--e-text); }
+.commercial :global(.rw-context .record-details) { margin: 0; }
+.commercial :global(.rw-main) { display: grid; align-content: start; gap: 16px; min-width: 0; }
+.commercial :global(.rw-main > .ui-section), .commercial :global(.deal-summary) { background: var(--e-surface); border: 1px solid var(--e-border); border-radius: 12px; padding: 20px; margin: 0; min-width: 0; }
+.commercial :global(.ui-section-head) { margin: 0 0 14px; }
+.commercial :global(.ui-section h2) { font-size: 13px; margin: 0; letter-spacing: -.015em; }
+.commercial :global(.ui-empty-state) { padding: 16px; min-height: 0; background: var(--e-bg); border: 0; border-radius: 8px; font-size: 12px; }
+.overview :global(.rw-main) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.overview :global(.rw-main > *) { min-width: 0; }
+.overview :global(.rw-main > .ui-metrics), .overview :global(.rw-main > .copilot-panel), .overview :global(.rw-main > .ai-panel), .overview :global(.rw-main > .rw-details-inline) { grid-column: 1 / -1; }
+.commercial :global(.detail-list dt) { font-size: 10px; color: var(--e-text-muted); }
+.commercial :global(.detail-list dd) { font-size: 12px; }
+@media (min-width: 1600px) { .header :global(.rw-titlebar) { grid-template-columns: minmax(0, 1fr) auto; align-items: start; } .header :global(.rw-actions) { max-width: 510px; justify-content: flex-end; } }
+@media (max-width: 1200px) { .overview :global(.rw-main) { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 720px) { .header h1 { font-size: 22px; } .header :global(.rw-actions) { display: flex; } .header :global(.rw-actions button) { min-height: 40px; } .commercial :global(.rw-main > .ui-section) { padding: 16px; } .commercial :global(.rw-body) { display: block; } .commercial :global(.rw-tabbar) { margin-bottom: 16px; } }

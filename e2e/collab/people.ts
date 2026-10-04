@@ -33,6 +33,7 @@ const person = (key: string, name: string, companies: string[], branches: string
 const range = (n: number) => Array.from({ length: n }, (_, i) => i + 1);
 
 export const people: TestPerson[] = [
+  person("studio", "Alex Morgan · Demo", ["Petronik", "Afrilube", "Petronex", "Istanegry"], [], "MD"),
   person("cmmd", "Commercial Director", ["Petronik"], [], "MD"),
   person("cmsales", "Commercial Seller", ["Petronik"], ["Main"], "Sales Executive"),
   person("cmsales2", "Other Commercial Seller", ["Petronik"], ["Main"], "Sales Executive"),

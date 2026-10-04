@@ -110,7 +110,7 @@ test("lead panel: next action first, one brief per click, sources, and a quotati
   await quote.getByRole("button", { name: "Create quotation draft" }).click();
   const form = page.getByRole("dialog", { name: "New quotation" });
   await expect(form).toBeVisible();
-  await expect(form.getByLabel("Destination / Port")).toHaveValue("Mombasa");
+  await expect(form.locator('[name="destination"]')).toHaveValue("Mombasa");
   await expect(form.getByLabel("Item 1 product")).toHaveValue("Base Oil SN500");
   // Known values from the requirement (packaging from the notes); the unit price is never filled in.
   await expect(form.getByLabel("Item 1 packaging")).toHaveValue("208L drums");

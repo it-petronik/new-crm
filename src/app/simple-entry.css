@@ -1,0 +1,10 @@
+/* One predictable form: essentials, items, then optional detail. */
+.simple-entry-dialog .dialog-body > p { margin-block: 0 12px; }
+.simple-entry-dialog .quotation-items-section { margin-block: 18px; }
+.simple-entry-dialog .form-more { margin-top: 16px; }
+.simple-entry-dialog .dialog-body .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.simple-entry-dialog .dialog-body .form-grid > .full { grid-column: 1 / -1; }
+.simple-entry-dialog .commercial-selection { padding: 12px; background: var(--e-bg); border: 1px solid var(--e-border); border-radius: 10px; }
+@media (max-width: 640px) {
+  .simple-entry-dialog .dialog-body .form-grid { grid-template-columns: minmax(0, 1fr); }
+}

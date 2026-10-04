@@ -38,6 +38,7 @@ import {
   type EditorTarget,
 } from "../commercial/execution-panel";
 import { AiPanel } from "../ai/ai-answer";
+import styles from "../studio/detail.module.css";
 
 /* ---------------------------------------------------------------------------
    The commercial record workspaces: Deal, Lead, Customer, Supplier, Product.
@@ -301,7 +302,7 @@ export default function CommercialWorkspace({
 
   const aside = active === "overview";
   return (
-    <div className="rw-commercial" role="region" aria-label={label} aria-busy={c.loading || x.busy}>
+    <div className={`rw-commercial ${styles.commercial} ${active === "overview" ? styles.overview : ""}`} role="region" aria-label={label} aria-busy={c.loading || x.busy}>
       {c.error && (
         <p className="form-error" role="alert">
           {c.error}

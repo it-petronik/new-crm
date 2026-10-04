@@ -1,0 +1,84 @@
+.call { position: absolute; inset: 0; display: grid; grid-template-rows: auto minmax(0,1fr) auto; background: var(--e-bg); color: var(--e-text); padding: 24px; gap: 16px; overflow: auto; }
+.head { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: min(100%, 900px); margin: 0 auto; font-size: 13px; color: var(--e-text-secondary); }
+.head > span:first-child { display: flex; align-items: center; gap: 8px; }
+.stage { position: relative; min-height: 200px; width: min(100%, 900px); margin: 0 auto; display: grid; place-items: center; }
+.identity { display: grid; gap: 18px; justify-items: center; text-align: center; padding: 24px; }
+.identity h1 { font-size: clamp(24px, 3vw, 34px); margin: 0; overflow-wrap: anywhere; max-width: 28ch; }
+.identity p { font-size: 13px; color: var(--e-text-secondary); margin: 0; }
+.remote { position: absolute; inset: 0; border-radius: 24px; overflow: hidden; }
+.remote :global(.meet-tile) { width: 100%; height: 100%; aspect-ratio: auto; margin: 0; }
+.self { position: absolute; right: 16px; bottom: 16px; width: clamp(100px, 20%, 180px); aspect-ratio: 3/4; border: 2px solid var(--e-surface); border-radius: 16px; overflow: hidden; box-shadow: var(--e-shadow-raised); }
+.self :global(.meet-tile) { width: 100%; height: 100%; margin: 0; }
+.self :global(.meet-tile figcaption) { font-size: 10px; }
+.stage :global(.meet-tile figcaption) { color: #fff; background: #0009; }
+.stage :global(.meet-tile figcaption [aria-label="Organiser"]) { display: none; }
+.bottom { display: grid; gap: 12px; justify-items: center; width: min(100%, 700px); margin: 0 auto; }
+.controls { display: flex; align-items: start; justify-content: center; gap: 24px; padding: 20px 28px 16px; border: 1px solid var(--e-border); border-radius: 28px; background: var(--e-surface); box-shadow: 0 8px 32px rgb(0 0 0 / .04); }
+.controls > .control { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 80px; min-width: 0; min-height: 0; padding: 0; border: 0; border-radius: 12px; background: transparent; box-shadow: none; color: var(--e-text); font-size: 12px; line-height: 1.35; font-weight: 500; }
+.controlIcon { display: grid; place-items: center; width: 64px; height: 64px; flex: none; border: 1px solid var(--e-border); border-radius: 50%; background: var(--e-surface-sunken); }
+.controlIcon svg { width: 23px; height: 23px; }
+.controlLabel { white-space: normal; text-align: center; }
+.controls > .control:hover { background: transparent; transform: none; }
+.control:hover .controlIcon { background: var(--e-accent-soft); border-color: var(--e-accent); }
+.control[aria-pressed="false"] .controlIcon { color: var(--e-text-secondary); }
+.control[aria-expanded="true"] .controlIcon { background: var(--e-accent-soft); border-color: var(--e-accent); color: var(--e-accent); }
+.controls > .control:focus-visible { outline: 2px solid var(--e-accent); outline-offset: 5px; }
+.control:disabled { opacity: .55; }
+.controls > .hangup { margin-left: 12px; }
+.hangup .controlIcon { color: #fff; background: var(--e-danger); border-color: var(--e-danger); }
+.hangup:hover .controlIcon { color: #fff; background: color-mix(in srgb, var(--e-danger) 88%, #000); border-color: var(--e-danger); }
+.recordControl[data-recording="true"] .controlIcon { color: var(--e-danger); border-color: var(--e-danger); background: color-mix(in srgb, var(--e-danger) 10%, var(--e-surface)); }
+.recordStatus { min-height: 28px; max-width: 100%; display: grid; place-items: center; font-size: 12px; line-height: 1.5; text-align: center; color: var(--e-text-secondary); }
+.recordStatus > span { display: inline-flex; align-items: center; gap: 7px; }
+.recordStatus svg { flex: none; }
+.recordBadge { padding: 7px 12px; border-radius: 12px; background: color-mix(in srgb, var(--e-danger) 9%, var(--e-surface)); color: var(--e-danger); overflow-wrap: anywhere; }
+.recordDot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.recordDialog:global(.modal.ui-dialog) { width: min(480px, calc(100vw - 32px)); max-width: 480px; }
+.recordExplanation { display: grid; justify-items: start; gap: 10px; }
+.recordExplanation h3 { margin: 0; font-size: 16px; }
+.recordExplanation p { color: var(--e-text-secondary); font-size: 14px; line-height: 1.65; }
+.recordIllustration { display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 4px; border-radius: 14px; background: var(--e-accent-soft); color: var(--e-accent); }
+.consent { display: flex; align-items: start; gap: 10px; margin-top: 16px; padding: 14px; border: 1px solid var(--e-border); border-radius: 12px; font-size: 13px; line-height: 1.5; cursor: pointer; }
+.consent input { flex: none; width: 18px; height: 18px; margin: 1px 0 0; accent-color: var(--e-accent); }
+.notice { padding: 10px 14px; border-radius: 10px; background: var(--e-warning-soft); color: var(--e-text); font-size: 13px; margin: 0; }
+.settings { display: flex; flex-wrap: wrap; gap: 12px; padding: 16px; border: 1px solid var(--e-border); background: var(--e-surface); border-radius: 12px; width: 100%; }
+.settings label { flex: 1 1 200px; display: grid; gap: 6px; font-size: 12px; min-width: 0; }
+.call :global(.device-select), .prejoin :global(.device-select) { --meet-surface: var(--e-surface); --meet-surface-2: var(--e-surface-sunken); --meet-text: var(--e-text); --meet-muted: var(--e-text-secondary); --meet-line: var(--e-border); --meet-accent: var(--e-accent); }
+.call :global(.device-select-control select), .prejoin :global(.device-select-control select) { min-height: 0; max-width: 100%; height: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; background-image: none; box-shadow: none; color: inherit; }
+.prejoin { position: fixed; inset: 0; z-index: 150; background: var(--e-bg); color: var(--e-text); display: grid; place-items: center; padding: 20px; overflow: auto; }
+.prejoinCard { width: min(100%, 480px); display: grid; justify-items: center; text-align: center; gap: 20px; padding: 28px; background: var(--e-surface); border: 1px solid var(--e-border); border-radius: 24px; }
+.prejoinCard h1 { font-size: 25px; margin: 0; overflow-wrap: anywhere; }
+.prejoinCard p { margin: 0; color: var(--e-text-secondary); font-size: 13px; }
+.prejoinCard :global(.meet-preview) { width: 100%; max-height: 240px; }
+.prejoinActions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.prejoinCard details { width: 100%; text-align: left; font-size: 13px; }
+.prejoinCard summary { cursor: pointer; padding: 10px 0; }
+@media(max-width:640px) {
+  .call { padding: max(14px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom)); gap: 10px; }
+  .head { font-size: 11px; }
+  .head > span:last-child { max-width: 50%; text-align: right; overflow-wrap: anywhere; }
+  .controls { width: min(100%, 360px); display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); column-gap: 8px; row-gap: 18px; padding: 18px 16px 16px; border-radius: 24px; }
+  .controls > .control { grid-column: span 2; width: 100%; gap: 7px; font-size: 11px; }
+  .controlIcon { width: 56px; height: 56px; }
+  .controlIcon svg { width: 22px; height: 22px; }
+  .controls > .hangup { grid-column: 5 / 7; grid-row: 1; margin-left: 0; }
+  .controls > .recordControl { grid-column: 2 / 4; grid-row: 2; }
+  .controls > .deviceControl { grid-column: 4 / 6; grid-row: 2; }
+  .recordStatus { font-size: 11px; }
+  .self { width: 100px; right: 10px; bottom: 10px; }
+  .prejoinCard { padding: 22px 18px; gap: 16px; }
+  .prejoin { padding: 14px; }
+  .settings select { font-size: 16px; }
+}
+@media(max-height:580px) and (min-width:560px) {
+  .call { gap: 8px; padding: 12px 20px; }
+  .stage { min-height: 120px; }
+  .identity { gap: 8px; padding: 8px; }
+  .identity > :first-child { width: 64px !important; height: 64px !important; font-size: 24px !important; }
+  .identity h1 { font-size: 22px; }
+  .controls { display: flex; width: auto; gap: 18px; padding: 12px 20px; }
+  .controls > .control { width: 72px; font-size: 11px; gap: 6px; }
+  .controlIcon { width: 48px; height: 48px; }
+  .bottom { gap: 6px; }
+}
+@media(prefers-reduced-motion:reduce) { .controlIcon { transition: none; } }

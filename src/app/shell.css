@@ -18,40 +18,48 @@
    need a breakpoint at all.
    ======================================================================== */
 
-:root {
-  --shell-sidebar: 232px;
-  --shell-sidebar-compact: 64px;
-  --shell-topbar: 56px;
-  --shell-gutter: clamp(16px, 2.6vw, 36px);
-  --page-max: 1560px;
-  --rw-context: 300px;
-  --section-gap: 32px;
-}
+/* Global tokens live in foundation.css. This file owns component rules only. */
 
 /* --------------------------------------------------------------- sidebar */
 .app-shell { --sidebar-width: var(--shell-sidebar); }
 .app-shell.is-collapsed { --sidebar-width: var(--shell-sidebar-compact); }
 .app-shell .desktop-sidebar,
 .app-shell .mobile-sidebar {
-  background: var(--e-surface);
+  background: var(--nav);
   border-right: 1px solid var(--e-border);
   padding: 14px 10px 10px;
   color: var(--e-text-secondary);
 }
 .app-shell .desktop-sidebar { width: var(--sidebar-width); }
+.app-shell .desktop-sidebar.sidebar-compact { --sidebar-width: var(--shell-sidebar-compact); }
 .app-shell .sidebar-header {
-  height: 44px;
+  height: 54px;
+  flex-shrink: 0;
   padding: 0 4px 0 6px;
-  margin-bottom: 10px;
+  margin-bottom: 16px;
 }
+.app-shell .sidebar-compact .sidebar-header {
+  height: 80px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+}
+.app-shell .sidebar-header .brand,
+.app-shell .sidebar-header .sidebar-toggle { flex-shrink: 0; }
 .app-shell .sidebar .logo-enercore,
 .app-shell .sidebar .brand-logo {
-  width: 104px;
-  height: 40px;
+  width: 96px;
+  height: 50px;
   padding: 2px;
   border-radius: 6px;
   background: transparent;
 }
+.app-shell .sidebar-header .brand { justify-content: flex-start; }
+.app-shell .sidebar-header .brand-logo img { object-position: left center; }
+.app-shell .sidebar-compact .brand-logo img { object-position: center; }
 .app-shell .sidebar-compact .logo-enercore,
 .app-shell .sidebar-compact .brand-logo { width: 40px; height: 36px; }
 .app-shell .sidebar-toggle {
@@ -63,14 +71,14 @@
 }
 .app-shell .sidebar-toggle:hover { background: var(--e-surface-sunken) !important; color: var(--e-text) !important; }
 .app-shell .sidebar nav { margin-top: 0; padding-right: 4px; }
-.app-shell .nav-group { margin: 0 0 14px; }
+.app-shell .nav-group { margin: 0 0 16px; }
 .app-shell .nav-group-title {
   margin: 0 0 4px;
   padding: 0 10px;
-  font-size: 11.5px;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0;
-  text-transform: none;
+  letter-spacing: .055em;
+  text-transform: uppercase;
   color: var(--e-text-muted);
   white-space: nowrap;
 }
@@ -80,17 +88,17 @@
   gap: 10px;
   margin: 1px 0;
   border-radius: 7px !important;
-  font-size: 13.5px !important;
+  font-size: 13px !important;
   font-weight: 500 !important;
   color: var(--e-text-secondary) !important;
 }
 .app-shell .nav-item svg { width: 18px; height: 18px; opacity: 1; color: var(--e-text-muted); }
 .app-shell .nav-item:hover { background: var(--e-surface-sunken) !important; color: var(--e-text) !important; }
 .app-shell .nav-item.active {
-  background: var(--e-accent-soft) !important;
+  background: var(--e-surface) !important;
   color: var(--e-accent-strong) !important;
   font-weight: 600 !important;
-  box-shadow: none;
+  box-shadow: inset 2px 0 0 var(--e-accent), var(--e-shadow-raised);
 }
 .app-shell .nav-item.active svg { color: var(--e-accent-strong); }
 .app-shell .nav-count {
@@ -238,7 +246,7 @@ html[data-theme="dark"] .theme-toggle .theme-icon-sun { display: inline-block; }
 /* ------------------------------------------------------------ page frame */
 .app-shell .main-content {
   max-width: var(--page-max);
-  padding: 24px var(--shell-gutter) 56px;
+  padding: var(--l-page-top) var(--shell-gutter) var(--l-page-bottom);
 }
 /* Phones: the floating Quick add must never cover the last row. */
 @media (max-width: 720px) {
@@ -248,48 +256,14 @@ html[data-theme="dark"] .theme-toggle .theme-icon-sun { display: inline-block; }
 .app-shell .main-content > .page-under-record > * + * { margin-top: var(--l-section-gap, 20px); }
 .app-shell .page-under-record[hidden] { display: none; }
 
-.ui-page-header,
 .app-shell .page-heading {
-  display: flex;
-  /* Always a row that wraps: older layers switch this to a column on phones,
-     which would turn the heading's flex-basis into an empty 320px block. */
-  flex-direction: row;
-  align-items: flex-end;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px 24px;
-  margin: 0 0 20px;
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  gap: var(--e-3) var(--e-6); margin: 0 0 var(--e-5);
 }
-.ui-page-heading { min-width: 0; flex: 1 1 320px; text-align: left; }
-@media (max-width: 640px) {
-  .ui-page-header,
-  .app-shell .page-heading { align-items: stretch; margin-bottom: 16px; }
-  .ui-page-heading { flex-basis: 100%; }
-  .ui-page-actions,
-  .app-shell .heading-actions { width: 100%; }
-}
-.ui-page-kicker {
-  margin: 0 0 2px;
-  font-size: 13px;
-  font-weight: 550;
-  color: var(--e-accent-strong);
-}
-.ui-page-header h1,
-.app-shell .page-heading h1 {
-  margin: 0;
-  font-size: clamp(22px, 1.4rem + 0.4vw, 28px);
-  font-weight: 650;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-}
-.ui-page-description {
-  margin: 4px 0 0;
-  max-width: 70ch;
-  font-size: 14px;
-  color: var(--e-text-secondary);
-}
-.ui-page-actions,
-.app-shell .heading-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.app-shell .page-heading h1 { font-size: var(--e-title); font-weight: 650; letter-spacing: -.035em; }
+.app-shell .heading-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e-2); }
+.ui-page-kicker { margin: 0 0 var(--e-1); font-size: var(--e-meta); color: var(--e-text-secondary); }
+/* PageHeader itself is owned by ui/layout.module.css. */
 
 /* Sections: a heading and space — the box is the exception. */
 .ui-section { min-width: 0; }
@@ -366,6 +340,8 @@ html[data-theme="dark"] .theme-toggle .theme-icon-sun { display: inline-block; }
   position: relative;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  text-align: center;
   gap: 6px;
   flex: none;
   min-height: 44px;
@@ -377,7 +353,8 @@ html[data-theme="dark"] .theme-toggle .theme-icon-sun { display: inline-block; }
   cursor: pointer;
   white-space: nowrap;
 }
-.ui-tab:hover { color: var(--e-text); }
+.ui-tab:hover { color: var(--e-accent); }
+.ui-tab:hover .ui-tab-count { color: inherit; background: var(--e-accent-soft); }
 .ui-tab[aria-selected="true"] { color: var(--e-text); font-weight: 600; }
 .ui-tab[aria-selected="true"]::after {
   content: "";
@@ -741,8 +718,8 @@ html[data-theme="dark"] .theme-toggle .theme-icon-sun { display: inline-block; }
     animation: drawer-slide-in 260ms var(--ease, ease-out);
   }
   .modal.ui-dialog.ui-drawer[data-state="closed"] { animation: drawer-slide-out 200ms ease-in forwards; }
-  .modal.ui-dialog.ui-drawer .dialog-heading { padding: 16px 22px; }
-  .modal.ui-dialog.ui-drawer .dialog-body { flex: 1 1 auto; padding: 18px 22px 24px; }
+  .modal.ui-dialog.ui-drawer .dialog-heading { padding: 16px var(--f-dialog-pad); }
+  .modal.ui-dialog.ui-drawer .dialog-body { flex: 1 1 auto; padding: var(--f-field-gap) var(--f-dialog-pad); }
   .modal.ui-dialog.ui-drawer.prospecting-drawer { width: min(1080px, 100vw); }
 }
 .dialog-heading-text { min-width: 0; }
@@ -1034,10 +1011,10 @@ html[data-theme="dark"] .theme-toggle .theme-icon-sun { display: inline-block; }
 .app-shell .apollo-workspace > .panel.execution-card { box-shadow: none; }
 
 /* -------------------------------------------------------- collaboration */
-/* The hub is the page: edge to edge under the top bar, no gutter or card. */
-:root { --l-header-h: var(--shell-topbar); }
+/* Legacy frame only. Studio owns the collaboration viewport and gutters. */
+/* Header dimension is a foundation token. */
 @media (max-width: 640px) { :root { --l-header-h: 52px; } }
-.app-shell .main-content.is-collaboration { max-width: none; padding: 0; }
+.app-shell:not([data-design="studio"]) .main-content.is-collaboration { max-width: none; padding: 0; }
 .collab-msg:focus { outline: none; }
 .collab-msg:focus-within { background: color-mix(in srgb, var(--e-text) 3%, transparent); }
 @media (max-width: 760px) {

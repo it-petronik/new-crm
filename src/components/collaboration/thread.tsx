@@ -12,6 +12,8 @@ import {
   Pencil,
   RotateCcw,
   Trash2,
+  Phone,
+  Video,
 } from "lucide-react";
 import type {
   AttachmentView,
@@ -32,6 +34,7 @@ import { Skeleton } from "../ui/skeleton";
 import { Avatar } from "../avatar";
 import Composer, { type ComposerHandle } from "./composer";
 import { MeetingActions, MeetingBanner } from "../meetings/meeting-controls";
+import { meetingHistory } from "@/lib/conversation-timeline";
 import type { MeetingView } from "@/lib/meetings";
 import { Lightbox, MessageAttachments, PdfPreview, type LightboxItem } from "./attachments";
 import { ReactionChips, ReactionPicker } from "./reactions";
@@ -111,6 +114,17 @@ export default function Thread({
   // stays where it was even as the cursor moves on.
   const unreadFrom = useRef(conversation.lastReadMessageId);
   const conversationId = conversation.id;
+  const history = meetingHistory(meetings.filter(m => m.conversationId === conversationId)).filter(event =>
+    (!hasOlder || !items.length || event.createdAt >= items[0].createdAt) &&
+    (!hasNewer || !items.length || event.createdAt <= items[items.length - 1].createdAt));
+  const timeline = [
+    ...items.map(message => ({ type: "message" as const, createdAt: message.createdAt, message })),
+    ...history,
+  ].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+  const lastCall = history[history.length - 1]?.id;
+  useLayoutEffect(() => {
+    if (atBottom.current && scroller.current) scroller.current.scrollTop = scroller.current.scrollHeight;
+  }, [lastCall]);
 
   useEffect(() => {
     itemsRef.current = items;
@@ -594,7 +608,7 @@ export default function Thread({
               <RotateCcw size={14} /> Try again
             </Button>
           </div>
-        ) : !items.length ? (
+        ) : !timeline.length ? (
           <div className="collab-empty is-thread">
             <p className="collab-empty-title">No messages yet.</p>
             <p>{direct ? `Say hello to ${conversation.title}.` : "Start the conversation."}</p>
@@ -610,9 +624,18 @@ export default function Thread({
             ) : (
               <li className="collab-start">Beginning of the conversation</li>
             )}
-            {items.map((m, i) => {
-              const prev = items[i - 1];
-              const newDay = !prev || dayKey(prev.createdAt) !== dayKey(m.createdAt);
+            {timeline.map((entry, i) => {
+              const previous = timeline[i - 1];
+              const newDay = !previous || dayKey(previous.createdAt) !== dayKey(entry.createdAt);
+              if (entry.type === "call") return <Fragment key={`call-${entry.id}`}>
+                {newDay && <li className="collab-day" role="separator"><span>{dayLabel(entry.createdAt)}</span></li>}
+                <li className="collab-call-history" data-meeting-id={entry.id}>
+                  <span className="collab-call-history-icon">{entry.meeting.media === "voice" ? <Phone size={18}/> : <Video size={18}/>}</span>
+                  <div><strong>{entry.label} · {entry.outcome}</strong><span>{entry.duration ? `${entry.durationLabel} ${entry.duration} · ` : ""}<time dateTime={entry.createdAt}>{timeOf(entry.createdAt)}</time></span></div>
+                </li>
+              </Fragment>;
+              const m = entry.message;
+              const prev = previous?.type === "message" ? previous.message : undefined;
               const grouped =
                 !!prev &&
                 !newDay &&

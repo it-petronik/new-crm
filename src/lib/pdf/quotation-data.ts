@@ -26,7 +26,7 @@ export function quotationData(r: RecordItem): DocumentData {
       address: a.senderAddress,
       trn: a.senderTaxNumber,
       phone: a.senderPhone,
-      logoUrl: files[r.company] ? `/brands/${files[r.company]}.png` : undefined,
+      logoUrl: files[r.company] ? `/brands/${files[r.company]}.${r.company === "Istanegry" ? "svg" : "png"}` : undefined,
     },
     to: {
       name: r.title,

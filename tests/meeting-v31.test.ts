@@ -24,7 +24,7 @@ import { attachRelated, linkableRecord } from "../src/lib/meeting-related";
 import { runMeetingSweep } from "../src/realtime/meeting-sweep";
 import { CollabError } from "../src/lib/collab-access";
 import { toCsv } from "../src/lib/export";
-import { deviceOptions, cleanLabel } from "../src/components/meetings/device-setup";
+import { deviceOptions, cleanLabel } from "../src/lib/device-labels";
 import { d1, migratedDatabase } from "./support/sqlite-d1";
 
 /**

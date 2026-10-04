@@ -1,4 +1,6 @@
 "use client";
+
+import styles from "./studio/navigation.module.css";
 import { BrandLogo } from "./brand";
 import Link from "next/link";
 import * as Drawer from "@radix-ui/react-dialog";
@@ -22,6 +24,7 @@ import {
   X,
   Settings2,
   MessagesSquare,
+  Mail,
   Sparkles,
   ListChecks,
   Radar,
@@ -37,6 +40,7 @@ import {
 import { canProspect } from "@/lib/execution/model";
 import { type WorkspaceView } from "./workspace-pages";
 import { Button, Tooltip } from "./ui/controls";
+import { moduleHelp, viewHelp } from "@/lib/workspace-help";
 import { Avatar } from "./avatar";
 import { useAvatar } from "@/lib/avatar-store";
 import { useOverflowFade } from "@/lib/use-overflow-fade";
@@ -48,7 +52,13 @@ import { useOverflowFade } from "@/lib/use-overflow-fade";
  */
 function FadingNav(props: React.ComponentProps<"nav">) {
   const ref = useOverflowFade<HTMLElement>("y");
-  return <nav ref={ref} {...props} className={["overflow-fade-y", props.className].filter(Boolean).join(" ")} />;
+  return (
+    <nav
+      ref={ref}
+      {...props}
+      className={["overflow-fade-y", props.className].filter(Boolean).join(" ")}
+    />
+  );
 }
 const icons: Record<Module, LucideIcon> = {
   overview: LayoutDashboard,
@@ -73,11 +83,18 @@ const icons: Record<Module, LucideIcon> = {
  * the Action Center by the live workspace, Prospecting by canProspect(),
  * Access control by canManageUsers().
  */
-type NavEntry = { module: Module } | { view: WorkspaceView; label: string; icon: LucideIcon };
+type NavEntry =
+  { module: Module } | { view: WorkspaceView; label: string; icon: LucideIcon };
 const groups: [string, NavEntry[]][] = [
-  ["", [{ module: "overview" }, { view: "actions", label: "Action Center", icon: ListChecks }]],
   [
-    "Commercial",
+    "",
+    [
+      { module: "overview" },
+      { view: "actions", label: "Action Center", icon: ListChecks },
+    ],
+  ],
+  [
+    "Sales",
     [
       { module: "leads" },
       { module: "quotations" },
@@ -89,14 +106,18 @@ const groups: [string, NavEntry[]][] = [
     ],
   ],
   [
-    "Work",
+    "Team",
     [
       { view: "collaboration", label: "Collaboration", icon: MessagesSquare },
+      { view: "mail", label: "Email", icon: Mail },
       { view: "ai", label: "Enercore AI", icon: Sparkles },
     ],
   ],
-  ["Operations", [{ module: "logistics" }, { module: "accounts" }]],
-  ["Organization", [{ module: "hr" }, { module: "marketing" }, { module: "it" }]],
+  ["Delivery & payments", [{ module: "logistics" }, { module: "accounts" }]],
+  [
+    "People & support",
+    [{ module: "hr" }, { module: "marketing" }, { module: "it" }],
+  ],
   [
     "Manage",
     [
@@ -139,153 +160,74 @@ export default function Sidebar({
   onView: (view: WorkspaceView) => void;
 }) {
   const photo = useAvatar(actor.id);
-  const permitted = allowedModules(actor);
+  const entryAllowed = (e: NavEntry) =>
+    "module" in e
+      ? allowedModules(actor).includes(e.module)
+      : e.view === "prospecting"
+        ? canProspect(actor)
+        : e.view === "access"
+          ? canManageUsers(actor)
+          : e.view === "ai" || e.view === "actions"
+            ? !preview
+            : true;
   function contents(isMobile: boolean) {
     const compact = collapsed && !isMobile;
     return (
-      <>
-        <div className="sidebar-header">
-          <Link href="/" className="brand" aria-label="Enercore workspace">
-            <BrandLogo company="Enercore" />
-          </Link>
-          {isMobile ? (
-            <Button
-              className="sidebar-toggle"
-              aria-label="Close navigation"
-              onClick={() => onMobileChange(false)}
-            >
-              <X size={18} />
-            </Button>
-          ) : (
-            <Tooltip label={compact ? "Expand sidebar" : "Collapse sidebar"}>
-              <Button
-                className="sidebar-toggle"
-                onClick={onCollapse}
-                aria-label={compact ? "Expand sidebar" : "Collapse sidebar"}
-                aria-expanded={!compact}
-              >
-                {compact ? (
-                  <PanelLeftOpen size={17} />
-                ) : (
-                  <PanelLeftClose size={17} />
-                )}
-              </Button>
-            </Tooltip>
-          )}
+      <div className={styles.panel}>
+        <div className={styles.header}>
+          {compact ? <Button className={styles.expand} aria-label="Expand sidebar" onClick={onCollapse}><PanelLeftOpen size={20}/></Button> : <>
+            <Link href="/" className="brand" aria-label="Enercore workspace"><BrandLogo company="Enercore"/><span><strong>Enercore</strong><small>Business workspace</small></span></Link>
+            <Button className={styles.toggle} aria-label={isMobile ? "Close navigation" : "Collapse sidebar"} onClick={isMobile ? () => onMobileChange(false) : onCollapse}>{isMobile ? <X size={18}/> : <PanelLeftClose size={17}/>}</Button>
+          </>}
         </div>
-        <FadingNav aria-label={isMobile ? "Mobile navigation" : "Main navigation"}>
+        <FadingNav className={styles.nav} aria-label={isMobile ? "Mobile navigation" : "Main navigation"}>
           {groups.map(([title, entries]) => {
-            const visible = entries.filter((e) =>
-              "module" in e
-                ? permitted.includes(e.module)
-                : e.view === "prospecting"
-                  ? canProspect(actor)
-                  : e.view === "access"
-                    ? canManageUsers(actor)
-                    : e.view === "ai" || e.view === "actions"
-                      ? !preview
-                      : true,
-            );
+            const visible = entries.filter(entryAllowed);
             if (!visible.length) return null;
-            return (
-              <section className="nav-group" key={title || "home"} aria-label={title || undefined}>
-                {title && <h2 className="nav-group-title">{title}</h2>}
-                {visible.map((e) => {
-                  if ("module" in e) {
-                    const Icon = icons[e.module];
-                    return (
-                      <Tooltip key={e.module} label={labels[e.module]} enabled={compact}>
-                        <Button
-                          className={`nav-item ${module === e.module ? "active" : ""}`}
-                          onClick={() => onNavigate(e.module)}
-                          aria-label={labels[e.module]}
-                          aria-current={module === e.module ? "page" : undefined}
-                        >
-                          <Icon size={18} />
-                          <span className="nav-label">{labels[e.module]}</span>
-                          {e.module === "approvals" && approvalCount > 0 && <b className="nav-count">{approvalCount}</b>}
-                        </Button>
-                      </Tooltip>
-                    );
-                  }
-                  const Icon = e.icon;
-                  const collab = e.view === "collaboration";
-                  return (
-                    <Tooltip key={e.view} label={e.label} enabled={compact}>
-                      <Button
-                        className={`nav-item ${collab ? "nav-item-collab " : ""}${module === e.view ? "active" : ""}`}
-                        onClick={() => onView(e.view)}
-                        aria-label={
-                          collab && collabUnread
-                            ? `Collaboration, ${collabUnread} unread${collabMentions ? `, ${collabMentions} mentions` : ""}`
-                            : e.label
-                        }
-                        aria-current={module === e.view ? "page" : undefined}
-                      >
-                        <Icon size={18} />
-                        <span className="nav-label">{e.label}</span>
-                        {collab &&
-                          (collabMentions > 0 ? (
-                            <b className="nav-count nav-count-mention">@</b>
-                          ) : collabUnread > 0 ? (
-                            <b className="nav-count nav-count-subtle">{collabUnread > 99 ? "99+" : collabUnread}</b>
-                          ) : null)}
-                      </Button>
-                    </Tooltip>
-                  );
-                })}
-              </section>
-            );
+            return <section className={styles.group} key={title || "workspace"} aria-label={title || "Workspace"}>
+              {!compact && <h2 className={styles.groupTitle}>{title || "Workspace"}</h2>}
+              {visible.map(e => {
+                const key = "module" in e ? e.module : e.view;
+                const Icon = "module" in e ? icons[e.module] : e.icon;
+                const label = "module" in e ? labels[e.module] : e.label;
+                const count = key === "approvals" ? approvalCount : key === "collaboration" ? collabMentions ? "@" : collabUnread || 0 : 0;
+                return <Tooltip key={key} label={compact ? label : `${label} — ${"module" in e ? moduleHelp[e.module].purpose : viewHelp[e.view] || label}`}>
+                  <Button className={styles.item} aria-label={label} aria-current={module === key ? "page" : undefined} onClick={() => "module" in e ? onNavigate(e.module) : onView(e.view)}>
+                    <Icon size={18}/>{!compact && <span className="nav-label">{label}</span>}
+                    {!!count && <b className="nav-count">{typeof count === "number" && count > 99 ? "99+" : count}</b>}
+                  </Button>
+                </Tooltip>;
+              })}
+            </section>;
           })}
         </FadingNav>
-        <div className="sidebar-bottom">
-          <Tooltip label="My requests" enabled={compact}>
-            <Link
-              className={`nav-item ${module === "my-requests" ? "active" : ""}`}
-              aria-current={module === "my-requests" ? "page" : undefined}
-              href="/my-requests"
-              onClick={(event) => {
-                if (onMyRequests && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
-                  event.preventDefault();
-                  onMyRequests();
-                }
-              }}
-              aria-label="My requests"
-            >
-              <CalendarDays size={18} />
-              <span className="nav-label">My requests</span>
-            </Link>
-          </Tooltip>
-          <Button
-            className={`profile profile-link ${module === "profile" ? "active" : ""}`}
-            aria-label="Open my profile"
-            onClick={() => onView("profile")}
-          >
-            <Avatar name={actor.name} image={photo} avatarId={actor.id} size={30} />
-            <span className="profile-info">
-              {actor.name}
-              <small>
-                {actor.role}
-                {preview ? " · Preview" : ""}
-              </small>
-            </span>
+        <div className={styles.bottom}>
+          <Tooltip label="My requests"><Link className={styles.item} aria-label="My requests" aria-current={module === "my-requests" ? "page" : undefined} href="/my-requests" onClick={event => {
+            if (onMyRequests && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); onMyRequests(); }
+          }}><CalendarDays size={18}/>{!compact && <span className="nav-label">My requests</span>}</Link></Tooltip>
+          <div className={styles.utilities}>
+            <Tooltip label="Shortcuts & help"><Button className={styles.utility} aria-label="Shortcuts & help" onClick={() => onView("shortcuts")}><ListChecks size={17}/>{!compact && <span>Help & shortcuts</span>}</Button></Tooltip>
+            <Tooltip label="Appearance"><Button className={styles.utility} aria-label="Appearance" onClick={() => onView("appearance")}><Settings2 size={17}/></Button></Tooltip>
+          </div>
+          <Button className={styles.person} aria-label="Open my profile" onClick={() => onView("profile")}>
+            <Avatar name={actor.name} image={photo} avatarId={actor.id} size={30}/>
+            {!compact && <span className="profile-info">{actor.name}<small>{actor.role}{preview ? " · Preview" : ""}</small></span>}
           </Button>
         </div>
-      </>
+      </div>
     );
   }
+
   return (
     <>
-      <aside
-        className={`sidebar desktop-sidebar ${collapsed ? "sidebar-compact" : ""}`}
-      >
+      <aside className={`${styles.desktop} ${collapsed ? styles.compact : ""}`}>
         {contents(false)}
       </aside>
       <Drawer.Root open={mobile} onOpenChange={onMobileChange}>
         <Drawer.Portal>
-          <Drawer.Overlay className="sidebar-overlay" />
+          <Drawer.Overlay className={styles.overlay} />
           <Drawer.Content
-            className="sidebar mobile-sidebar"
+            className={styles.mobile}
             aria-describedby={undefined}
           >
             <Drawer.Title className="sr-only">

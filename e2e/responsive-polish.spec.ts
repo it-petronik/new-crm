@@ -152,22 +152,16 @@ test("create forms name what they create; edit saves changes", async ({ page }) 
     .toBe("Save changes");
 });
 
-test("the lead form marks its required name and spaces the notes like every field", async ({ page }) => {
+test("the lead form marks its required name and keeps optional fields in a consistent grid", async ({ page }) => {
   await page.goto("/?module=leads");
   await page.getByRole("button", { name: "New lead", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "New lead" });
   await expect(dialog.locator("label", { hasText: "Customer / company" }).locator(".ui-required")).toHaveText("*");
-  const gaps = await dialog.evaluate((d) => {
-    const field = (text: string) =>
-      [...d.querySelectorAll(".ui-field")].find((f) => f.querySelector("label")?.textContent?.startsWith(text))!.getBoundingClientRect();
-    return {
-      // Rows inside one grid: Destination below Quantity.
-      rowGap: Math.round(field("Destination / Port").top - field("Quantity").bottom),
-      // Notes follow the "More details" disclosure by the same rhythm.
-      notesGap: Math.round(field("Notes").top - d.querySelector(".form-more > summary")!.getBoundingClientRect().bottom),
-    };
-  });
-  expect(gaps.notesGap).toBe(gaps.rowGap);
+  await expect(dialog.getByLabel("Notes", { exact: true })).not.toBeVisible();
+  await dialog.locator("summary").click();
+  await expect(dialog.getByLabel("Notes", { exact: true })).toBeVisible();
+  const gaps = await dialog.locator(".form-grid").evaluateAll((grids) => grids.map((grid) => getComputedStyle(grid).rowGap));
+  expect(new Set(gaps).size).toBe(1);
 });
 
 test("the boot screen and a page skeleton are never shown together", async ({ page }) => {

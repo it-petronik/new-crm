@@ -51,6 +51,7 @@ import { DeviceSelect } from "./device-setup";
 import { MeetingShare, useDismiss } from "./meeting-info";
 import { MediaTile, metaOf, useParticipantTick } from "./media-tile";
 import { useLocalMedia } from "./use-local-media";
+import DirectCallStage from "./direct-call-stage";
 
 /**
  * Room settings: adaptive stream (each tile gets the size it shows),
@@ -120,7 +121,7 @@ export default function MeetingRoom({
 
   // Employees hear the meeting end or their access go through Collaboration.
   useCollabEvents(!current.guest, (event) => {
-    if (event.type === "meeting.ended" && event.meeting.id === current.meetingId) showEnding({ title: "The meeting has ended", detail: "Everyone has been disconnected." });
+    if (event.type === "meeting.ended" && event.meeting.id === current.meetingId) showEnding({ title: current.directCall ? "Call ended" : "The meeting has ended", detail: "Everyone has been disconnected." });
     if (event.type === "conversation.removed" && current.conversationId && event.conversationId === current.conversationId)
       showEnding({ title: "You no longer have access", detail: "You were removed from this conversation, so you have left its meeting." });
   });
@@ -131,7 +132,7 @@ export default function MeetingRoom({
     if (endingRef.current) return;
     if (reason === DisconnectReason.CLIENT_INITIATED) return onLeave();
     if (reason === DisconnectReason.ROOM_DELETED || reason === DisconnectReason.ROOM_CLOSED)
-      showEnding({ title: "The meeting has ended", detail: "Everyone has been disconnected." });
+      showEnding({ title: current.directCall ? "Call ended" : "The meeting has ended", detail: "Everyone has been disconnected." });
     else if (reason === DisconnectReason.PARTICIPANT_REMOVED)
       showEnding({ title: "You were removed from the meeting", detail: current.guest ? "The host removed you from this meeting." : "The organiser removed you, or your access to this meeting changed." });
     else if (reason === DisconnectReason.DUPLICATE_IDENTITY)
@@ -154,6 +155,7 @@ export default function MeetingRoom({
     return (
       <div className="meet-room meet-ended" role="dialog" aria-modal="true" aria-labelledby="meet-ended-title">
         <div className="meet-ended-card">
+          <span className="meet-ended-icon" aria-hidden="true"><PhoneOff size={28} /></span>
           <h1 id="meet-ended-title">{ending.title}</h1>
           <p>{ending.detail}</p>
           <div className="meet-ended-actions">
@@ -173,7 +175,7 @@ export default function MeetingRoom({
   return (
     <LiveKitRoom
       key={current.token}
-      className="meet-room"
+      className={`meet-room${current.directCall ? " meet-direct-room" : ""}`}
       serverUrl={current.serverUrl}
       token={current.token}
       connect
@@ -189,7 +191,7 @@ export default function MeetingRoom({
       aria-label={current.title}
     >
       <RoomAudioRenderer />
-      <Stage session={current} choices={current === session ? choices : { ...choices, media: undefined }} onEnded={() => showEnding({ title: "The meeting has ended", detail: "Everyone has been disconnected." })} notice={notice} setNotice={setNotice} />
+      {current.directCall ? <DirectCallStage session={current} choices={current === session ? choices : { ...choices, media: undefined }} notice={notice} onEnded={() => showEnding({ title: "Call ended", detail: "You are no longer connected to this call." })} /> : <Stage session={current} choices={current === session ? choices : { ...choices, media: undefined }} onEnded={() => showEnding({ title: "The meeting has ended", detail: "Everyone has been disconnected." })} notice={notice} setNotice={setNotice} />}
     </LiveKitRoom>
   );
 }

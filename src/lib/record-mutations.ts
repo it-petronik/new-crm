@@ -2,6 +2,7 @@ import { canWrite, totalCents, type Actor, type RecordItem, type Workspace } fro
 import { quotationError } from "./quotation";
 import { salaryAttributes } from "./salary";
 import { isCashEntry, cashEntryError } from "./cashbook";
+import { contentError } from "./content-calendar";
 
 export function commercialLocked(r: RecordItem) {
   if (isCashEntry(r)) return false;
@@ -39,6 +40,8 @@ export function mutateRecord(workspace: Workspace, actor: Actor, id: string, exp
       ? (values.attributes?.country !== undefined ? { country: values.attributes.country } : {})
       : values.attributes;
     next = { ...r, ...edits, attributes: { ...r.attributes, ...attrs }, updatedAt: now };
+    const contentProblem = contentError(next);
+    if (contentProblem) throw new Error(contentProblem);
     if(next.kind === "hr") next.attributes = salaryAttributes(next.attributes);
     if (isCashEntry(r)) {
       const error = cashEntryError(next);

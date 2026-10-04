@@ -1,0 +1,328 @@
+.surface {
+  overflow: hidden;
+}
+.views {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--e-border);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.views button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  min-height: 49px;
+  padding: 0 10px;
+  background: none;
+  color: var(--e-text-secondary);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  font-size: 12px;
+  cursor: pointer;
+}
+.views button[aria-pressed="true"] {
+  border-bottom-color: var(--e-accent);
+  color: var(--e-accent);
+  font-weight: 600;
+}
+.views button:hover { color: var(--e-accent); background: var(--e-accent-soft); }
+.views button:hover span, .views button[aria-pressed="true"] span { color: inherit; background: var(--e-accent-soft); }
+.views span {
+  padding: 2px 5px;
+  border-radius: 5px;
+  font-size: 10px;
+  background: var(--e-surface-sunken);
+  color: var(--e-text-secondary);
+}
+.surface :global(.list-query-controls) {
+  padding: 16px 20px;
+  margin: 0;
+  border: 0;
+}
+.surface :global(.list-query-search) {
+  max-width: 340px;
+}
+.table.table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.table th {
+  padding: 12px 18px;
+  background: var(--e-surface-sunken);
+  color: var(--e-text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  text-align: left;
+  border-block: 1px solid var(--e-border);
+}
+.table td {
+  padding: 16px 18px;
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--e-border-muted);
+}
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.table tbody tr {
+  transition: background 0.15s;
+}
+.table tbody tr:hover {
+  background: var(--e-surface-sunken);
+}
+@media (prefers-reduced-motion: reduce) {
+  .table tbody tr {
+    transition: none;
+  }
+}
+.table :global(.e-col-record) {
+  width: 29%;
+}
+.table :global(.e-col-status) {
+  width: 14%;
+}
+.table :global(.e-col-owner) {
+  width: 15%;
+}
+.table :global(.e-col-next) {
+  width: 18%;
+}
+.table :global(.e-col-value) {
+  width: 12%;
+  text-align: right;
+}
+.table :global(.e-col-actions) {
+  width: 106px;
+  text-align: right;
+}
+.table :global(.amount) {
+  text-align: right;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.table :global(.avatar-name) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.table :global(.avatar-name > span:last-child) {
+  min-width: 0;
+}
+.table :global(.record-link) {
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: none;
+  text-align: left;
+  justify-content: flex-start;
+  color: var(--e-text);
+}
+.table :global(.e-row-title) {
+  display: block;
+  font-size: 12px;
+  font-weight: 550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.table :global(.e-row-meta) {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  color: var(--e-text-muted);
+}
+.table :global(.e-row-owner) {
+  display: none;
+}
+.table :global(.record-status-select) {
+  width: 100%;
+  min-height: 28px;
+  border: 1px solid var(--e-border);
+  box-shadow: none;
+  background: var(--e-surface);
+  padding: 4px 7px;
+  font-size: 11px;
+  border-radius: 6px;
+}
+.table :global(.record-status-select .ui-select-value) {
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+.table :global(.e-cell-owner .avatar-name > span:last-child) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.table :global(.next-action-cell) {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+}
+.table :global(.cell-date) {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+}
+.table :global(.table-record-actions) {
+  justify-content: flex-end;
+  gap: 4px;
+}
+.table :global(.row-labelled-action) {
+  display: inline-flex;
+  justify-content: center;
+  width: 30px;
+  min-height: 30px;
+  padding: 6px;
+  border: 1px solid var(--e-border);
+  border-radius: 7px;
+  background: var(--e-surface);
+}
+.table :global(.row-labelled-action > span) {
+  display: none;
+}
+.table :global(.table-record-actions .row-open) {
+  font-size: 11px;
+}
+.surface :global(.pagination) {
+  margin: 0;
+  border-top: 1px solid var(--e-border);
+  padding: 12px 20px;
+  font-size: 11px;
+}
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+.identity > div:last-child {
+  min-width: 0;
+}
+.identity > :global(.avatar) {
+  flex: none;
+  border-radius: 16px;
+}
+@media (min-width: 721px) and (max-width: 1250px) {
+  .table :global(.e-col-owner),
+  .table :global(.e-cell-owner) {
+    display: none;
+  }
+  .table :global(.e-row-owner) {
+    display: inline;
+  }
+  .table :global(.e-col-record) {
+    width: 30%;
+  }
+  .table :global(.e-col-status) {
+    width: 16%;
+  }
+  .table :global(.e-col-next) {
+    width: 23%;
+  }
+}
+@media (max-width: 720px) {
+  .views {
+    padding-inline: 10px;
+  }
+  .surface :global(.list-query-controls) {
+    padding: 12px;
+  }
+  .surface :global(.table-scroll) {
+    overflow: visible;
+  }
+  .table.table,
+  .table tbody {
+    display: block;
+    width: 100%;
+  }
+  .table thead {
+    display: none;
+  }
+  .table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    padding: 18px 14px;
+    border-bottom: 1px solid var(--e-border);
+  }
+  .table.table td {
+    display: block;
+    border: 0;
+    padding: 0;
+    min-width: 0;
+    width: auto;
+  }
+  .table :global(.e-cell-identity) {
+    grid-column: 1 / -1;
+  }
+  .table :global(.e-cell-owner) {
+    display: none;
+  }
+  .table :global(.e-row-owner) {
+    display: inline;
+  }
+  .table :global(.e-row-title) {
+    font-size: 13px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .table :global(.e-row-meta) {
+    font-size: 11px;
+    white-space: normal;
+  }
+  .table :global(.e-cell-status) {
+    align-self: center;
+  }
+  .table :global(.record-status-select) {
+    min-height: 44px;
+    width: auto;
+    max-width: 100%;
+    padding: 8px 10px;
+  }
+  .table :global(.e-cell-next) {
+    grid-column: 1;
+    grid-row: 3;
+  }
+  .table :global(.amount) {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: center;
+  }
+  .table :global(.e-col-actions) {
+    grid-column: 2;
+    grid-row: 3;
+    align-self: center;
+  }
+  .table :global(.table-record-actions) {
+    flex-wrap: nowrap;
+  }
+  .table :global(.row-labelled-action) {
+    width: 44px;
+    min-height: 44px;
+  }
+  .surface :global(.pagination) {
+    padding: 12px;
+  }
+  .identity {
+    gap: 12px;
+  }
+  .identity > :global(.avatar) {
+    width: 40px !important;
+    height: 40px !important;
+    font-size: 14px !important;
+    border-radius: 12px;
+  }
+}

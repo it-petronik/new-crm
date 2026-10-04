@@ -21,6 +21,16 @@ export default {
         .bind(Date.now() - 1000, userId, signalKey).run();
       return Response.json({ ok: true });
     }
-    return app.fetch(request, env, ctx);
+    const response = await app.fetch(request, env, ctx);
+    // Local review uses a loopback LiveKit server, not LiveKit Cloud. Keep
+    // the actual browser CSP enabled during tests; allow only that local
+    // endpoint here. This entrypoint is never used by production.
+    const policy = response.headers.get("Content-Security-Policy");
+    if (policy && env.COLLAB_TEST_CONTROL && ["localhost", "127.0.0.1"].includes(new URL(request.url).hostname)) {
+      const local = new Response(response.body, response);
+      local.headers.set("Content-Security-Policy", policy.replace("connect-src 'self'", "connect-src 'self' ws://127.0.0.1:7880 http://127.0.0.1:7880"));
+      return local;
+    }
+    return response;
   },
 };

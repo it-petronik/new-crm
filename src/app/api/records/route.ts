@@ -1,5 +1,6 @@
 import { resolveLinks, inheritLeadLinks, hasCommercialHistory, existingDealForQuote, resolveSnapshotEdit, newRecordContact } from "@/lib/commercial/store";
 import { NextResponse } from "next/server";
+import { contentError } from "@/lib/content-calendar";
 import { CommercialError } from "@/lib/commercial/model";
 import { z } from "zod";
 import { getDb, isPreview } from "@/lib/db";
@@ -124,6 +125,7 @@ const input = z.object({
   attributes: z
     .partialRecord(
       z.enum([
+        "contentType", "contentStage", "contentFormat", "contentTime", "contentTimezone", "contentAsset",
         "incoterm",
         "entryType",
         "paymentMethod",
@@ -233,6 +235,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: Object.values(fields)[0] || "Check the highlighted fields.", fields }, { status: 400 });
     }
     const body = parsed.data;
+    const contentProblem = contentError(body);
+    if (contentProblem) return NextResponse.json({error:contentProblem},{status:400});
     if(body.kind === "hr") body.attributes = salaryAttributes(body.attributes);
     const quoteError =
       body.kind === "quotations"

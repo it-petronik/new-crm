@@ -2,7 +2,8 @@
 import { useEffect, useState } from "react";
 import { Button } from "./ui/controls";
 import type { RecordItem } from "@/lib/domain";
-import { companyCore } from "@/lib/commercial/model";
+import type { LeadMatch } from "@/lib/commercial/lead-matches";
+export { activeLeadMatches, type LeadMatch } from "@/lib/commercial/lead-matches";
 
 /**
  * Guidance shown while a record is being created, so a duplicate is noticed
@@ -105,34 +106,6 @@ export function CustomerMatches({
       )}
     </section>
   );
-}
-
-const open = (r: RecordItem) => !["Won", "Lost"].includes(r.status);
-export type LeadMatch = { record: RecordItem; sameContact: boolean };
-/**
- * Active leads for the same customer (and product, once one is known: by id
- * when both have one, otherwise by name). Read from the records this person
- * already sees, so nothing new is disclosed. A lead with a different contact
- * is related context, not a duplicate. Repeat business is legitimate: this
- * only informs.
- */
-export function activeLeadMatches(
-  records: RecordItem[],
-  lead: { customerId?: string | null; contactId?: string | null; productId?: string | null; title: string; product: string },
-): LeadMatch[] {
-  const core = companyCore(lead.title);
-  const product = lead.product.trim().toLowerCase();
-  return records
-    .filter((r) => r.kind === "leads" && open(r))
-    .filter((r) => (lead.customerId ? r.customerId === lead.customerId : core.length >= 3 && companyCore(r.title) === core))
-    .filter((r) =>
-      lead.productId && r.productId
-        ? r.productId === lead.productId
-        : !product || (r.product || "").toLowerCase().includes(product) || product.includes((r.product || "~").toLowerCase()),
-    )
-    .map((r) => ({ record: r, sameContact: !lead.contactId || !r.contactId || r.contactId === lead.contactId }))
-    .sort((a, b) => Number(b.sameContact) - Number(a.sameContact))
-    .slice(0, 3);
 }
 
 export function LeadMatches({ leads, onOpen, onDismiss }: { leads: LeadMatch[]; onOpen: (r: RecordItem) => void; onDismiss: () => void }) {

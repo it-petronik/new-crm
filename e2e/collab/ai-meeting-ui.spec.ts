@@ -37,7 +37,7 @@ test("notes in the room (employees only), then the AI report on request, with ju
   const panel = page.getByRole("complementary", { name: "Meeting notes" });
   await panel.getByRole("button", { name: "Customer requirement" }).click();
   await panel.getByLabel("Product").fill("Base Oil SN500");
-  await panel.getByLabel("Quantity").fill("500 MT/month");
+  await panel.getByRole("textbox", { name: "Quantity", exact: true }).fill("500 MT/month");
   await panel.getByLabel("Destination / port").fill("Mombasa");
   await expect(panel.getByLabel("What was said about it")).toHaveValue("requested");
   await panel.getByRole("button", { name: "Add customer requirement" }).click();

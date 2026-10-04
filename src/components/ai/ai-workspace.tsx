@@ -47,9 +47,9 @@ export default function AiWorkspace({ actor, preview }: { actor: Actor; preview:
     <div className="ai-workspace">
       <div className="page-heading">
         <div>
-          <span className="eyebrow">WORKSPACE</span>
+          <span className="eyebrow"><Sparkles size={14} /> YOUR WORKSPACE ASSISTANT</span>
           <h1>Enercore AI</h1>
-          <p>Ask about your pipeline, follow-ups and receivables — answered from the records you can see.</p>
+          <p>A clear answer. A useful next step. Grounded in the records you can access.</p>
         </div>
       </div>
 
@@ -69,7 +69,6 @@ export default function AiWorkspace({ actor, preview }: { actor: Actor; preview:
         </section>
       ) : (
         <>
-          {status.features.sales && <SalesHome actor={actor} />}
           <form
             className="panel ai-ask"
             onSubmit={(e) => {
@@ -82,7 +81,7 @@ export default function AiWorkspace({ actor, preview }: { actor: Actor; preview:
             </label>
             <Textarea
               id="ai-question"
-              rows={2}
+              rows={3}
               maxLength={600}
               value={question}
               placeholder={status.features.ask ? "e.g. Which follow-ups are overdue this week?" : "Your role doesn't include sales or accounts questions."}
@@ -140,6 +139,7 @@ export default function AiWorkspace({ actor, preview }: { actor: Actor; preview:
               ))}
             </ol>
           )}
+          {status.features.sales && <SalesHome actor={actor} />}
         </>
       )}
     </div>

@@ -199,7 +199,8 @@ export function AiAnswerView({ result, onApply }: { result: AiResult; onApply?: 
   const [applied, setApplied] = useState<string[]>([]);
   const { answer } = result;
   return (
-    <div className="ai-answer">
+    <div className="ai-answer" role="region" aria-label="AI result" tabIndex={0}>
+      <AiResultHeading confidence={answer.confidence} />
       {result.scope && <p className="ai-scope">{result.scope}</p>}
       <p className="ai-summary">{answer.summary}</p>
       {/* Summary first, then what is known, what is missing or at risk, and
@@ -301,6 +302,11 @@ export function AiAnswerView({ result, onApply }: { result: AiResult; onApply?: 
       </DialogPresence>
     </div>
   );
+}
+
+/** One visual entry point for answers across records, conversations and reports. */
+export function AiResultHeading({ confidence }: { confidence?: string }) {
+  return <div className="ai-result-heading"><span><Sparkles size={16} aria-hidden="true"/>AI insight</span><small>{confidence ? `Confidence: ${confidence} · Review before use` : "Review before use"}</small></div>;
 }
 
 export function AiLoading({ label }: { label: string }) {

@@ -92,7 +92,7 @@ test("wide lead dialog fits and exits cleanly", async ({ page }) => {
   await page.getByRole("button", { name: "New lead", exact: true }).click();
   const dialog = page.locator(".ui-dialog");
   await expect(dialog).toBeVisible();
-  expect(await dialog.evaluate((el) => el.clientWidth)).toBeGreaterThan(900);
+  expect(await dialog.evaluate((el) => el.clientWidth)).toBeGreaterThan(500);
   expect(await dialog.evaluate((el) => el.clientWidth)).toBeLessThanOrEqual(1000);
   expect(
     await dialog.evaluate((el) => el.scrollHeight <= el.clientHeight),
@@ -148,8 +148,9 @@ test("company filter, lead creation and persistence", async ({ page }) => {
     .getByRole("button", { name: "Sales pipeline", exact: true })
     .click();
   await page.getByRole("button", { name: "New lead", exact: true }).click();
-  await page.getByLabel("Customer / company").fill("Test customer");
-  await page.getByLabel("Contact person").fill("Test contact");
+  await page.getByRole("textbox", { name: "Customer / company" }).fill("Test customer");
+  await page.getByRole("dialog").locator("summary").click();
+  await page.getByRole("textbox", { name: "Contact person", exact: true }).fill("Test contact");
   await page.getByRole("button", { name: "Create lead", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Test customer" }),

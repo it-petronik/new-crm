@@ -1,46 +1,8 @@
 /* Studio: one neutral, blue-accented system across every workspace surface. */
-:root {
-  --ink: #20232d;
-  --muted: #646b7c;
-  --subtle: #707789;
-  --teal: #365ee9;
-  --teal-dark: #2848c1;
-  --mint: #edf1ff;
-  --line: #e5e7ed;
-  --surface: #ffffff;
-  --bg: #f6f7fb;
-  --nav: #fbfbfd;
-  --nav-muted: #5f6677;
-  --soft: #f1f3f8;
-  --accent-ink: #365ee9;
-  --accent-soft: #edf1ff;
-  --radius: 12px;
-  --radius-lg: 16px;
-  --sidebar-width: 236px;
-  --shadow: 0 1px 3px #19233a04, 0 5px 16px #19233a03;
-  --focus: 0 0 0 3px #5577ee24;
-}
-:root[data-theme="dark"] {
-  --ink: #f0f1f6;
-  --muted: #adb3c3;
-  --subtle: #969fb2;
-  --teal: #a2b5ff;
-  --teal-dark: #c1ccff;
-  --mint: #252f50;
-  --line: #303542;
-  --surface: #1c202a;
-  --bg: #141720;
-  --nav: #181b24;
-  --nav-muted: #adb3c3;
-  --soft: #232835;
-  --accent-ink: #b4c2ff;
-  --accent-soft: #283353;
-  --shadow: 0 2px 8px #00000014;
-  --focus: 0 0 0 3px #8fa6ff30;
-}
+/* Theme values are owned by foundation.css, not by feature styles. */
 ::selection {
-  background: #b9c8ff;
-  color: #172247;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
 }
 button:focus-visible,
 a:focus-visible {
@@ -417,32 +379,7 @@ h1,
   color: var(--accent-ink);
   border-color: var(--line);
 }
-.primary,
-[data-theme="dark"] .primary {
-  background: #365ee9 !important;
-  color: #fff !important;
-  border: 1px solid #365ee9 !important;
-  box-shadow: 0 2px 3px #2c4fc61a;
-  border-radius: 8px !important;
-  font-weight: 550 !important;
-}
-.primary:hover,
-[data-theme="dark"] .primary:hover {
-  background: #284ccb !important;
-  border-color: #284ccb !important;
-}
-.secondary,
-[data-theme="dark"] .secondary {
-  color: var(--ink) !important;
-  background: var(--surface) !important;
-  border-color: var(--line) !important;
-  border-radius: 8px !important;
-  box-shadow: 0 1px 2px #19233a05;
-}
-.secondary:hover,
-[data-theme="dark"] .secondary:hover {
-  background: var(--soft) !important;
-}
+/* Shared component styling lives with its owning component. */
 .text-button,
 .add-column,
 [data-theme="dark"]
@@ -525,9 +462,9 @@ h1,
 }
 .kanban,
 [data-theme="dark"] .kanban {
-  padding: 20px;
-  background: var(--surface);
-  gap: 18px;
+  padding: 0 0 var(--e-3);
+  background: transparent;
+  gap: var(--e-4);
 }
 .kanban-column,
 [data-theme="dark"] .kanban-column {
@@ -560,10 +497,10 @@ h1,
 }
 .lead-card,
 .collection-card {
-  background: var(--surface) !important;
-  border-color: var(--line) !important;
+  background: var(--surface);
+  border-color: var(--line);
   box-shadow: 0 2px 3px #19233a04;
-  border-radius: 9px !important;
+  border-radius: var(--e-radius);
 }
 .lead-card {
   padding: 16px !important;
@@ -610,7 +547,7 @@ h1,
 }
 .ui-dialog-overlay,
 [data-theme="dark"] .ui-dialog-overlay {
-  background: #141a2d70;
+  background: var(--e-overlay);
   backdrop-filter: blur(5px);
 }
 .workflow-note,
@@ -716,9 +653,9 @@ h1,
 }
 .rdp-selected .rdp-day_button,
 [data-theme="dark"] .rdp-selected .rdp-day_button {
-  background: #365ee9;
+  background: var(--brand-action);
   color: white;
-  border-color: #365ee9;
+  border-color: var(--brand-action);
 }
 @media (max-width: 1080px) {
   .overview-grid {
@@ -780,7 +717,7 @@ h1,
     padding: 14px;
   }
   .kanban {
-    padding: 14px;
+    padding: 0 0 var(--e-3);
   }
   .collection-card {
     padding: 18px !important;
@@ -792,3 +729,14 @@ h1,
     padding: 22px;
   }
 }
+
+/* Pipeline cards keep identity and the overflow action on the same footer. */
+.pipeline-card-shell > .lead-card { padding: 16px 16px 12px !important; }
+.pipeline-card-shell .lead-card h3 { margin: 10px 0 5px; }
+.pipeline-card-shell .lead-card p { margin: 0 0 14px; }
+.pipeline-card-shell > .lead-card-footer { display:flex; margin:0 16px; padding:10px 0; gap:8px; border-top:1px solid var(--e-border); }
+.pipeline-card-shell > .lead-card-footer > span:first-child { flex:1; min-width:0; font-size:10px; }
+.pipeline-card-shell .lead-card-footer .entity-avatar { flex:none; }
+.pipeline-card-shell .lead-card-footer .table-record-actions { padding:0; border:0; margin:0; }
+.pipeline-card-shell .row-labelled-action { padding:0; min-width:28px; width:28px; min-height:28px; height:28px; justify-content:center; }
+.pipeline-card-shell .row-labelled-action > span { display:none; }

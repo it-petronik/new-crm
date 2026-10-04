@@ -7,7 +7,7 @@ import { companyName } from "@/lib/company-name";
 import { isCashEntry } from "@/lib/cashbook";
 import { recordProfiles, detailFields } from "@/lib/record-profiles";
 import { statusTone } from "@/lib/status";
-import { Button, Select } from "../ui/controls";
+import { Button, Select, Dialog, DialogActions } from "../ui/controls";
 import { MoreActions, type RowAction } from "../ui/row-actions";
 import { Section, useMediaQuery } from "../ui/layout";
 import { StatusBadge } from "../ui/status-badge";
@@ -17,6 +17,9 @@ import { QuotationDocument, QuotationSummary } from "../quotation-document";
 import { CustomerCopilot, LeadCopilot } from "../ai/sales-copilot";
 import CommercialWorkspace from "./commercial-workspace";
 import type { Suggestion } from "@/lib/ai/client";
+import { Avatar } from "../avatar";
+import recordStyles from "../studio/records.module.css";
+import detailStyles from "../studio/detail.module.css";
 
 /* ---------------------------------------------------------------------------
    A record is a page, not a dialog.
@@ -100,6 +103,7 @@ export default function RecordWorkspace({
   const titleId = useId();
   const heading = useRef<HTMLHeadingElement>(null);
   const narrow = useMediaQuery("(max-width: 640px)");
+  const [showDocument, setShowDocument] = useState(false);
   // Arriving on a record moves focus to its title, so a screen reader
   // announces where you are and Tab continues from the top of the page.
   useEffect(() => {
@@ -141,8 +145,8 @@ export default function RecordWorkspace({
   );
 
   return (
-    <article className="record-workspace" aria-labelledby={titleId} data-kind={r.kind}>
-      <header className="rw-header">
+    <article className={`record-workspace ${detailStyles.record}`} aria-labelledby={titleId} data-kind={r.kind}>
+      <header className={`rw-header ${detailStyles.header}`}>
         <div className="rw-topline">
           <Button className="ghost compact rw-back" onClick={onClose} aria-label={`Back to ${backLabel}`}>
             <ArrowLeft size={15} aria-hidden="true" />
@@ -151,7 +155,9 @@ export default function RecordWorkspace({
           <span className="rw-kind">{noun}</span>
         </div>
         <div className="rw-titlebar">
-          <div className="rw-identity">
+          <div className={`rw-identity ${recordStyles.identity}`}>
+            <Avatar name={r.title} size={44} />
+            <div>
             <h1 id={titleId} ref={heading} tabIndex={-1}>
               {r.title}
             </h1>
@@ -175,8 +181,10 @@ export default function RecordWorkspace({
               {!!r.amount && r.kind !== "quotations" && <span className="rw-value e-numeric">{money(r.amount, r.currency)}</span>}
               {pinned && <span className="exec-tag is-accent">Pinned</span>}
             </div>
+            </div>
           </div>
           <div className="rw-actions">
+            {r.kind === "quotations" && <Button className="secondary compact" onClick={() => setShowDocument(true)} aria-haspopup="dialog"><FileText size={15} aria-hidden="true" />View document</Button>}
             {!narrow && loggable && (
               <Button className="secondary compact" onClick={onLog}>
                 <Phone size={15} aria-hidden="true" /> Log activity
@@ -202,6 +210,10 @@ export default function RecordWorkspace({
           </div>
         </div>
       </header>
+      {showDocument && <Dialog title="Quotation document" onClose={() => setShowDocument(false)} className="quotation-preview-dialog">
+        <div className="quotation-dialog-preview"><QuotationDocument record={r} /></div>
+        <DialogActions onCancel={() => setShowDocument(false)} cancel="Close" primary={{ label: "Print / Save PDF", onClick: () => { setShowDocument(false); window.setTimeout(() => window.print(), 200); } }} />
+      </Dialog>}
 
       {live && COMMERCIAL.includes(r.kind) ? (
         <CommercialWorkspace
@@ -230,15 +242,16 @@ export default function RecordWorkspace({
       ) : r.kind === "quotations" ? (
         <QuotationBody record={r} activity={activity} />
       ) : (
-        <div className="rw-body has-aside">
-          <div className="rw-main">
+        <div className="rw-body rw-summary-layout">
+          <section className="rw-main rw-summary-card" aria-label="Record overview">
+            <div className="rw-summary-heading"><h2>Record overview</h2><p>The key information for this {noun.toLowerCase()}.</p></div>
+            {details}
             <RecordNotes record={r} />
             <RecordLines record={r} />
+          </section>
+          <section className="rw-summary-card rw-history-card" aria-label="Updates and activity">
             {activity}
-          </div>
-          <aside className="rw-context" aria-label="Details">
-            {details}
-          </aside>
+          </section>
         </div>
       )}
     </article>
@@ -330,25 +343,24 @@ function RecordLines({ record: r }: { record: RecordItem }) {
  * the page; print always renders the document unchanged.
  */
 function QuotationBody({ record, activity }: { record: RecordItem; activity: ReactNode }) {
-  const [showDoc, setShowDoc] = useState(false);
   return (
     <div className="rw-body">
       <div className="rw-main">
         <QuotationSummary record={record} />
-        <Section
-          title="Document"
-          className="rw-document"
-          actions={
-            <Button className="ghost compact rw-doc-toggle" aria-expanded={showDoc} onClick={() => setShowDoc(!showDoc)}>
-              <FileText size={14} aria-hidden="true" /> {showDoc ? "Hide document" : "View document"}
-            </Button>
-          }
-        >
-          <div className={`rw-document-frame${showDoc ? " is-open" : ""}`}>
+        <div className="rw-summary-layout quote-details-grid">
+          <section className="rw-summary-card" aria-label="Quotation details">
+            <h2>Quotation details</h2>
+            <RecordDetails record={record} />
+            <RecordLines record={record} />
+            <RecordNotes record={record} />
+          </section>
+          <section className="rw-summary-card rw-history-card" aria-label="Quotation activity">{activity}</section>
+        </div>
+        <div className="rw-document quotation-print-only" aria-hidden="true">
+          <div className="rw-document-frame">
             <QuotationDocument record={record} />
           </div>
-        </Section>
-        {activity}
+        </div>
       </div>
     </div>
   );

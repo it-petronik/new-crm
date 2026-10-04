@@ -14,6 +14,8 @@ export type MeetingMedia = "video" | "voice";
 export type MeetingStatus = "scheduled" | "live" | "ended" | "cancelled" | "missed";
 /** Where a meeting lives: a room, a direct message, or on its own. */
 export type MeetingScope = "room" | "direct" | "standalone";
+/** Scheduled conversations retain the meeting workspace; instant DMs use calls. */
+export const isDirectCall = (meeting: Pick<MeetingView, "scope" | "kind">) => meeting.scope === "direct" && meeting.kind === "instant";
 export type GuestAccess = "off" | "open" | "admit";
 export type GuestExpiry = "1h" | "24h" | "7d" | "meeting_end";
 
@@ -195,6 +197,15 @@ export function durationLabel(ms: number) {
   return h ? `${h} h${min % 60 ? ` ${min % 60} min` : ""}` : `${min} min`;
 }
 
+/** Live calls show elapsed seconds; do not round a new call up to one minute. */
+export function callDuration(ms: number) {
+  const seconds = Math.max(0, Math.floor(Number.isFinite(ms) ? ms / 1000 : 0));
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor(seconds / 60) % 60;
+  const s = seconds % 60;
+  return `${h ? `${h}:` : ""}${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
 export const scopeLabel = (m: Pick<MeetingView, "scope" | "media">) =>
   m.scope === "direct" ? (m.media === "voice" ? "Voice call" : "Video call") : `${m.media === "voice" ? "Voice" : "Video"} meeting`;
 
@@ -215,6 +226,9 @@ export type GuestGrant = { serverUrl: string; token: string; expiresIn: number; 
 
 /** The one shape the meeting room needs, for employees and guests alike. */
 export type RoomSession = {
+  directCall?: boolean;
+  outgoingCall?: boolean;
+  callName?: string;
   meetingId: string;
   conversationId: string | null;
   title: string;

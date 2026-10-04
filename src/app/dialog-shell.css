@@ -4,10 +4,13 @@
     display: flex;
     flex-direction: column;
     padding: 0;
-    width: min(1000px, calc(100vw - 32px));
+    width: min(720px, calc(100vw - 32px));
     max-height: calc(100dvh - 32px);
     overflow: hidden;
     scrollbar-gutter: auto;
+    border-radius: var(--e-radius-lg);
+    border: 1px solid var(--e-border);
+    box-shadow: var(--e-shadow-overlay);
   }
   .modal.ui-dialog:has(.command-list) {
     width: min(720px, calc(100vw - 32px));
@@ -22,7 +25,7 @@
     flex-shrink: 0;
   }
   .dialog-heading h2 {
-    font-size: 18px;
+    font-size: var(--e-section);
     margin: 0;
     letter-spacing: -0.4px;
   }
@@ -69,3 +72,32 @@
     max-height: none !important;
   }
 }
+
+/* Studio presentation: shared by all portal-based dialogs. */
+.studio-dialog.studio-dialog.studio-dialog { border-radius:20px; box-shadow:0 30px 100px rgb(10 15 30 / 22%),0 2px 6px rgb(10 15 30 / 8%); }
+.studio-dialog .studio-dialog-heading { gap:12px; padding:20px 24px; background:var(--e-surface); }
+.studio-dialog-mark { display:grid; place-items:center; flex:none; width:36px; height:36px; border:1px solid color-mix(in srgb,var(--e-accent) 18%,var(--e-border)); border-radius:11px; background:var(--e-accent-soft); color:var(--e-accent); }
+.studio-dialog-heading .dialog-heading-text { flex:1; min-width:0; }
+.studio-dialog-heading h2 { font-size:18px; font-weight:600; letter-spacing:-.5px; }
+.studio-dialog .dialog-body { padding:24px; }
+.studio-dialog .ui-dialog-footer { padding:16px 24px; background:var(--e-surface-sunken); border-top:1px solid var(--e-border); }
+.studio-dialog .ui-dialog-actions-end { gap:8px; }
+.studio-dialog .form-section { border:1px solid var(--e-border); border-radius:12px; padding:16px; }
+.studio-dialog .form-section > summary { font-size:12px; }
+.studio-dialog .ui-input,.studio-dialog .ui-select,.studio-dialog .ui-textarea { border-radius:8px; box-shadow:0 1px 2px #00000003; }
+.studio-dialog .field > label,.studio-dialog .field-label { font-size:12px; font-weight:500; color:var(--e-text-secondary); }
+@media(max-width:600px) {
+ .studio-dialog.studio-dialog.studio-dialog { border-radius:16px; }
+ .studio-dialog .studio-dialog-heading { padding:14px 16px; }
+ .studio-dialog .dialog-body { padding:16px; }
+ .studio-dialog .ui-dialog-footer { padding:12px 16px; }
+ .studio-dialog-mark { width:32px; height:32px; border-radius:9px; }
+}
+@media print { .studio-dialog-mark { display:none; } }
+.request-create-dialog .request-form { display:grid; gap:20px; padding:0; }
+.request-create-dialog .form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
+.request-create-dialog .full { grid-column:1 / -1; }
+.request-create-dialog .segmented { width:100%; padding:5px; background:var(--e-surface-sunken); border-radius:10px; }
+.request-create-dialog .segmented button { flex:1; min-height:38px; border-radius:7px; }
+.request-create-dialog .segmented button[aria-pressed="true"] { color:var(--e-accent); background:var(--e-surface); box-shadow:var(--e-shadow-raised); }
+@media(max-width:600px) { .request-create-dialog .form-grid { grid-template-columns:minmax(0,1fr); } }

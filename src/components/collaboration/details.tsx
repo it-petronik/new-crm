@@ -203,17 +203,13 @@ export default function Details({
                         </button>
                       </ProfilePopover>
                       <span className="collab-member-name">
-                        {m.name}
-                        {m.id === actor.id && <em> (you)</em>}
+                        <strong>{m.name}{m.id === actor.id && <em> (you)</em>}</strong>
                         <small>
-                          {[m.role, m.active ? presenceLabel(presenceOf(m.id)) || null : "Inactive"].filter(Boolean).join(" · ")}
+                          {[roleLabel[m.memberRole], m.role, m.active ? presenceLabel(presenceOf(m.id)) || null : "Inactive"].filter(Boolean).join(" · ")}
                         </small>
                       </span>
                       {/* Fixed columns: the badge and the actions keep their
                           place whether or not a row has them. */}
-                      <span className="collab-member-badge">
-                        {roleLabel[m.memberRole] && <span className="e-badge tone-info is-sm">{roleLabel[m.memberRole]}</span>}
-                      </span>
                       {!(manageable || (m.id !== actor.id && m.active)) && <span aria-hidden="true" />}
                       {(manageable || (m.id !== actor.id && m.active)) && (
                         <Popover.Root>
