@@ -14,6 +14,8 @@ import { ArrowRight, ShieldCheck } from "lucide-react";
 import { BrandLogo } from "@/components/brand";
 import { demoAccounts, demoPassword, previewActorKey } from "@/lib/fixtures";
 import ThemeToggle from "@/components/theme-toggle";
+import { AuthStory } from "./auth-story";
+import { readJsonResponse, friendlyError } from "@/lib/client-request";
 export default function LoginForm({ preview, next = "/", resume = false }: { preview: boolean; next?: string; resume?: boolean }) {
   const [error, setError] = useState("");
   // "Keep me signed in": try the device's credential before showing the form.
@@ -37,27 +39,7 @@ export default function LoginForm({ preview, next = "/", resume = false }: { pre
       <div className="login-theme">
         <ThemeToggle />
       </div>
-      <section className="login-story">
-        <div className="brand">
-          <BrandLogo company="Enercore" />
-        </div>
-        <span className="eyebrow">CONNECTED BUSINESS. CLEARER DECISIONS.</span>
-        <h1>
-          Every company.
-          <br />
-          Every team.
-          <br />
-          <em>One direction.</em>
-        </h1>
-        <p>Your people, pipeline and operations. Finally working together.</p>
-        <div className="login-orbit" aria-hidden="true">
-          <span />
-          <span />
-          <span />
-          <b>e</b>
-        </div>
-        <small>ENERCORE GROUP · BUSINESS WORKSPACE</small>
-      </section>
+      <AuthStory/>
       <section className="login-form">
         <div className="login-box">
           <span className="eyebrow">YOUR WORKSPACE AWAITS</span>
@@ -72,9 +54,13 @@ export default function LoginForm({ preview, next = "/", resume = false }: { pre
             noValidate
             onSubmit={async (e) => {
               e.preventDefault();
-              setBusy(true);
+              if(busy)return;
               setError("");
               const f = new FormData(e.currentTarget);
+              const found={email:check(String(f.get("email")||""),[required("Work email"),emailRule]),password:check(String(f.get("password")||""),[required("Password")])};
+              setFieldErrors(found);
+              if(found.email||found.password){e.currentTarget.querySelector<HTMLInputElement>(`[name="${found.email?"email":"password"}"]`)?.focus();return;}
+              setBusy(true);
               try {
                 if (preview) {
                   // Preview has no database; demo accounts stand in for real
@@ -96,12 +82,13 @@ export default function LoginForm({ preview, next = "/", resume = false }: { pre
                     remember: f.get("remember") === "on",
                   }),
                 });
-                const data = await r.json();
+                if(r.status===401)throw new Error("Those sign-in details don’t match. Check your work email and password.");
+                const data = await readJsonResponse(r,"Sign-in couldn’t be completed. Please try again.");
                 if (!r.ok) throw new Error(data.error);
                 window.location.href = next;
               } catch (err) {
                 setError(
-                  err instanceof Error ? err.message : "Unable to sign in.",
+                  friendlyError(err,"Sign-in couldn’t be completed. Check your connection and try again."),
                 );
               } finally {
                 setBusy(false);
@@ -115,7 +102,6 @@ export default function LoginForm({ preview, next = "/", resume = false }: { pre
                 inputMode="email"
                 autoComplete="username"
                 placeholder="you@company.com"
-                onBlur={(e) => setFieldErrors((f) => ({ ...f, email: check(e.target.value, [required("Work email"), emailRule]) }))}
                 onChange={(e) => fieldErrors.email && setFieldErrors((f) => ({ ...f, email: check(e.target.value, [required("Work email"), emailRule]) }))}
               />
             </Field>
@@ -125,7 +111,6 @@ export default function LoginForm({ preview, next = "/", resume = false }: { pre
                 name="password"
                 type="password"
                 autoComplete="current-password"
-                onBlur={(e) => setFieldErrors((f) => ({ ...f, password: check(e.target.value, [required("Password")]) }))}
                 onChange={(e) => fieldErrors.password && setFieldErrors((f) => ({ ...f, password: check(e.target.value, [required("Password")]) }))}
               />
             </Field>

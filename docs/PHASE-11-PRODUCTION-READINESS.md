@@ -79,6 +79,49 @@ actual accounts; never interpret SMTP acceptance as delivery/read confirmation.
 
 ## Team handover
 
+### Brand and team usability follow-up — 19 October 2026
+
+Released to `https://crm.enercore.ae` as Worker version
+`7ef55d3c-b4d4-4175-97f9-b9d4c465b643`. This is a source/asset-only release;
+no migrations, real-mail sync, account changes or provider activation were run.
+Read-only live smoke passed at 390/1440 px, with eight anonymous API denials,
+both test endpoints absent and all three new SVG assets/install manifest served
+successfully. Authenticated live team acceptance remains a separate handover
+step. The original saved local workspace was restored after fictional testing.
+
+- Reused the approved Enercore Prism vector assets from the existing Brand
+  Studio source in `Generate 10 premium company logos`: full-colour mark,
+  full-colour lockup and white lockup. Login, password reset, loaders, favicon
+  and install manifest now use those assets. No other company's logo changed.
+- Navigation stores only per-user sidebar scroll position in tab storage and
+  reveals the active item on route changes or reload. Profile/appearance/help
+  utilities also expose their active state. Page motion does not remount forms
+  or navigation and respects reduced-motion settings.
+- Credits & usage refreshes the provider account counter on entry, every 65
+  seconds while visible, and after focus/reconnect. It does not run searches
+  or enrichment. Server caching and authorization remain unchanged. A failed
+  balance refresh retains the last checked balance with a helpful message.
+- Forms using the shared validation hook stay neutral until submit; Quick Add
+  resets errors when changing record type. Record creation and auth no longer
+  show required-field errors merely on blur. Server validation is unchanged.
+  Incorrect sign-in details are distinguished from an expired session.
+- Follow-up dates have a controlled, accessible selected state including No
+  follow-up. Shared button/avatar sizing, disclosures, dashboard width and
+  auth layouts were refined. The grey quotation print background is confined
+  to the intended bands; unused page area is white.
+- Enercore AI now has a centred conversation layout, chronological tab-only
+  history, a new-conversation action and collapsible guidance/copilot panels.
+  The on-demand companion shortcut reuses existing permission-checked CRM
+  question tools. It is not an unrestricted general-purpose chatbot, has no
+  automatic actions, and makes no model call until explicitly asked.
+- Local evidence: 566 unit tests, 392 responsive route/width/theme checks,
+  eight usability scenarios, five AI browser scenarios, and ten fictional
+  print/validation scenarios. Four company PDFs and a multi-page quotation
+  passed pagination checks; the rendered Petronik proof was visually reviewed.
+  Ten operations/outbound/task/access workflows are recorded in the final
+  release check. No production records, mailbox credentials, schemas or
+  Phase 4/provider activation settings are changed by this follow-up.
+
 ### Responsive and shared UX follow-up — 19 October 2026
 
 Deployed to the existing live domain as Worker version

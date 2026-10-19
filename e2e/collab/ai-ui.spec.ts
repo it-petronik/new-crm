@@ -57,7 +57,9 @@ test("AI workspace on desktop: role prompts, loading, answer, figures, reference
   await expect(examples.first()).toBeVisible();
   await expect(examples).toContainText(["How is our pipeline looking?"]);
   await expect(page.getByLabel("Example questions")).not.toContainText("owe");
-  await expect(page.getByRole("heading", { name: "How Enercore AI works" })).toBeVisible();
+  await expect(page.locator(".ai-about > summary")).toHaveText("How Enercore AI works");
+  await page.locator(".ai-about > summary").click();
+  await expect(page.locator(".ai-about ul")).toBeVisible();
 
   await ask(page, "[[route:pipeline_summary,Istanegry,]] How is the pipeline?");
   const turn = page.locator(".ai-turn").first();
@@ -83,7 +85,7 @@ test("AI workspace on desktop: role prompts, loading, answer, figures, reference
 
   // A capacity error: plain words, and nothing else breaks.
   await ask(page, "[[fake:quota]] [[route:pipeline_summary,,]] Anything?");
-  await expect(page.locator(".ai-turn").first().getByRole("alert")).toHaveText(CAPACITY);
+  await expect(page.locator(".ai-turn").last().getByRole("alert")).toContainText(CAPACITY);
   expect(asks).toHaveLength(2);
   await expect(page.getByRole("textbox", { name: "Your question" })).toBeEnabled();
   await context.close();

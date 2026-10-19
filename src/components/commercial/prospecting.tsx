@@ -40,6 +40,7 @@ import { phase7Call, Field } from "./execution-panel";
 import { ProspectReview } from "./prospect-review";
 import { CreditDialog, BulkImportDialog, ReportDialog } from "./apollo-dialogs";
 import { openReference } from "@/lib/ai/client";
+import {readJsonResponse,friendlyError} from "@/lib/client-request";
 type Page = ProspectPage & { stageId: string; expiresAt: string };
 type Workspace = Awaited<ReturnType<typeof workspace>>;
 const call = async <T,>(c: Record<string, unknown>): Promise<T> => {
@@ -48,7 +49,7 @@ const call = async <T,>(c: Record<string, unknown>): Promise<T> => {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(c),
   });
-  const data = await res.json();
+  const data = await readJsonResponse(res,"Prospecting couldn’t load. Please try again.");
   if (!res.ok)
     throw Object.assign(
       Error(
@@ -119,6 +120,9 @@ export default function Prospecting({
     prepIdentity = useRef<{ key: string; id: string } | null>(null),
     scopeVersion = useRef(0);
   const formId = useId();
+  const creditRefresh = useRef(false);
+  const [creditBusy,setCreditBusy]=useState(false);
+  const [creditError,setCreditError]=useState("");
   const currentScope = useRef({ company, branch });
   currentScope.current = { company, branch };
   const restoreFocus = () =>
@@ -133,6 +137,19 @@ export default function Prospecting({
     )
       setMeta(data);
   }
+  async function refreshCredits(){
+    if(preview||creditRefresh.current||document.hidden||!navigator.onLine)return;
+    creditRefresh.current=true;setCreditBusy(true);setCreditError("");const version=scopeVersion.current;
+    try{await call({action:"refresh-account",company,branch});if(version===scopeVersion.current)await metadata();}
+    catch(e){if(version===scopeVersion.current)setCreditError(friendlyError(e,"The balance couldn’t refresh. We’ll try again shortly."));}
+    finally{creditRefresh.current=false;setCreditBusy(false);}
+  }
+  useEffect(()=>{
+    if(tab!=="usage"||preview)return;
+    void refreshCredits();const refresh=()=>{void refreshCredits();};
+    const timer=setInterval(refresh,65000);window.addEventListener("focus",refresh);window.addEventListener("online",refresh);document.addEventListener("visibilitychange",refresh);
+    return()=>{clearInterval(timer);window.removeEventListener("focus",refresh);window.removeEventListener("online",refresh);document.removeEventListener("visibilitychange",refresh);};
+  },[tab,company,branch,preview]);
   useEffect(() => {
     scopeVersion.current++;
     resultCache.current = {};
@@ -1279,13 +1296,9 @@ export default function Prospecting({
               </h2>
               <Button
                 className="secondary compact"
-                disabled={busy || preview}
-                onClick={() =>
-                  void task(async () => {
-                    await call({ action: "refresh-account", company, branch });
-                    await metadata();
-                  })
-                }
+                disabled={busy || preview || creditBusy}
+                loading={creditBusy}
+                onClick={() => void refreshCredits()}
               >
                 Refresh balance
               </Button>
@@ -1319,10 +1332,12 @@ export default function Prospecting({
             )}
             <p className="muted small">
               External Apollo account counter
+              {" · Updates automatically while this tab is open"}
               {meta?.account
                 ? ` · Checked ${new Date(meta.account.checkedAt).toLocaleString()}`
                 : ""}
             </p>
+            {creditError&&<p className="muted small" role="status">{creditError} Your last checked balance is still shown.</p>}
             <a href="https://app.apollo.io/" target="_blank" rel="noreferrer">
               Open Apollo
             </a>

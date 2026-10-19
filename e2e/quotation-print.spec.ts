@@ -31,15 +31,16 @@ for (const [count, company] of [
       .getByRole("button", { name: /Gulf Industrial Trading/ })
       .first()
       .click();
-    await expect(
-      page.getByRole("article", { name: "Quotation document" }),
-    ).toBeVisible();
+    // The record screen has a summary; its A4 document is intentionally
+    // print-only until View document is opened. Verify the real print path.
+    await expect(page.locator(".quotation-print-only .reference-document")).toBeAttached();
     await page.emulateMedia({ media: "print" });
     // The quotation is a page inside the shell; printing drops the shell's
     // navigation and the record's own controls, leaving only the document.
     for (const chrome of [".sidebar", ".topbar", ".rw-header", ".page-under-record"])
       await expect(page.locator(chrome)).toBeHidden();
     await expect(page.locator(".reference-document")).toBeVisible();
+    await expect(page.locator("body")).toHaveCSS("background-color","rgb(255, 255, 255)");
     await expect(page.locator(".pdf-footer-band")).toBeHidden();
     await expect(
       page.getByText("Peiman Hussain", { exact: true }),

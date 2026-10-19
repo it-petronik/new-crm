@@ -7,6 +7,8 @@ import { check, required, email as emailRule, minLength } from "@/lib/validation
 import { BrandLogo } from "@/components/brand";
 import ThemeToggle from "@/components/theme-toggle";
 import { MIN_PASSWORD_LENGTH } from "@/lib/password-reset";
+import { AuthStory } from "./auth-story";
+import {readJsonResponse,friendlyError} from "@/lib/client-request";
 
 export default function ResetPasswordForm({ preview }: { preview: boolean }) {
   const [token, setToken] = useState("");
@@ -29,19 +31,7 @@ export default function ResetPasswordForm({ preview }: { preview: boolean }) {
       <div className="login-theme">
         <ThemeToggle />
       </div>
-      <section className="login-story">
-        <div className="brand">
-          <BrandLogo company="Enercore" />
-        </div>
-        <span className="eyebrow">ACCOUNT RECOVERY</span>
-        <h1>
-          Set a new
-          <br />
-          <em>password.</em>
-        </h1>
-        <p>Your reset link works once and expires 30 minutes after it was issued.</p>
-        <small>ENERCORE GROUP · BUSINESS WORKSPACE</small>
-      </section>
+      <AuthStory recovery/>
       <section className="login-form">
         <div className="login-box">
           {done ? (
@@ -68,6 +58,9 @@ export default function ResetPasswordForm({ preview }: { preview: boolean }) {
                   const form = e.currentTarget;
                   const data = new FormData(form);
                   const password = String(data.get("password") || "");
+                  if(busy)return;
+                  const found={password:check(password,[required("A new password"),minLength("Your password",MIN_PASSWORD_LENGTH)]),confirm:check(String(data.get("confirm")||""),[required("Confirmation")])};setFieldErrors(found);
+                  if(found.password||found.confirm)return;
                   if (password !== String(data.get("confirm") || ""))
                     return setError("Those passwords do not match.");
                   setBusy(true);
@@ -78,11 +71,11 @@ export default function ResetPasswordForm({ preview }: { preview: boolean }) {
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ token, password }),
                     });
-                    const result = await response.json();
+                    const result = await readJsonResponse(response,"The password update couldn’t be confirmed. Try signing in before requesting another reset.");
                     if (!response.ok) throw new Error(result.error);
                     setDone(true);
                   } catch (err) {
-                    setError(err instanceof Error ? err.message : "Unable to update the password.");
+                    setError(friendlyError(err,"The password update couldn’t be confirmed. Try signing in before requesting another reset."));
                   } finally {
                     setBusy(false);
                   }
@@ -94,7 +87,6 @@ export default function ResetPasswordForm({ preview }: { preview: boolean }) {
                     name="password"
                     type="password"
                     autoComplete="new-password"
-                    onBlur={(e) => setFieldErrors((f) => ({ ...f, password: check(e.target.value, [required("A new password"), minLength("Your password", MIN_PASSWORD_LENGTH)]) }))}
                     onChange={(e) => fieldErrors.password && setFieldErrors((f) => ({ ...f, password: check(e.target.value, [required("A new password"), minLength("Your password", MIN_PASSWORD_LENGTH)]) }))}
                   />
                 </Field>
@@ -104,7 +96,6 @@ export default function ResetPasswordForm({ preview }: { preview: boolean }) {
                     name="confirm"
                     type="password"
                     autoComplete="new-password"
-                    onBlur={(e) => setFieldErrors((f) => ({ ...f, confirm: check(e.target.value, [required("Confirmation")]) }))}
                     onChange={(e) => fieldErrors.confirm && setFieldErrors((f) => ({ ...f, confirm: "" }))}
                   />
                 </Field>

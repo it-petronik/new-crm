@@ -3,6 +3,7 @@
 import styles from "./studio/navigation.module.css";
 import { BrandLogo } from "./brand";
 import Link from "next/link";
+import { useLayoutEffect } from "react";
 import * as Drawer from "@radix-ui/react-dialog";
 import {
   Activity,
@@ -52,8 +53,17 @@ import { useOverflowFade } from "@/lib/use-overflow-fade";
  * visible part — the Manage group on a short screen — a soft fade at that
  * edge says so; it disappears once scrolled to the end.
  */
-function FadingNav(props: React.ComponentProps<"nav">) {
+function FadingNav({storageKey, activeKey, ...props}: React.ComponentProps<"nav"> & {storageKey:string;activeKey:string}) {
   const ref = useOverflowFade<HTMLElement>("y");
+  useLayoutEffect(() => {
+    const nav=ref.current;if(!nav)return;
+    try { const saved=Number(sessionStorage.getItem(storageKey));if(Number.isFinite(saved))nav.scrollTop=saved; } catch {}
+    const reveal=()=>{const active=nav.querySelector<HTMLElement>('[aria-current="page"]');if(!active)return;const item=active.getBoundingClientRect(),box=nav.getBoundingClientRect();if(item.top<box.top+8)nav.scrollTop-=box.top+8-item.top;else if(item.bottom>box.bottom-8)nav.scrollTop+=item.bottom-box.bottom+8;};
+    reveal();const frame=requestAnimationFrame(reveal);
+    const save=()=>{try{sessionStorage.setItem(storageKey,String(nav.scrollTop));}catch{}};
+    nav.addEventListener("scroll",save,{passive:true});window.addEventListener("pagehide",save);
+    return()=>{cancelAnimationFrame(frame);save();nav.removeEventListener("scroll",save);window.removeEventListener("pagehide",save);};
+  },[storageKey,activeKey,ref]);
   return (
     <nav
       ref={ref}
@@ -184,7 +194,7 @@ export default function Sidebar({
             <Button className={styles.toggle} aria-label={isMobile ? "Close navigation" : "Collapse sidebar"} onClick={isMobile ? () => onMobileChange(false) : onCollapse}>{isMobile ? <X size={18}/> : <PanelLeftClose size={17}/>}</Button>
           </>}
         </div>
-        <FadingNav className={styles.nav} aria-label={isMobile ? "Mobile navigation" : "Main navigation"}>
+        <FadingNav storageKey={`enercore-nav:${actor.id}:${preview?"preview":"live"}:${isMobile?"mobile":"desktop"}`} activeKey={module} className={styles.nav} aria-label={isMobile ? "Mobile navigation" : "Main navigation"}>
           {groups.map(([title, entries]) => {
             const visible = entries.filter(entryAllowed);
             if (!visible.length) return null;
@@ -210,11 +220,11 @@ export default function Sidebar({
             if (onMyRequests && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); onMyRequests(); }
           }}><CalendarDays size={18}/>{!compact && <span className="nav-label">My requests</span>}</Link></Tooltip>
           <div className={styles.utilities}>
-            <Tooltip label="Shortcuts & help"><Button className={styles.utility} aria-label="Shortcuts & help" onClick={() => onView("shortcuts")}><ListChecks size={17}/>{!compact && <span>Help & shortcuts</span>}</Button></Tooltip>
-            <Tooltip label="Appearance"><Button className={styles.utility} aria-label="Appearance" onClick={() => onView("appearance")}><Settings2 size={17}/></Button></Tooltip>
+            <Tooltip label="Shortcuts & help"><Button className={styles.utility} aria-label="Shortcuts & help" aria-current={module==="shortcuts"?"page":undefined} onClick={() => onView("shortcuts")}><ListChecks size={17}/>{!compact && <span>Help & shortcuts</span>}</Button></Tooltip>
+            <Tooltip label="Appearance"><Button className={styles.utility} aria-label="Appearance" aria-current={module==="appearance"?"page":undefined} onClick={() => onView("appearance")}><Settings2 size={17}/></Button></Tooltip>
           </div>
-          <Button className={styles.person} aria-label="Open my profile" onClick={() => onView("profile")}>
-            <Avatar name={actor.name} image={photo} avatarId={actor.id} size={30}/>
+          <Button className={styles.person} aria-label="Open my profile" aria-current={module==="profile"?"page":undefined} onClick={() => onView("profile")}>
+            <Avatar name={actor.name} image={photo} avatarId={actor.id} size={32}/>
             {!compact && <span className="profile-info">{actor.name}<small>{actor.role}{preview ? " · Preview" : ""}</small></span>}
           </Button>
         </div>

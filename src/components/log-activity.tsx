@@ -103,6 +103,7 @@ export default function LogActivity({
 
       <FollowUpControl
         compact
+        value={due}
         busy={saving}
         onChoose={(date) => setDue(date)}
         onClear={() => setDue(undefined)}

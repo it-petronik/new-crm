@@ -27,7 +27,7 @@ export function avatarTone(name: string) {
 export function Avatar({
   name,
   image,
-  size = 34,
+  size = 32,
   className,
   avatarId,
 }: {

@@ -17,11 +17,13 @@ export default function FollowUpControl({
   onClear,
   busy,
   compact,
+  value,
 }: {
   onChoose: (date: string, label: string) => void;
   onClear?: () => void;
   busy?: boolean;
   compact?: boolean;
+  value?: string;
 }) {
   const [custom, setCustom] = useState("");
   return (
@@ -33,7 +35,8 @@ export default function FollowUpControl({
         {followUpPresets().map((preset) => (
           <Button
             key={preset.label}
-            className="secondary"
+            className={`secondary${value === preset.date ? " is-selected" : ""}`}
+            aria-pressed={value === preset.date}
             disabled={busy}
             onClick={() => onChoose(preset.date, preset.label)}
           >
@@ -43,7 +46,7 @@ export default function FollowUpControl({
         <Input
           type="date"
           aria-label="Follow-up date"
-          value={custom}
+          value={value ?? custom}
           disabled={busy}
           onChange={(e) => {
             const value = e.target.value;
@@ -52,7 +55,7 @@ export default function FollowUpControl({
           }}
         />
         {onClear && (
-          <Button className="secondary" disabled={busy} onClick={onClear}>
+          <Button className={`secondary${value === undefined ? " is-selected" : ""}`} aria-pressed={value === undefined} disabled={busy} onClick={()=>{setCustom("");onClear();}}>
             No follow-up
           </Button>
         )}

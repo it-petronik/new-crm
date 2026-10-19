@@ -354,14 +354,7 @@ export default function RecordForm({
           if (name) clearFieldError(name);
           if (name && name in watch) setWatch((prev) => ({ ...prev, [name]: target.value }));
         }}
-        // Leaving a field checks it straight away, in the same words as submit.
-        onBlur={(e) => {
-          const target = e.target as unknown as HTMLInputElement;
-          const spec = profile.fields.find((f) => f.name === target.name);
-          if (!spec || !("value" in target) || !target.value) return;
-          const message = fieldMessage(spec, target.value);
-          if (message) setFieldErrors((prev) => ({ ...prev, [spec.name]: message }));
-        }}
+        // Keep new forms neutral. Submission validates all required fields.
         onSubmit={(e) => {
           e.preventDefault();
           // Validate against the same field metadata the CSV importer uses, so

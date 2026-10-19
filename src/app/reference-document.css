@@ -102,11 +102,18 @@
     display: none !important;
   }
   body:has(.reference-document) {
+    background: #fff !important;
     margin: 0 !important;
     padding: 0 !important;
     min-height: 0 !important;
     height: auto !important;
     overflow: visible !important;
+  }
+  html:has(.reference-document) { background:#fff !important; }
+  body:has(.reference-document) :is(.app-shell,.main-shell,.main-content,.record-workspace,.rw-body,.rw-main) {
+    background:#fff !important;
+    min-height:0 !important;
+    height:auto !important;
   }
   body:has(.reference-document) .modal > *:not(.dialog-body),
   body:has(.reference-document) .dialog-body > *:not(.reference-document) {

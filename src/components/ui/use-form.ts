@@ -6,10 +6,9 @@ import { validate, firstInvalid, type FieldRules } from "@/lib/validation";
  * Validation timing.
  *
  * A form opens neutral: nobody wants a wall of red before they have typed
- * anything. A field is judged once the person has left it, and from then on it
- * corrects itself as they type, so a fixed field clears immediately rather
- * than waiting for another submit. Submitting judges everything and moves
- * focus to the first problem.
+ * anything. Messages become visible only after submission; corrections clear
+ * immediately as the person types. Submitting checks everything and moves
+ * focus to the first problem. Merely exploring a form is never an error.
  */
 export function useForm(rules: FieldRules, order: string[] = Object.keys(rules)) {
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -71,7 +70,7 @@ export function useForm(rules: FieldRules, order: string[] = Object.keys(rules))
   }, []);
 
   /** Only show a message once the field has earned one. */
-  const errorFor = (name: string) => (submitted || touched[name] ? errors[name] : "") || "";
+  const errorFor = (name: string) => (submitted ? errors[name] : "") || "";
 
   return { form, errors, errorFor, blur, revalidate, submit, reset, submitted };
 }

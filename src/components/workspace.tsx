@@ -98,6 +98,8 @@ import {
 import { makePreview } from "@/lib/fixtures";
 import { transition, addNote, recordPayment, canAssign } from "@/lib/workflow";
 import Sidebar from "./sidebar";
+import {PageMotion} from "./page-motion";
+import {AiCompanion} from "./ai/ai-companion";
 import { Dialog, DialogPresence, DialogActions } from "./ui/controls";
 import ThemeToggle from "./theme-toggle";
 import MyRequests from "./my-requests";
@@ -1315,7 +1317,7 @@ export default function Workspace({
               onClick={() => openView("profile")}
             >
               {/* The same picture (or initials) as the sidebar and profile. */}
-              <Avatar name={actor.name} image={photo} avatarId={actor.id} size={30} />
+              <Avatar name={actor.name} image={photo} avatarId={actor.id} size={32} />
             </Button>
           </div>
         </header>
@@ -1413,6 +1415,7 @@ export default function Workspace({
               }
             />
           )}
+          <PageMotion routeKey={`${view??module}:${selfService}`}/>
           <div className="page-under-record" hidden={!!selectedCurrent}>
           {selfService ? (
             <MyRequests actor={actor} preview={preview} />
@@ -1884,6 +1887,7 @@ export default function Workspace({
           </div>
         </main>
       </div>
+      {!preview&&view!=="ai"&&!selectedCurrent&&!form&&!quickAdd.open&&<AiCompanion onOpen={()=>openView("ai")}/>}
       <DialogPresence>
         {form && (
           <RecordForm

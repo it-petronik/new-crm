@@ -69,7 +69,7 @@ export default function QuickAdd({
   const nameRef = useRef<HTMLInputElement>(null);
 
   const values = { name, contact, email, product, amount };
-  const { form, errorFor, blur, revalidate, submit } = useForm(
+  const { form, errorFor, blur, revalidate, submit, reset } = useForm(
     {
       name: [required(profileLabel(kind)), minLength(profileLabel(kind), 2)],
       email: [emailRule],
@@ -125,7 +125,7 @@ export default function QuickAdd({
               key={k}
               aria-pressed={k === kind}
               className={`quick-add-kind${k === kind ? " is-active" : ""}`}
-              onClick={() => setKind(k)}
+              onClick={() => { setKind(k); reset(); setError(""); }}
             >
               {recordProfiles[k].noun}
             </Button>

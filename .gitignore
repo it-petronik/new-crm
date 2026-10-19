@@ -21,3 +21,5 @@ backups/
 # Python recovery tooling caches.
 __pycache__/
 *.py[cod]
+/test-results-print/
+/test-results-premium/
