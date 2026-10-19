@@ -5,14 +5,20 @@
 // one runtime owns D1, and no other preview can replace this test service.
 import { unstable_startWorker } from "wrangler";
 import { resolve } from "node:path";
+import { readFileSync } from "node:fs";
 
 let worker;
 let stopping = false;
+let mailboxTimer;
 async function stop(code = 0) {
   if (stopping) return;
   stopping = true;
-  try { await worker?.dispose(); }
-  finally { process.exit(code); }
+  clearInterval(mailboxTimer);
+  try {
+    await worker?.dispose();
+  } finally {
+    process.exit(code);
+  }
 }
 process.on("SIGINT", () => void stop());
 process.on("SIGTERM", () => void stop());
@@ -29,7 +35,26 @@ try {
     },
   });
   await worker.ready;
-  console.log("Regression Worker ready: one D1 owner; watch=false; local fake AI self-binding");
+  const localConfig = JSON.parse(
+    readFileSync(resolve(process.argv[2]), "utf8"),
+  );
+  if (
+    localConfig.vars?.APP_URL === "http://localhost:8788" &&
+    localConfig.vars?.MAIL_MODE === "sandbox" &&
+    localConfig.vars?.COLLAB_TEST_CONTROL
+  ) {
+    mailboxTimer = setInterval(
+      () =>
+        void fetch("http://127.0.0.1:8788/__test/mailbox-sweep", {
+          method: "POST",
+          headers: { "X-Test-Control": localConfig.vars.COLLAB_TEST_CONTROL },
+        }).catch(() => {}),
+      120000,
+    );
+  }
+  console.log(
+    "Regression Worker ready: one D1 owner; watch=false; local fake AI self-binding",
+  );
 } catch (error) {
   console.error(error);
   await stop(1);

@@ -20,7 +20,9 @@ export const moduleHelp: Record<Module, PageHelp> = {
 };
 
 export const viewHelp: Record<string, string> = {
+  operations: "Manage purchase orders, receipts, stock dispatches and supplier invoices linked to sales orders.",
   actions: "Your follow-ups, reminders and work needing attention.",
+  tasks: "Your tasks for today, what is overdue and what is coming up, plus task automation.",
   prospecting: "Find potential customers. Review matches before importing; provider searches or enrichment may use credits.",
   collaboration: "Team conversations and work shared with you.",
   ai: "Ask for assistance with work you can access. Review suggestions; AI does not approve or send work for you.",
@@ -28,6 +30,7 @@ export const viewHelp: Record<string, string> = {
 };
 
 export const pageGuides: Record<string, PageHelp> = {
+  "Operations": {purpose:viewHelp.operations,steps:["Create a purchase order for one product, unit and warehouse, then ask a different manager to approve it.","Record receipts and dispatches as they happen; use a reversal to correct a stock entry.","Record supplier invoices and payments in the purchase currency. Review the remaining balance before saving."]},
   "My profile": { purpose: "Your personal details and workspace preferences.", steps: ["Check your name and contact details.", "Update the preferences available to you.", "Company access is managed by an authorized administrator."] },
   "Appearance": { purpose: "Make the workspace comfortable to read.", steps: ["Choose light or dark mode.", "Choose your preferred colour palette.", "These choices affect your display, not company records."] },
   "Access control": { purpose: viewHelp.access, steps: ["Choose the user you want to manage.", "Review their role, company access and module permissions.", "Save carefully: permissions control what the user can see and change."] },
@@ -35,6 +38,7 @@ export const pageGuides: Record<string, PageHelp> = {
   "Notifications": { purpose: "Updates and reminders relevant to your work.", steps: ["Open an update to see its related work.", "Mark items as read once checked.", "Reading a notification does not approve or complete the underlying request."] },
   "My requests": { purpose: "Your leave and other personal requests.", steps: ["Choose the type of request you need.", "Fill in the essentials and submit it.", "Return here to check the decision or progress."] },
   "Collaboration": { purpose: viewHelp.collaboration, steps: ["Open the relevant conversation.", "Share an update with the right people.", "Use the linked record for official status and commercial changes."] },
+  "Tasks": { purpose: viewHelp.tasks, steps: ["Start with Overdue, then Today.", "Open a task to see its linked record and history.", "Mark it complete when done; reopen it if something comes back."] },
   "Action Center": { purpose: viewHelp.actions, steps: ["Start with overdue or urgent work.", "Open the item to understand what needs doing.", "Record the result and your next follow-up."] },
   "Enercore AI": { purpose: viewHelp.ai, steps: ["Ask a specific question about your work.", "Check the sources and figures in the answer.", "Make business decisions through the normal approval workflow."] },
 };

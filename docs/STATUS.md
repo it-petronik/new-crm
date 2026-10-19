@@ -1,5 +1,230 @@
 # Implementation status
 
+## Phase 11 production readiness
+
+Live at https://crm.enercore.ae, version `0ff1b582-277f-4f6a-9b40-1ea0713aa2b2`.
+All pending migrations through 0021 are applied; required mailbox encryption is
+configured. Pre/post backups validated and existing application-table contents
+are unchanged. Live anonymous API, absent test endpoints, desktop/mobile login
+and security-header smoke checks passed. R2 remains disabled. Existing team
+authenticated acceptance, real mailbox delivery and a live two-person call still
+require human verification; they are not implied by local fixture tests.
+
+See [PHASE-11-PRODUCTION-READINESS.md](PHASE-11-PRODUCTION-READINESS.md). Empty-inbox
+bootstrap under a concurrent/stale sync lease is fixed; a non-empty folder shows
+loading rather than an empty-folder claim until its private headers arrive.
+564 automated checks, OpenNext build, TypeScript, all 16 role page/scope checks,
+workflow/mail browser regressions, no-R2 behavior and isolated full-schema recovery
+rehearsal passed. Live additive migrations 0017–0021 have been applied after the
+approved validated pre-release backup. Deployment verification follows in the
+Phase 11 document; do not interpret earlier local-only entries as current status.
+
+## Show-all button count correction
+
+The enquiry filter's return button now uses the provider Inbox total: for an
+Inbox with 456 emails and 10 enquiry matches it reads **Show all emails · 456**,
+not 10. **Possible enquiries** retains the separate match count. Returning to
+all emails clears both enquiry and text-search filters. Browser regressions
+cover distinct totals/matches and restoration of the complete 456-header list.
+
+## Complete mailbox header loading (latest local change)
+
+Folders now progressively load all headers after the fast initial latest-40
+batch. Each older-page read is bounded to 100 headers and uses an authenticated,
+owner/connection/UIDVALIDITY-bound cursor. Bodies remain on demand; no downloaded
+email copies are persisted. Refresh merges preserve older loaded headers without
+duplicates. Sorting is a compact button beside Refresh, and desktop selects the
+newest message automatically instead of starting with a blank reader.
+
+Verified locally: 563 automated checks, TypeScript, OpenNext build and five
+mailbox browser flows passed. A fictional 456-message mailbox reached exactly
+456 unique headers, retained them after refresh, sorted both ways and opened
+the newest email. Pagination retries and cross-owner/origin rejection passed;
+existing rendering, attachments, privacy, recovery and scrolling checks passed.
+Downloaded-mail table counts remain zero. No production deployment occurred.
+
+## Mailbox recovery and rendering correction (latest local build)
+
+- Inbox totals come from the provider; loaded headers and enquiry/search matches
+  are separately labelled. Newest-first sorting is default, with an oldest-first
+  option. Previews remain temporary tab memory only.
+- Time-bounded reads, automatic retries and online recovery replace the need to
+  refresh after a temporary connection failure. Invalid passwords still require
+  reconnecting. Failed HTML loads no longer expose a stripped preview body.
+- Original email uses an authenticated transient rendering frame with two HTML
+  sanitization boundaries and a no-script policy. This fixes the inherited CSP
+  blocking approved images without widening the main app's security policy.
+  Embedded images load progressively; failed images have a retry control.
+- External-image approval and tracking warning remain. Dead/expired sender URLs
+  and provider response times are outside the reader's control. No remote image
+  proxy, provider mailbox deletion or production deployment was introduced.
+
+Validation: 561 automated checks, TypeScript and the OpenNext local build passed.
+All four mailbox browser flows passed with fictional local accounts, including
+offline recovery, original styled HTML, decoded CID/remote images, failed-image
+retry, full totals versus filtered matches, newest-first sorting, independent
+scrolling and renderer authorization. Downloaded-email table counts remain zero;
+the existing mailbox connection remains present. No real mailbox contents or
+external SMTP delivery were used for these regression tests.
+
+## Preview-only email and conservative enquiry triage
+
+Synced mail no longer writes downloaded headers/bodies into D1. Sync responses
+and opened content stay in temporary tab memory, not localStorage or a shared
+email cache. Signed owner/connection-bound references allow private on-demand
+reads without database message rows. Background fetching is disabled. Explicit
+drafts, submission history, encrypted connection settings and reviewed CRM leads
+are separate; provider email is untouched. Legacy recovery tables remain unused.
+
+The user-approved local cleanup removed 80 downloaded cache rows, retaining the
+one mailbox connection. Saved drafts/history were unchanged (zero before/after).
+Cache counts remained zero after browser tests. No production cleanup/deployment.
+
+Possible enquiries replaces the broad keyword buyer flag: automated platforms,
+Facebook conversions and newsletters are excluded, while explicit RFQs/website
+requests remain review candidates. This is conservative rule-based triage, not
+verified buyers; generic-subject requests can be missed. Explicit AI analysis
+reads the message on demand, disables answer caching and gates sales output on
+actual buying evidence. No automatic lead creation.
+
+557 automated checks, TypeScript, OpenNext build and three mailbox browser flows
+passed, including transient responses, original-format rendering, owner checks,
+attachments, read flags, manual analysis and notification filtering.
+
+## Original sender-format email reader
+
+The latest local reader preserves sender CSS and email presentation attributes
+inside a sanitized, no-script iframe with restrictive CSP. CRM styles no longer
+override email tables or branding. Private Content-ID raster logos/signatures
+resolve to bounded blob images, while external images require per-message
+approval with a tracking warning. Scripts, forms, nested frames, remote fonts
+and remote stylesheets remain disabled. No schema change or production action.
+
+554 automated checks, TypeScript and OpenNext build passed. Three mailbox browser
+flows verify preserved brand colours/widths, embedded logo rendering, blocked
+scripts, external-image consent, caching, attachment controls and independent
+scrolling. Fictional accounts only; the existing real connection was preserved.
+Earlier stripping-style notes below describe superseded reader iterations.
+
+## Email loading, links and preview polish
+
+Uncached bodies now show a skeleton, with sender/subject retained and attachment
+metadata loaded independently. Small raster thumbnails are bounded to two files
+of 256 KB each; larger-file previews are explicit and display a loading state.
+Safe links remain clickable with opener isolation, while scripts/unsafe schemes
+and external image loads remain blocked. Removed the overlapping sticky reader
+toolbar and nested layout-table box borders; normalized mail-control icon sizes.
+One preferred MIME representation plus a private, mounted-mailbox-only cache
+reduces repeat downloads. No browser persistence or shared cross-user body cache.
+
+554 automated checks, TypeScript, OpenNext build and three mailbox browser flows
+passed, including delayed-body skeletons, early attachments, safe links, cached
+repeat selection and long-message/responsive scrolling. The local preview at
+8788 was rebuilt, preserving the real connection. No deployment or new migration;
+first provider loads still depend on actual network/mail-server latency.
+
+## Headers-first mailbox polish and actual Sent/Drafts (19 October 2026)
+
+Latest local candidate: compact Outlook-style folder/list/reader layout,
+responsive folder navigation, headers-first inbox synchronization, independently
+loaded bodies/attachments, and sanitized semantic HTML retaining table columns.
+Provider Sent/Drafts are discovered read-only and show server totals; the latest
+40 messages per folder are cached privately. Copying a provider draft creates a
+local draft. Enercore submission records are labelled Activity, not provider Sent
+or delivery confirmation. Migration 0021 is applied only to the saved local
+workspace; recovery profile `mail-folders` preserves the prior profiles.
+
+Verified: 551 automated checks, TypeScript, OpenNext build, 33 recovery unit cases,
+and the isolated local D1 recovery rehearsal through 0021 passed. All three
+mailbox browser scenarios passed, including deliberately delayed body loading,
+immediate headers, real-folder fixture counts, HTML safety/table rendering,
+folder-switch isolation, attachment controls, long-message wheel scrolling,
+short-screen page scrolling and 390/768/1440 light/dark layouts. Reviewed final
+desktop and phone screenshots. These use fictional accounts; the existing real
+connection was preserved, not used for test assertions. No external message was
+sent, production migration run or deployment performed. Phase 4 remains on hold.
+
+
+## Mail scrolling follow-up
+
+Added a realistic 40-message/long-forward regression, visible scrollbars and
+up/down controls for both panes, plus short-screen outer-page scrolling instead
+of clipping. Attachments now precede long message bodies; CID placeholders are
+readable and inline/root MIME attachments are discovered more robustly. 547
+automated checks, TypeScript, OpenNext and two mailbox browser scenarios passed
+locally. The embedded host was not directly tested. No connection reset,
+deployment or production migration occurred.
+
+## Compact email reader and attachments
+
+The latest local mailbox candidate removes the whole-message 256 KB block by
+fetching MIME text independently, adds on-demand attachment listing/downloads
+and previews, and uses a fixed-height reader/list with independent scrolling.
+Visible-page checks run every five seconds plus on focus/manual refresh; this
+is polling, not IMAP push. Existing size-blocked cache rows repair on sync/open.
+546 automated checks, TypeScript, OpenNext and the expanded mailbox browser flow
+passed. See [MAILBOX-CONNECTIONS.md](MAILBOX-CONNECTIONS.md) for limits and preview
+support. Existing connections are retained; no new migration or deployment.
+
+## Private mailbox connection candidate (19 October 2026)
+
+Email now includes a per-user cPanel connection screen, encrypted credentials,
+bounded INBOX synchronization, private read/unread updates, lead-review filtering,
+drafts, replies and explicitly confirmed SMTP submission. See
+[MAILBOX-CONNECTIONS.md](MAILBOX-CONNECTIONS.md) for limits and setup.
+Migration 0020 and recovery profile `mailboxes` are local candidates only.
+The supplied real mailbox password was not embedded or used to log in.
+Actual provider authentication and delivery remain unverified. No deployment,
+production migration, real message send or Phase 4/storage activation occurred.
+
+## Local launch parity correction (19 October 2026)
+
+The normal `npm run dev` launch now uses the built production-mode **local**
+Worker, D1, credential sessions and LiveKit server at port 8788. The former
+browser-only preview is explicitly `npm run dev:ui` at port 3000. This does not
+change production configuration or weaken preview authorization guards.
+
+The launcher remembers its selected isolated state directory. Resuming does not
+reseed/overwrite edited design records; `--fresh` explicitly creates a separate
+retained database. The saved Phase 10 workspace was reopened through this
+launcher. Local launcher/config isolation checks, 534 automated checks, type
+checking and all ten call/media browser scenarios passed with browser CSP
+enabled, including ringing, device recovery, screen sharing, network reconnection
+and phone layouts. See [LOCAL-TESTING.md](LOCAL-TESTING.md) for the difference between real
+local services, provider simulations and unimplemented/pending integrations.
+The newer private-mailbox candidate above supersedes the former IMAP setup gap;
+other provider limitations remain as documented.
+
+## Latest local candidate — Phase 10 preparation (19 October 2026)
+
+The existing Email page now includes **Outbound & templates**: private
+record-linked email/WhatsApp drafts, immutable company templates, scheduled
+review reminders, explicit recipient/permission confirmation and retained
+submission history. The cPanel SMTP adapter and optional approved-template Meta
+adapter are disabled until server-side configuration is supplied. Test sending
+captures locally; it is never delivery proof.
+
+This historical preparation entry is superseded by the private-mailbox candidate
+above. Real provider verification, WhatsApp onboarding and delivery/opt-out
+webhooks remain pending. Phase 4/R2 stays on hold; no production action was taken. See
+[PHASE-10-COMMUNICATION.md](PHASE-10-COMMUNICATION.md) for scope and setup boundaries.
+Migration 0019 and the `communication` recovery profile are additive local work;
+release still requires separately authorized validation of live migration history.
+Verified locally: 532 automated checks, type checking, OpenNext build, 13 final
+browser scenarios, 31 recovery unit cases and the real D1 recovery rehearsal.
+
+## Latest local candidate — Phase 9 (19 October 2026)
+
+Phase 8 Tasks and Phase 9 Operations are implemented locally; they have not
+been released by this work. Phase 4/R2 remains on hold. Phase 9 adds approved
+purchase orders, lot/warehouse stock receipts and dispatches, immutable stock
+reversals, supplier invoices/payments and scoped operations history. See
+`PHASE-9-OPERATIONS.md` for permissions, limits and verification evidence.
+The latest candidate passed 508 unit checks, type checking, OpenNext build,
+10 final browser scenarios and the real local D1 recovery rehearsal. Migrations
+0017 and 0018 require a separately authorized release against verified live
+history; no production data or deployment was changed here.
+
 ## Current architecture (authoritative)
 
 Everything below this section is a reverse-chronological work log. Where an

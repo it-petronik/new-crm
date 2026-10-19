@@ -112,7 +112,7 @@ export type Audit = {
    * "account" for user administration, "collaboration" for chat room
    * administration; absent for business records.
    */
-  subject?: "account" | "collaboration" | null;
+  subject?: "account" | "collaboration" | "task" | "operations" | null;
   /** Branch of the account concerned; null or absent means group-wide. */
   branch?: string | null;
 };
@@ -366,7 +366,7 @@ export function scopedWorkspace(actor: Actor, workspace: Workspace): Workspace {
     audit: workspace.audit.filter((a) =>
       // Room administration is audited for the record, but a private room's
       // name must never surface in anyone's Activity feed.
-      a.subject === "collaboration"
+      a.subject === "collaboration" || a.subject === "task"
         ? false
         : // Rows written before `subject` existed are business-record events
           // and keep exactly their previous visibility.

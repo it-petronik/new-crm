@@ -11,6 +11,7 @@ import {
   messages,
   notificationPreferences,
   notifications,
+  tasks,
   users,
   type NotificationRow,
   type UserRow,
@@ -25,6 +26,7 @@ import {
   type NotificationView,
 } from "./notification-types";
 import type { NotificationDraft, Person } from "./notification-rules";
+import { canSeeTask } from "./tasks/model";
 
 /**
  * Persistence and delivery for notifications.
@@ -176,6 +178,10 @@ async function redact(db: Database, actor: Actor, rows: NotificationView[], sour
     for (const r of [...own, ...invited]) standaloneOk.add(r.id);
   }
   const messageIds = [...new Set(source.map((r) => r.messageId).filter((id): id is string => !!id))];
+  const taskIds = [...new Set(source.filter((r) => r.entityType === "task").map((r) => r.entityId))];
+  const visibleTasks = new Set<string>();
+  for (const ids of chunks(taskIds))
+    for (const t of await db.select().from(tasks).where(inArray(tasks.id, ids)).all()) if (canSeeTask(actor, t)) visibleTasks.add(t.id);
 
   const readable = new Set<string>();
   for (const ids of chunks(recordIds)) {
@@ -208,6 +214,7 @@ async function redact(db: Database, actor: Actor, rows: NotificationView[], sour
     const allowed =
       !target ||
       target.kind === "profile" ||
+      (target.kind === "task" && visibleTasks.has(target.taskId)) ||
       (target.kind === "record" && readable.has(target.recordId)) ||
       (target.kind === "conversation" && reachable.has(target.conversationId)) ||
       (target.kind === "meeting" && (target.conversationId ? reachable.has(target.conversationId) : standaloneOk.has(target.meetingId)));

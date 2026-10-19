@@ -4,11 +4,18 @@ import type { D1Database } from "@cloudflare/workers-types";
 export { CollabHub, DOQueueHandler, DOShardedTagCache, BucketCachePurge } from "../worker";
 export { FakeApollo } from "./fake-apollo-worker";
 export { FakeAi } from "./fake-ai-worker";
+export {FakeMailbox} from "./fake-mailbox-worker";
+import {runMailboxSweep} from "../src/realtime/mailbox-sweep";
+import { runAutomationSweep } from "../src/realtime/automation-sweep";
 
 type TestEnv = Parameters<typeof app.fetch>[1] & { DB: D1Database; COLLAB_TEST_CONTROL?: string };
 export default {
   ...app,
   async fetch(request: Request, env: TestEnv, ctx: unknown) {
+    if(new URL(request.url).pathname==="/__test/mailbox-sweep"){
+      if(request.method!=="POST"||!env.COLLAB_TEST_CONTROL||request.headers.get("X-Test-Control")!==env.COLLAB_TEST_CONTROL)return new Response("Not found",{status:404});
+      return Response.json(await runMailboxSweep(env as never));
+    }
     if (new URL(request.url).pathname === "/__test/expire-snooze") {
       // The single fixture clock adjustment must use the running D1 owner;
       // opening the live SQLite file for writes can race its transactions.
@@ -20,6 +27,13 @@ export default {
       await env.DB.prepare('UPDATE "ProactiveState" SET "snoozedUntil" = ? WHERE "userId" = ? AND "signalKey" = ?')
         .bind(Date.now() - 1000, userId, signalKey).run();
       return Response.json({ ok: true });
+    }
+    if (new URL(request.url).pathname === "/__test/automation-sweep") {
+      // The scheduled five-minute task automation, on demand, for local
+      // review and browser tests. Same token protection; never in worker.ts.
+      if (request.method !== "POST" || !env.COLLAB_TEST_CONTROL || request.headers.get("X-Test-Control") !== env.COLLAB_TEST_CONTROL)
+        return new Response("Not found", { status: 404 });
+      return Response.json(await runAutomationSweep(env as never));
     }
     const response = await app.fetch(request, env, ctx);
     // Local review uses a loopback LiveKit server, not LiveKit Cloud. Keep

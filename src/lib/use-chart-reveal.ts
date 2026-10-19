@@ -11,7 +11,9 @@ export function useChartReveal(enabled = true) {
     if (!window.IntersectionObserver || window.matchMedia("(prefers-reduced-motion: reduce)").matches) { setEntered(true); return; }
     const observer = new IntersectionObserver(entries => {
       if (entries.some(entry => entry.isIntersecting)) { setEntered(true); observer.disconnect(); }
-    }, { threshold: .15 });
+    // A zoomed chart can be taller than the viewport. Requiring a fixed
+    // fraction to enter would leave its data invisible indefinitely.
+    }, { threshold: 0 });
     observer.observe(element);
     return () => observer.disconnect();
   }, [enabled]);

@@ -67,7 +67,7 @@
   .list-query-controls p[role="alert"] { color:#c5263d; }
   [data-theme="dark"] .list-query-controls p[role="alert"] { color:#ff8799; }
   .chart-segment:focus, .chart-segment:focus-visible { outline:none; }
-  .chart-segment:focus-visible { stroke-width:29; filter:drop-shadow(0 0 2px var(--ink)); }
+  .chart-segment:focus-visible { filter:drop-shadow(0 0 2px var(--ink)); }
   .chart-donut svg:focus { outline:none; }
   .record-card-shell > .lead-card:hover, .record-card-shell > .collection-card:hover,
   .record-card-shell > .lead-card:active, .record-card-shell > .collection-card:active { transform:none; border:0 !important; box-shadow:none !important; background:transparent; border-radius:0; }
@@ -119,24 +119,28 @@
   .chart-interactive { width:100%; color:inherit; font:inherit; text-align:left; background:transparent; border:0; cursor:pointer; border-radius:6px; }
   .chart-interactive:hover, .chart-interactive[aria-pressed="true"] { background:var(--accent-soft); }
   .chart-interactive:focus-visible { outline:2px solid var(--brand-action); outline-offset:3px; }
-  .chart-segment { cursor:pointer; transition:stroke-width 160ms ease,opacity 160ms ease; }
-  .chart-segment:hover, .chart-segment[aria-pressed="true"] { stroke-width:29; }
+  /* Keep every arc the same thickness. Growing a selected stroke creates
+     stepped seams where it meets the adjacent segment, especially at zoom. */
+  .chart-segment { cursor:pointer; transition:opacity 160ms ease,filter 160ms ease; }
+  .chart-segment:hover, .chart-segment[aria-pressed="true"] { filter:brightness(1.08); }
   /* Always present so selecting or clearing a segment never shifts the layout. */
   .chart-selection { position:relative; padding:12px 26px 12px 12px; background:var(--accent-soft); border:1px solid var(--line); border-radius:8px; font-size:12px; margin-top:12px; min-height:62px; }
   .chart-selection[data-empty] { background:transparent; border-style:dashed; color:var(--muted); }
   .chart-selection[data-empty] strong { font-weight:500; }
   .chart-selection span { display:block; margin-top:6px; line-height:1.5; }
   .chart-selection button { position:absolute; right:6px; top:6px; background:none; border:0; color:inherit; cursor:pointer; }
-  .insight-stack .chart-donut { display:grid; grid-template-columns:minmax(150px,190px) minmax(0,1fr); align-items:center; gap:24px; margin:0; padding:12px 20px 24px; }
-  .insight-stack .chart-donut svg { width:100%; max-width:100%; height:auto; }
+  /* Wrap against the actual card width, not the viewport. This also works
+     when browser/text zoom or the sidebar reduces the available space. */
+  .insight-stack .chart-donut { display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:24px; margin:0; padding:12px 20px 24px; }
+  .insight-stack .chart-donut svg { flex:0 1 160px; width:160px; max-width:100%; height:auto; aspect-ratio:1; }
   .donut-total { fill:var(--ink); font-size:25px; font-weight:650; letter-spacing:-1px; }
   .donut-caption { fill:var(--muted); font-size:11px; }
-  .donut-breakdown { min-width:0; }
-  .donut-legend-row { display:grid; grid-template-columns:9px minmax(0,1fr) auto; align-items:start; gap:10px; padding:13px 0; border-bottom:1px solid var(--line); }
+  .donut-breakdown { flex:1 1 260px; min-width:0; }
+  .donut-legend-row { display:grid; grid-template-columns:9px minmax(0,1fr); align-items:start; gap:6px 10px; padding:13px 0; border-bottom:1px solid var(--line); }
   .donut-legend-row i { width:9px; height:9px; border-radius:3px; margin-top:4px; }
   .donut-legend-row strong, .horizontal-chart-label strong { font-size:12px; font-weight:550; overflow-wrap:anywhere; }
   .donut-legend-row small { display:block; font-size:11px; color:var(--muted); margin-top:6px; }
-  .donut-legend-row b { font-size:12px; white-space:nowrap; }
+  .donut-legend-row b { grid-column:2; font-size:12px; overflow-wrap:anywhere; }
   .insight-stack .chart-horizontal { display:grid; gap:18px; margin:0; padding:10px 20px 22px; }
   .horizontal-chart-label { display:flex; justify-content:space-between; align-items:baseline; gap:12px; margin-bottom:8px; }
   .horizontal-chart-label b { font-size:12px; white-space:nowrap; }
@@ -144,10 +148,6 @@
   .horizontal-chart-track span { display:block; height:100%; border-radius:5px; }
   .horizontal-chart-row small { display:block; color:var(--muted); font-size:11px; margin-top:6px; }
   .chart-note { color:var(--muted); font-size:10px; line-height:1.5; margin:12px 0 0; }
-  @media (min-width:1001px) and (max-width:1250px), (max-width:560px) {
-    .insight-stack .chart-donut { grid-template-columns:1fr; gap:4px; }
-    .insight-stack .chart-donut svg { width:170px; justify-self:center; }
-  }
   .insight-tabs { display:flex; gap:4px; margin:18px 0 0; padding:4px; background:var(--bg); border:1px solid var(--line); border-radius:11px; width:fit-content; max-width:100%; overflow-x:auto; }
   .insight-tabs button { flex:0 0 auto; padding:8px 18px; border:0; border-radius:8px; background:transparent; color:var(--muted); font:inherit; font-size:13px; font-weight:550; cursor:pointer; white-space:nowrap; }
   .insight-tabs button:hover { color:var(--ink); }

@@ -4,6 +4,7 @@ import type { Actor, RecordItem } from "./domain";
 import { afterResponse, publish } from "./collab-realtime";
 import { authorised, recordChangeDrafts, type NotificationDraft } from "./notification-rules";
 import { activePeople, createNotifications, readConversation, resolveApproval } from "./notification-store";
+import { processEvents } from "./tasks/automation";
 
 /**
  * The one entry point API routes use to raise notifications. Everything runs
@@ -128,5 +129,24 @@ export function notifyAccount(
       publish,
       event.actor ? new Map([[event.actor.id, event.actor.name]]) : undefined,
     );
+  });
+}
+
+/** A task was given to someone (by a person or by an automation rule). */
+export function notifyTask(db: Database, drafts: NotificationDraft[]) {
+  if (!drafts.length) return Promise.resolve();
+  return afterResponse("task", () => createNotifications(db, drafts, publish));
+}
+
+/**
+ * Processes the automation events a business change just enqueued, after
+ * the response. Anything left (a failure, a lost Worker) is picked up by the
+ * five-minute sweep; dedupe keys make the second attempt harmless.
+ */
+export function runAutomation(db: Database, ids: string[]) {
+  if (!ids.length) return Promise.resolve();
+  return afterResponse("automation", async () => {
+    const { drafts } = await processEvents(db, { ids });
+    if (drafts.length) await createNotifications(db, drafts, publish);
   });
 }

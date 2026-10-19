@@ -12,17 +12,19 @@
 .table-scroll tbody tr, .action-card { transition:background-color var(--motion-fast) ease; }
 .table-scroll tbody tr:focus-within { background:var(--e-accent-soft); }
 .table-scroll tbody { animation:workspaceReveal var(--motion-enter) ease-out; }
-.chart-segment { transition:stroke-width var(--motion-fast) var(--ease), opacity var(--motion-fast) ease, stroke-dasharray var(--motion-chart) var(--ease); }
-.chart-segment[data-dimmed="true"] { opacity:.32; }
+.chart-segment { transition:opacity var(--motion-fast) ease, filter var(--motion-fast) ease; }
+.chart-segment[data-dimmed="true"] { opacity:.55; }
 .horizontal-chart-track span { transform-origin:left; transition:width var(--motion-chart) var(--ease), filter var(--motion-fast) ease; }
 .chart-interactive:hover .horizontal-chart-track span { filter:brightness(1.1); }
 [data-chart-entered="true"] .horizontal-chart-track span { animation:chartBarReveal var(--motion-chart) var(--ease) both; }
-[data-chart-entered="true"] .chart-segment { animation:chartRingReveal var(--motion-chart) var(--ease) both; }
+[data-chart-entered="true"] .chart-segment { animation:chartRingReveal var(--motion-chart) var(--ease); }
 .chart-selection { transition:background-color var(--motion-fast) ease; }
 [data-chart-entered="false"] .horizontal-chart-track span { transform:scaleX(0); }
 [data-chart-entered="false"] .chart-segment { opacity:0; }
 @keyframes chartBarReveal { from { transform:scaleX(0); } to { transform:scaleX(1); } }
-@keyframes chartRingReveal { from { stroke-dasharray:0 100; opacity:0; } }
+/* Fade the complete geometry in. Animating dash lengths briefly produces
+   misleading wedges and raster seams on scaled SVGs. */
+@keyframes chartRingReveal { from { opacity:0; } }
 :is(.ui-select-menu, .ui-calendar-popover, .ui-time-popover, .ui-help-popover, .ui-guide-popover)[data-state="open"] { animation:surfaceReveal var(--motion-enter) var(--ease); }
 :is(.ui-select-menu, .ui-calendar-popover, .ui-time-popover, .ui-help-popover, .ui-guide-popover)[data-state="closed"] { animation:surfaceHide var(--motion-fast) ease-in; }
 .ui-tooltip { max-width:min(260px,calc(100vw - 24px)); padding:9px 12px; color:var(--e-text); background:var(--e-surface); border:1px solid var(--e-border); border-radius:10px; box-shadow:var(--e-shadow-overlay); font-size:11px; line-height:1.55; font-weight:500; transform-origin:var(--radix-tooltip-content-transform-origin); }

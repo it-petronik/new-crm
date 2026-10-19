@@ -24,13 +24,15 @@ import {
   type RecordItem,
 } from "@/lib/domain";
 export type WorkspaceView =
-  "mail" | "prospecting" | "collaboration" | "ai" | "actions" | "notifications" | "profile" | "appearance" | "access" | "shortcuts";
+  "mail" | "prospecting" | "collaboration" | "ai" | "actions" | "tasks" | "operations" | "notifications" | "profile" | "appearance" | "access" | "shortcuts";
 export const viewLabels: Record<WorkspaceView, string> = {
   mail: "Email",
   prospecting: "Prospecting",
   collaboration: "Collaboration",
   ai: "Enercore AI",
   actions: "Action Center",
+  tasks: "Tasks",
+  operations: "Operations",
   notifications: "Notifications",
   profile: "My profile",
   appearance: "Appearance",

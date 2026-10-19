@@ -28,7 +28,7 @@ export default function MailIntakePanel({ message, records, onCreate }: IntakePr
   return <section className="mail-intake">
     <div className="mail-intake-heading"><div><h3><Sparkles size={16}/>Email to CRM</h3><p>Extract details and review before creating a record.</p></div><Button className="secondary compact" disabled={busy} onClick={() => void analyze()}>{busy ? "Analysing…" : result ? "Analyse again" : "Analyse email"}</Button></div>
     {error && <p role="alert">{error}</p>}
-    {s && <div className="ai-answer mail-intake-result" role="region" aria-label="Email analysis result" tabIndex={0}><AiResultHeading/><small>{result?.mode === "simulation" ? "Local simulation · not a live AI result" : "AI suggestion · verify before saving"}</small>
+    {s && <div className="ai-answer mail-intake-result" role="region" aria-label="Email analysis result" tabIndex={0}><AiResultHeading/><small>{result?.mode === "simulation" ? "Local simulation · not a live AI result" : result?.mode==="extraction"?"Literal email extraction · not an AI result · verify before saving":"AI suggestion · verify before saving"}</small>
       <h4>{({sales:"Sales enquiry",customer:"Customer registration",it:"IT support issue",other:"Needs your review"})[s.category]}</h4><p className="ai-summary">{s.summary}</p>
       <dl><dt>Company</dt><dd>{s.company || "Not stated"}</dd><dt>Contact</dt><dd>{s.contact || "Not stated"}</dd><dt>Product</dt><dd>{s.product || "Not stated"}</dd><dt>Quantity</dt><dd>{s.quantity === null ? "Not stated" : `${s.quantity} ${s.unit}`}</dd></dl>
       <details><summary>Source excerpts</summary>{s.evidence.map((v,i) => <blockquote key={i}>{v}</blockquote>)}</details>

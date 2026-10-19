@@ -57,3 +57,4 @@
   .workspace :global(.action-card-actions button) { justify-content:center; white-space:normal; }
   .workspace :global(.action-card-actions button:first-child:nth-last-child(n+3)) { grid-column:1/-1; }
 }
+.workspace :global(.action-card-task) { display: inline-flex; align-items: center; gap: 4px; padding: 0; font-size: 11px; color: var(--e-text-secondary); }

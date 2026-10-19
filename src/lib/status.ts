@@ -19,13 +19,13 @@ const TONES: Record<Tone, string[]> = {
   // In hand and progressing.
   active: ["Contacted", "Qualified", "In Progress", "In Transit", "Confirmed", "Active", "Available", "Picked Up", "On Leave", "Responded"],
   // Waiting on someone else.
-  info: ["Quote Sent", "Sent", "Open", "Pending Planning", "Awaiting Collection", "Partially Paid", "Documents Pending", "Ready to Dispatch", "Sent externally", "Received", "Under review", "Reviewed"],
+  info: ["Quote Sent", "Sent", "Open", "Pending Planning", "Awaiting Collection", "Partially Paid", "Documents Pending", "Ready to Dispatch", "Sent externally", "Received", "Under review", "Reviewed", "Would create"],
   // Needs a decision or is slipping.
-  warning: ["Negotiation", "Pending Approval", "On Hold", "Credit Hold", "Low Stock", "Expiring", "Expiring soon", "No response"],
+  warning: ["Negotiation", "Pending Approval", "On Hold", "Credit Hold", "Low Stock", "Expiring", "Expiring soon", "No response", "Skipped"],
   // Concluded well.
-  success: ["Won", "Accepted", "Paid", "Delivered", "Completed", "Approved", "Resolved", "Selected", "Valid"],
+  success: ["Won", "Accepted", "Paid", "Delivered", "Completed", "Approved", "Resolved", "Selected", "Valid", "Succeeded"],
   // Money or goods are late, or the record failed.
-  danger: ["Lost", "Overdue", "Delayed", "Rejected", "Declined", "Expired"],
+  danger: ["Lost", "Overdue", "Delayed", "Rejected", "Declined", "Expired", "Failed"],
 };
 
 const BY_STATUS = new Map<string, Tone>();

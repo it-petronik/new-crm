@@ -21,7 +21,8 @@ import { transition, addNote, recordPayment, assign } from "@/lib/workflow";
 import { findUserById } from "@/lib/data";
 import { mayOwn } from "@/lib/notification-rules";
 import { toPerson } from "@/lib/notification-store";
-import { notifyRecordChange } from "@/lib/notify";
+import { notifyRecordChange, runAutomation } from "@/lib/notify";
+import { automationOutbox } from "@/lib/tasks/automation";
 import { quotationError } from "@/lib/quotation";
 import { mutateRecord } from "@/lib/record-mutations";
 import { isCashEntry, cashEntryError } from "@/lib/cashbook";
@@ -307,6 +308,8 @@ export async function POST(request: Request) {
     // is written together with that contact, as its primary contact.
     const mainContact = body.requestId && !importBatch ? await newRecordContact(db, actor, record, body.requestId) : null;
     const created = mainContact ? mainContact.record : record;
+    // An IT ticket's triage automation is enqueued in the same batch.
+    const outbox = await automationOutbox(db, { after: created });
     try {
       await createRecordWithAudit(
         db,
@@ -320,7 +323,7 @@ export async function POST(request: Request) {
           action: `Created ${record.kind}${importBatch ? ` (CSV import ${importBatch})` : ""}`,
           recordId: record.id, after: created,
         },
-        mainContact ? [...mainContact.statements] : [],
+        [...(mainContact ? mainContact.statements : []), ...outbox.statements],
       );
     } catch (error) {
       // Two simultaneous submissions of the same key race past the read above;
@@ -336,6 +339,7 @@ export async function POST(request: Request) {
       throw error;
     }
     await notifyRecordChange(db, { actor, after: created, version: 1 });
+    await runAutomation(db, outbox.ids);
     return NextResponse.json({ record: created, duplicate: false }, { status: 201 });
   } catch (error) {
     // The commercial rules already speak plainly ("Choose an active contact
@@ -463,6 +467,9 @@ export async function PATCH(request: Request) {
           ownerId: r.ownerId, status: r.status, payload: r,
         }));
       const event = result.audit[0];
+      // A quotation's acceptance enqueues its handoff automation in the same
+      // batch as the order, shipment and invoice, after they are created.
+      const outbox = await automationOutbox(db, { before: record, after: changed, created: created.map((r) => r.payload as RecordItem) });
       // The version guard preserves the original optimistic-concurrency check.
       const applied = await updateRecordWithAudit(
         db,
@@ -475,6 +482,7 @@ export async function PATCH(request: Request) {
           before: record, after: changed, at: new Date(event.at),
         },
         created,
+        outbox.statements,
       );
       if (!applied)
         throw new Error("Another user updated this record. Refresh and retry.");
@@ -485,6 +493,7 @@ export async function PATCH(request: Request) {
         version: row.version + 1,
         created: created.map((r) => r.payload as RecordItem),
       });
+      await runAutomation(db, outbox.ids);
     }
     return NextResponse.json({ ok: true });
   } catch (error) {

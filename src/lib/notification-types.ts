@@ -19,7 +19,9 @@ export type NotificationTarget =
   | { kind: "conversation"; conversationId: string; messageId: string | null }
   // Opens the meeting's pre-join screen (never joins by itself).
   | { kind: "meeting"; meetingId: string; conversationId: string | null }
-  | { kind: "profile" };
+  | { kind: "profile" }
+  // A task opens in Tasks; its visibility is checked again when shown.
+  | { kind: "task"; taskId: string };
 
 export type NotificationView = {
   id: string;
@@ -83,6 +85,7 @@ export function targetFor(row: {
   if (row.entityType === "conversation")
     return { kind: "conversation", conversationId: row.conversationId ?? row.entityId, messageId: row.messageId };
   if (row.entityType === "account") return { kind: "profile" };
+  if (row.entityType === "task") return { kind: "task", taskId: row.entityId };
   return null;
 }
 
@@ -90,6 +93,7 @@ export function targetFor(row: {
 export const ACTION_TYPES = new Set([
   "approval.requested",
   "record.assigned",
+  "task.assigned",
   "ticket.created",
   "shipment.to_plan",
   "invoice.to_issue",

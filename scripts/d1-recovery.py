@@ -101,7 +101,7 @@ def split_export(text):
 
 
 def migrations(profile):
-    return [p for p in sorted((ROOT/'drizzle').glob('[0-9][0-9][0-9][0-9]_*.sql')) if int(p.name[:4]) <= {'pre-phase6': 12, 'phase6': 13, 'phase7': 14, 'phase7-apollo': 15}[profile]]
+    return [p for p in sorted((ROOT/'drizzle').glob('[0-9][0-9][0-9][0-9]_*.sql')) if int(p.name[:4]) <= {'pre-phase6': 12, 'phase6': 13, 'phase7': 14, 'phase7-apollo': 15, 'shared-options': 16, 'tasks': 17, 'operations': 18, 'communication': 19, 'mailboxes': 20, 'mail-folders': 21}[profile]]
 
 
 def expected_schema(profile):
@@ -180,7 +180,7 @@ def validate(db, profile):
                 raise RecoveryError('Cyclic BusinessRecord ancestry')
             seen.add(current['id'])
             current = records.get(current.get('parentId'))
-    if profile in ['phase6', 'phase7', 'phase7-apollo']:
+    if profile in ['phase6', 'phase7', 'phase7-apollo', 'shared-options', 'tasks', 'operations', 'communication', 'mailboxes', 'mail-folders']:
         for table in ('Contact', 'SupplierProductCapability'):
             for (details,) in db.execute('SELECT details FROM ' + quote_name(table)):
                 obj = json_object(details)
@@ -204,18 +204,59 @@ def validate(db, profile):
         # Roll back the validation transaction even on success: no row changes.
         db.execute('SAVEPOINT validate_guards')
         try:
-            for table in ('Contact', 'Deal', 'SupplierProductCapability', 'BusinessRecord') + (('DealSupplier', 'SupplierRFQ', 'SupplierOffer', 'CommercialScenario', 'ApolloImport') if profile in ['phase7', 'phase7-apollo'] else ()):
+            for table in ('Contact', 'Deal', 'SupplierProductCapability', 'BusinessRecord') + (('DealSupplier', 'SupplierRFQ', 'SupplierOffer', 'CommercialScenario', 'ApolloImport') if profile in ['phase7', 'phase7-apollo', 'shared-options', 'tasks', 'operations', 'communication', 'mailboxes', 'mail-folders'] else ()):
                 db.execute('UPDATE ' + quote_name(table) + ' SET id=id')
         finally:
             db.execute('ROLLBACK TO validate_guards')
             db.execute('RELEASE validate_guards')
-    if profile in ['phase7', 'phase7-apollo']:
+    if profile in ['phase7', 'phase7-apollo', 'shared-options', 'tasks', 'operations', 'communication', 'mailboxes', 'mail-folders']:
         for table in ('SupplierRFQ', 'SupplierOffer', 'CommercialScenario'):
             for (details,) in db.execute('SELECT details FROM '+quote_name(table)):
                 json_object(details)
         broken=db.execute("SELECT 1 FROM SupplierOffer o LEFT JOIN SupplierOffer p ON p.id=o.previousId WHERE (o.revision=1 AND (o.previousId IS NOT NULL OR o.seriesId!=o.id)) OR (o.revision>1 AND (p.id IS NULL OR p.revision!=o.revision-1 OR p.seriesId!=o.seriesId OR p.dealId!=o.dealId OR p.supplierId!=o.supplierId OR p.productId!=o.productId OR p.status!='Superseded')) LIMIT 1").fetchone()
         if broken:
             raise RecoveryError('Invalid Supplier Offer revision chain')
+    if profile in ['tasks', 'operations', 'communication', 'mailboxes', 'mail-folders']:
+        # Phase 8: rule conditions and outbox data are JSON objects; every
+        # task, rule and run stays inside its linked record's company/branch.
+        for table, column in (('AutomationRule', 'conditions'), ('AutomationEvent', 'data')):
+            for (value,) in db.execute('SELECT ' + quote_name(column) + ' FROM ' + quote_name(table)):
+                json_object(value)
+        if db.execute("SELECT 1 FROM Task t LEFT JOIN BusinessRecord r ON r.id=t.linkedRecordId LEFT JOIN AutomationRule a ON a.id=t.ruleId WHERE (t.linkedRecordId IS NOT NULL AND (r.id IS NULL OR r.company!=t.company OR r.branch!=t.branch)) OR (t.ruleId IS NOT NULL AND (a.id IS NULL OR a.company!=t.company)) LIMIT 1").fetchone():
+            raise RecoveryError('Task scope differs from its linked record or rule')
+        if db.execute("SELECT 1 FROM AutomationRun x LEFT JOIN AutomationRule a ON a.id=x.ruleId LEFT JOIN Task t ON t.id=x.taskId WHERE a.id IS NULL OR a.company!=x.company OR (x.taskId IS NOT NULL AND (t.id IS NULL OR t.ruleId!=x.ruleId OR t.company!=x.company)) LIMIT 1").fetchone():
+            raise RecoveryError('Automation run scope differs from its rule or task')
+        # Re-run the installed scope guards over every row; roll back after.
+        db.execute('SAVEPOINT validate_task_guards')
+        try:
+            db.execute('UPDATE Task SET company=company')
+            db.execute('UPDATE AutomationRun SET company=company')
+        finally:
+            db.execute('ROLLBACK TO validate_task_guards')
+            db.execute('RELEASE validate_task_guards')
+    if profile in ['operations', 'communication', 'mailboxes', 'mail-folders']:
+        for ident,company,branch,order_id,supplier_id,product_id,quantity,price,total,status,creator,approver in db.execute('SELECT id,company,branch,orderId,supplierId,productId,quantity,priceCents,totalCents,status,createdBy,approvedBy FROM PurchaseOrder'):
+            for parent,kind in [(order_id,'orders'),(supplier_id,'suppliers'),(product_id,'products')]:
+                if db.execute('SELECT kind,company,branch FROM BusinessRecord WHERE id=?',(parent,)).fetchone() != (kind,company,branch):
+                    raise RecoveryError('Purchase order endpoint scope differs')
+            if total != (quantity*price+500000)//1000000:
+                raise RecoveryError('Purchase order extended amount differs')
+            if status in ['Approved','Closed'] and (not approver or approver==creator):
+                raise RecoveryError('Purchase order lacks independent approval')
+            balance,received=db.execute("SELECT coalesce(sum(quantity),0),coalesce(sum(CASE WHEN kind IN ('Receipt','Receipt reversal') THEN quantity ELSE 0 END),0) FROM StockMovement WHERE purchaseId=?",(ident,)).fetchone()
+            if balance<0 or received<0 or received>quantity:
+                raise RecoveryError('Stock ledger balance exceeds purchase limits')
+            invoiced=db.execute('SELECT coalesce(sum(amountCents),0) FROM SupplierInvoice WHERE purchaseId=?',(ident,)).fetchone()[0]
+            if invoiced>total:
+                raise RecoveryError('Supplier invoices exceed purchase total')
+        if db.execute("SELECT 1 FROM StockMovement m JOIN PurchaseOrder p ON p.id=m.purchaseId LEFT JOIN BusinessRecord s ON s.id=m.shipmentId LEFT JOIN StockMovement original ON original.id=m.reversalOf WHERE (m.shipmentId IS NOT NULL AND (s.id IS NULL OR s.kind!='logistics' OR s.company!=p.company OR s.branch!=p.branch OR json_extract(s.payload,'$.parentId')!=p.orderId)) OR (m.kind='Receipt' AND m.shipmentId IS NOT NULL) OR (m.kind IN ('Dispatch','Dispatch reversal') AND m.shipmentId IS NULL) OR (m.reversalOf IS NOT NULL AND (original.id IS NULL OR original.purchaseId!=m.purchaseId OR original.quantity!=-m.quantity OR original.reversalOf IS NOT NULL OR original.shipmentId IS NOT m.shipmentId OR NOT ((original.kind='Receipt' AND m.kind='Receipt reversal') OR (original.kind='Dispatch' AND m.kind='Dispatch reversal')))) LIMIT 1").fetchone():
+            raise RecoveryError('Stock ledger scope or reversal differs')
+        if db.execute('SELECT 1 FROM SupplierInvoice i JOIN PurchaseOrder p ON p.id=i.purchaseId WHERE i.company!=p.company OR i.supplierId!=p.supplierId OR (SELECT coalesce(sum(amountCents),0) FROM SupplierPayment WHERE invoiceId=i.id)>i.amountCents LIMIT 1').fetchone():
+            raise RecoveryError('Supplier invoice scope or payment balance differs')
+    if profile in ['mailboxes','mail-folders']:
+        for table in ('MailboxMessage','MailboxDraft')+(('MailboxRemoteMessage',) if profile=='mail-folders' else ()):
+            if db.execute('SELECT 1 FROM '+quote_name(table)+' m LEFT JOIN MailboxConnection c ON c.id=m.connectionId WHERE c.id IS NULL OR c.ownerId!=m.ownerId LIMIT 1').fetchone():
+                raise RecoveryError('Private mailbox owner scope differs')
     return snapshot(db)
 
 
@@ -275,7 +316,7 @@ def plan(db):
             raise RecoveryError('Missing physical foreign-key table')
         visiting.add(t)
         for parent in sorted(deps[t]):
-            if parent == t and t == "SupplierOffer":
+            if parent == t and t in ["SupplierOffer", "StockMovement"]:
                 continue  # Phase 7 immutable revision chain is loaded oldest first.
             visit(parent)
         visiting.remove(t)
@@ -290,6 +331,10 @@ def plan(db):
         if t == 'SupplierOffer':
             revision_index = [r[1] for r in db.execute('PRAGMA table_info(' + quote_name(t) + ')')].index('revision')
             rows.sort(key=lambda row: row[revision_index])
+        if t == 'StockMovement':
+            # Only original -> reversal edges are supported, never chains.
+            reversal_index = [r[1] for r in db.execute('PRAGMA table_info(' + quote_name(t) + ')')].index('reversalOf')
+            rows.sort(key=lambda row: row[reversal_index] is not None)
         parts['data'].extend('INSERT INTO ' + quote_name(t) + '(' + columns + ') VALUES(' + ','.join(literal(v) for v in row) + ');' for row in rows)
     # Preserve AUTOINCREMENT high-water marks when an export includes them.
     if db.execute("SELECT 1 FROM sqlite_master WHERE name='sqlite_sequence'").fetchone():
@@ -457,7 +502,7 @@ def main():
     for name in ['validate', 'restore']:
         p = sub.add_parser(name)
         p.add_argument('backup')
-        p.add_argument('--schema', choices=['phase7-apollo', 'phase7', 'phase6', 'pre-phase6'], default='phase6')
+        p.add_argument('--schema', choices=['mail-folders', 'mailboxes', 'communication', 'operations', 'tasks', 'shared-options', 'phase7-apollo', 'phase7', 'phase6', 'pre-phase6'], default='phase6')
         p.add_argument('--report', required=True)
         if name == 'restore':
             mode = p.add_mutually_exclusive_group(required=True)

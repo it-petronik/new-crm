@@ -20,7 +20,12 @@ export function d1(db: DatabaseSync) {
       return new Statement(this.sql, params.map(norm));
     }
     async all() {
-      return { results: db.prepare(this.sql).all(...this.params), success: true, meta: {} };
+      return this.allSync();
+    }
+    allSync() {
+      const results = db.prepare(this.sql).all(...this.params);
+      const changed = db.prepare("SELECT changes() AS n").get() as {n:number};
+      return { results, success: true, meta: {changes:changed.n} };
     }
     async first() {
       return (db.prepare(this.sql).all(...this.params)[0] as unknown) ?? null;
@@ -37,11 +42,12 @@ export function d1(db: DatabaseSync) {
   }
   return {
     prepare: (sql: string) => new Statement(sql),
+    // Synchronous, like D1: a batch is atomic and no other request's
+    // statements can interleave with it.
     async batch(statements: Statement[]) {
       db.exec("BEGIN");
       try {
-        const out = [];
-        for (const s of statements) out.push(await s.all());
+        const out = statements.map((s) => s.allSync());
         db.exec("COMMIT");
         return out;
       } catch (e) {

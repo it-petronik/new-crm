@@ -11,7 +11,7 @@ import {
 } from "../src/lib/list-query";
 import { localISO, windowStart } from "../src/lib/domain";
 import { companyName } from "../src/lib/company-name";
-import { chartSegments } from "../src/components/insight-chart";
+import { chartSegments, chartShare } from "../src/components/insight-chart";
 import { salaryTotal } from "../src/lib/salary";
 import { detailFields } from "../src/lib/record-profiles";
 import { makePreview } from "../src/lib/fixtures";
@@ -21,6 +21,13 @@ const rows = [
   { id: "REC-2", title: "Base oil order", status: "Confirmed", amount: 100, currency: "USD", createdAt: "2026-09-02", due: "2026-01-05" },
   { id: "REC-3", title: "Lubricant order", status: "Cancelled", amount: 500, currency: "USD", createdAt: "2026-09-03", due: "2026-02-01" },
 ];
+
+test("chart shares preserve half-percent precision without inflating the total", () => {
+  assert.equal(chartShare(358000, 400000), "89.5%");
+  assert.equal(chartShare(42000, 400000), "10.5%");
+  assert.equal(chartShare(1, 4), "25%");
+  assert.equal(chartShare(0, 0), "0%");
+});
 
 test("search matches stored values, not field names or bookkeeping keys", () => {
   // The old JSON.stringify search matched every row for any field name.

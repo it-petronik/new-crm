@@ -32,11 +32,12 @@ const SEVERITY: Record<ProactiveSignal["severity"], { label: string; tone: strin
   important: { label: "Important", tone: "amber" },
   normal: { label: "Normal", tone: "blue" },
 };
-const KIND_LABELS: Record<string, string> = { leads: "Lead", quotations: "Quotation", orders: "Order", logistics: "Shipment", accounts: "Invoice", customers: "Customer", suppliers: "Supplier", meeting: "Meeting" };
+const KIND_LABELS: Record<string, string> = { task: "Task", leads: "Lead", quotations: "Quotation", orders: "Order", logistics: "Shipment", accounts: "Invoice", customers: "Customer", suppliers: "Supplier", meeting: "Meeting" };
 
 const openRecord = (kind: string, id: string) => window.dispatchEvent(new CustomEvent("enercore:open-record", { detail: { kind, id } }));
 const openMeeting = (meetingId: string, view: "details" | "report") => window.dispatchEvent(new CustomEvent("enercore:open-meeting-page", { detail: { meetingId, view } }));
-const openEntity = (s: ProactiveSignal) => (s.entity.type === "meeting" ? openMeeting(s.entity.id, "details") : openRecord(s.entity.type, s.entity.id));
+const openTask = (taskId: string) => window.dispatchEvent(new CustomEvent("enercore:open-task", { detail: { taskId } }));
+const openEntity = (s: ProactiveSignal) => (s.entity.type === "meeting" ? openMeeting(s.entity.id, "details") : s.entity.type === "task" ? openTask(s.entity.id) : openRecord(s.entity.type, s.entity.id));
 const canFollowUp = (s: ProactiveSignal) => s.actions.includes("set_follow_up") && !!s.entity.updatedAt;
 
 /** Refetches when CRM data changes here, a notification arrives, or the tab regains focus. */
@@ -333,6 +334,11 @@ function SignalCard({
             ))}
             {s.facts.evidence ? ` — ${s.facts.evidence}` : ""}
           </span>
+        )}
+        {s.task && (
+          <Button className="record-link action-card-task" onClick={() => openTask(s.task!.id)} aria-label={`Open task ${s.task.title}`}>
+            <ListChecks size={12} aria-hidden="true" /> Task: {s.task.title}
+          </Button>
         )}
       </div>
       <div className="action-when">

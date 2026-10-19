@@ -1043,7 +1043,7 @@ export async function inheritLeadLinks(
 }
 export async function hasCommercialHistory(db: Database, id: string) {
   const found = await db.get<{ linked: number }>(
-    sql`SELECT EXISTS(SELECT 1 FROM Contact WHERE parentId=${id}) OR EXISTS(SELECT 1 FROM Deal WHERE leadId=${id}) OR EXISTS(SELECT 1 FROM SupplierProductCapability WHERE supplierId=${id} OR productId=${id}) OR EXISTS(SELECT 1 FROM BusinessRecord WHERE json_extract(payload,'$.customerId')=${id} OR json_extract(payload,'$.productId')=${id}) AS linked`,
+    sql`SELECT EXISTS(SELECT 1 FROM Contact WHERE parentId=${id}) OR EXISTS(SELECT 1 FROM Deal WHERE leadId=${id}) OR EXISTS(SELECT 1 FROM SupplierProductCapability WHERE supplierId=${id} OR productId=${id}) OR EXISTS(SELECT 1 FROM BusinessRecord WHERE json_extract(payload,'$.customerId')=${id} OR json_extract(payload,'$.productId')=${id}) OR EXISTS(SELECT 1 FROM PurchaseOrder WHERE orderId=${id} OR supplierId=${id} OR productId=${id}) OR EXISTS(SELECT 1 FROM StockMovement WHERE shipmentId=${id}) AS linked`,
   );
   return !!found?.linked;
 }

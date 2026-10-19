@@ -28,6 +28,7 @@ import {
   Sparkles,
   ListChecks,
   Radar,
+  SquareCheckBig,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -38,6 +39,7 @@ import {
   type Module,
 } from "@/lib/domain";
 import { canProspect } from "@/lib/execution/model";
+import { operationsAccess } from "@/lib/operations/model";
 import { type WorkspaceView } from "./workspace-pages";
 import { Button, Tooltip } from "./ui/controls";
 import { moduleHelp, viewHelp } from "@/lib/workspace-help";
@@ -80,7 +82,7 @@ const icons: Record<Module, LucideIcon> = {
 /**
  * Navigation by the work people do, not by database table. Every entry is
  * still gated exactly as before: modules by allowedModules(), Enercore AI and
- * the Action Center by the live workspace, Prospecting by canProspect(),
+ * the Action Center and Tasks by the live workspace, Prospecting by canProspect(),
  * Access control by canManageUsers().
  */
 type NavEntry =
@@ -91,6 +93,7 @@ const groups: [string, NavEntry[]][] = [
     [
       { module: "overview" },
       { view: "actions", label: "Action Center", icon: ListChecks },
+      { view: "tasks", label: "Tasks", icon: SquareCheckBig },
     ],
   ],
   [
@@ -113,7 +116,7 @@ const groups: [string, NavEntry[]][] = [
       { view: "ai", label: "Enercore AI", icon: Sparkles },
     ],
   ],
-  ["Delivery & payments", [{ module: "logistics" }, { module: "accounts" }]],
+  ["Delivery & payments", [{ view: "operations", label: "Operations", icon: Package }, { module: "logistics" }, { module: "accounts" }]],
   [
     "People & support",
     [{ module: "hr" }, { module: "marketing" }, { module: "it" }],
@@ -163,11 +166,12 @@ export default function Sidebar({
   const entryAllowed = (e: NavEntry) =>
     "module" in e
       ? allowedModules(actor).includes(e.module)
+      : e.view === "operations" ? !preview && operationsAccess(actor).view
       : e.view === "prospecting"
         ? canProspect(actor)
         : e.view === "access"
           ? canManageUsers(actor)
-          : e.view === "ai" || e.view === "actions"
+          : e.view === "ai" || e.view === "actions" || e.view === "tasks"
             ? !preview
             : true;
   function contents(isMobile: boolean) {

@@ -57,7 +57,9 @@ const diag = (page: Page) => page.evaluate(() => (window as unknown as { __enerc
 const gum = (page: Page) => page.evaluate(() => (window as unknown as { __gum: { video: number; audio: number } }).__gum);
 
 async function mediaContext(browser: Browser, viewport = { width: 1280, height: 800 }) {
-  const context = await browser.newContext({ viewport, permissions: ["camera", "microphone", "clipboard-read", "clipboard-write"], bypassCSP: true });
+  // Keep browser security enabled: the local-only Worker entrypoint allows
+  // the loopback LiveKit origin, without widening the production CSP.
+  const context = await browser.newContext({ viewport, permissions: ["camera", "microphone", "clipboard-read", "clipboard-write"] });
   await context.addInitScript(GUM_PROBE);
   return context;
 }

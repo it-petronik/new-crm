@@ -2,6 +2,10 @@
 import { useState } from "react";
 import { useChartReveal } from "@/lib/use-chart-reveal";
 const colors = ["var(--e-chart-1)", "var(--e-chart-2)", "var(--e-chart-3)", "var(--e-chart-4)"];
+// Keep half-percent shares visible (89.5 + 10.5, not 90 + 11).
+export function chartShare(value: number, total: number) {
+  return new Intl.NumberFormat("en-US", { style: "percent", maximumFractionDigits: 1 }).format(total > 0 ? value / total : 0);
+}
 /** Single source of truth for which rows a chart can draw, so callers and the
  *  chart never disagree about whether a chart will appear. */
 export function chartSegments(rows: { name: string; value: number; count: number }[], metric: "value" | "count" = "value") {
@@ -25,7 +29,7 @@ export function InsightChart({ rows, metric = "value", variant = "donut", curren
   // never changes the height of the panel.
   const detail = <div className="chart-selection" data-empty={active ? undefined : "true"}>
     <strong>{active ? active.name : "Explore the breakdown"}</strong>
-    <span>{active ? `${format(active.value)} · ${active.count} ${metric === "count" ? (active.count === 1 ? "enquiry" : "enquiries") : (active.count === 1 ? "order" : "orders")} · ${Math.round(active[metric] / total * 100)}% of displayed total` : "Hover to preview · Click or press Enter to pin a result."}</span>
+    <span>{active ? `${format(active.value)} · ${active.count} ${metric === "count" ? (active.count === 1 ? "enquiry" : "enquiries") : (active.count === 1 ? "order" : "orders")} · ${chartShare(active[metric], total)} of displayed total` : "Hover to preview · Click or press Enter to pin a result."}</span>
     {active && <button type="button" aria-label="Clear chart selection" onClick={() => setSelected(null)}>×</button>}
   </div>;
   const select = (name:string) => setSelected(old => old === name ? null : name);
@@ -44,14 +48,14 @@ export function InsightChart({ rows, metric = "value", variant = "donut", curren
       <circle cx="100" cy="100" r="78" fill="none" stroke="var(--line)" strokeWidth="23" />
       {visible.map((row, i) => {
         const portion = row[metric] / total * 100, start = offset; offset += portion;
-        return <circle data-dimmed={active && active.name !== row.name ? "true" : undefined} className="chart-segment" role="button" tabIndex={0} aria-label={`${row.name}: ${format(row.value)}, ${Math.round(portion)}%`} aria-pressed={selected === row.name} onMouseEnter={() => setHovered(row.name)} onMouseLeave={() => setHovered(null)} onFocus={() => setHovered(row.name)} onBlur={() => setHovered(null)} onClick={() => select(row.name)} onKeyDown={e => {if(e.key === "Enter" || e.key === " "){e.preventDefault();select(row.name);}}} key={row.name} cx="100" cy="100" r="78" fill="none" stroke={colors[i]} strokeWidth="23" pathLength="100" strokeDasharray={`${Math.max(0, portion - 0.6)} ${100 - Math.max(0, portion - 0.6)}`} strokeDashoffset={-start} transform="rotate(-90 100 100)"><title>{row.name}: {format(row.value)} ({Math.round(portion)}%)</title></circle>;
+        return <circle data-dimmed={active && active.name !== row.name ? "true" : undefined} className="chart-segment" role="button" tabIndex={0} aria-label={`${row.name}: ${format(row.value)}, ${chartShare(row[metric], total)}`} aria-pressed={selected === row.name} onMouseEnter={() => setHovered(row.name)} onMouseLeave={() => setHovered(null)} onFocus={() => setHovered(row.name)} onBlur={() => setHovered(null)} onClick={() => select(row.name)} onKeyDown={e => {if(e.key === "Enter" || e.key === " "){e.preventDefault();select(row.name);}}} key={row.name} cx="100" cy="100" r="78" fill="none" stroke={colors[i]} strokeWidth="23" pathLength="100" strokeDasharray={`${Math.max(0, portion - 0.6)} ${100 - Math.max(0, portion - 0.6)}`} strokeDashoffset={-start} transform="rotate(-90 100 100)"><title>{row.name}: {format(row.value)} ({chartShare(row[metric], total)})</title></circle>;
       })}
       <text x="100" y="98" textAnchor="middle" className="donut-total">{format(active?.value ?? total, true)}</text>
-      <text x="100" y="119" textAnchor="middle" className="donut-caption">{active ? `${Math.round(active[metric] / total * 100)}% of total` : "Shown sales"}</text>
+      <text x="100" y="119" textAnchor="middle" className="donut-caption">{active ? `${chartShare(active[metric], total)} of total` : "Shown sales"}</text>
     </svg>
     <div className="donut-breakdown">{visible.map((row,i) => <button type="button" className="donut-legend-row chart-interactive" aria-pressed={selected === row.name} onMouseEnter={() => setHovered(row.name)} onMouseLeave={() => setHovered(null)} onFocus={() => setHovered(row.name)} onBlur={() => setHovered(null)} onClick={() => select(row.name)} key={row.name}>
       <i style={{background:colors[i]}} />
-      <div><strong>{row.name}</strong><small>{row.count} {row.count === 1 ? "order" : "orders"} · {Math.round(row[metric] / total * 100)}%</small></div>
+      <div><strong>{row.name}</strong><small>{row.count} {row.count === 1 ? "order" : "orders"} · {chartShare(row[metric], total)}</small></div>
       <b>{format(row.value)}</b>
     </button>)}<p className="chart-note">Share of displayed order value · {currency} · Select to inspect</p>{detail}</div>
   </div>;

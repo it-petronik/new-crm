@@ -7,6 +7,7 @@
  * can leak into another.
  */
 
+import {roles} from "../../src/lib/domain";
 export const PASSWORD = "Collab-Test-Password-1";
 export const WORKER = "http://localhost:8788";
 
@@ -33,6 +34,7 @@ const person = (key: string, name: string, companies: string[], branches: string
 const range = (n: number) => Array.from({ length: n }, (_, i) => i + 1);
 
 export const people: TestPerson[] = [
+  ...roles.map((role,i)=>person(`release${i}`,`Release role ${role}`,["Petronik"],[],role)),
   person("studio", "Alex Morgan · Demo", ["Petronik", "Afrilube", "Petronex", "Istanegry"], [], "MD"),
   person("cmmd", "Commercial Director", ["Petronik"], [], "MD"),
   person("cmsales", "Commercial Seller", ["Petronik"], ["Main"], "Sales Executive"),

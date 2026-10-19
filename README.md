@@ -6,11 +6,33 @@ A Next.js / TypeScript CRM foundation for Petronik, Afrilube, Petronex and Istan
 
 ```sh
 npm install
-npm run db:generate
 npm run dev
 ```
 
-Open http://localhost:3000. Without a database in development the application starts a **clearly labelled fictional preview**. Workspace preview changes persist in this browser's local storage; preview users are temporary and reset on reload. My requests has a separate fictional local store. Never enter actual customer, financial, HR or password information in preview mode.
+Open http://localhost:8788/login. The default local launch builds the production
+application and runs it in a **local Worker with local D1**, real credential
+sessions, company/role permissions and a local LiveKit call server. It never
+deploys or contacts production data. Local LiveKit must be installed.
+
+Use `studio@collab.test` / `Collab-Test-Password-1` for the fictional management
+workspace. Other fictional roles include `cmsales@collab.test`,
+`cmsales2@collab.test` and `cmmd@collab.test`, using the same test password.
+Never use these accounts/passwords in production.
+
+Restart with `npm run dev` to reopen the same saved local database. Existing
+fixture edits are not overwritten on resume. Use `npm run dev -- --fresh` for
+a separate test database (previous data stays intact), or
+`npm run dev -- --resume .wrangler/manual-review.NAME` for another saved review.
+One workspace runs on port 8788 at a time; stop its existing server before launch.
+
+`npm run dev:ui` starts the separate lightweight browser-only demo at
+http://localhost:3000. It deliberately lacks server-backed workflows and is
+**not** the full-feature testing environment. Do not change the preview guards
+or connect production D1 to work around this distinction.
+
+See [local testing coverage](docs/LOCAL-TESTING.md) for what is real locally,
+what is a provider simulation and what still needs account setup. Local testing
+does not mean every planned feature has already been implemented.
 
 ## Implemented
 
@@ -28,7 +50,11 @@ Open http://localhost:3000. Without a database in development the application st
 
 ## Production setup
 
-Use `.env.example` as a guide. Configure `APP_MODE=production`, `APP_URL` and `DATABASE_URL` privately. Do not commit credentials. See `docs/DEPLOYMENT.md` before applying migrations. No live database has been connected, migrated or seeded. No deployment or outbound messages have been performed.
+Production uses Cloudflare Workers and D1, not a MySQL `DATABASE_URL`.
+See `docs/DEPLOYMENT.md` and `wrangler.jsonc` for the current architecture.
+Local testing is separate from a production release; it does not authorize
+deployment, real provider delivery or production migrations. Keep credentials
+out of source and browser storage.
 
 ```sh
 npm run typecheck

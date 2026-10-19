@@ -1,4 +1,4 @@
-import { eq, and, or, lt, gt, inArray, sql, desc, isNull, ne } from "drizzle-orm";
+import { eq, and, or, lt, gt, inArray, notInArray, sql, desc, isNull } from "drizzle-orm";
 import type { Database } from "./d1";
 import type { BatchItem } from "drizzle-orm/batch";
 import { users, sessions, businessRecords, auditEvents, loginAttempts, passwordResets, refreshTokens } from "./schema";
@@ -256,9 +256,9 @@ export const listAuditEvents = (db: Database, limit = 200) =>
   db
     .select()
     .from(auditEvents)
-    // Chat room administration events are kept for the record only; they
-    // must not use up the workspace's display window.
-    .where(or(isNull(auditEvents.subject), ne(auditEvents.subject, "collaboration")))
+    // Chat room administration and task history are kept for the record
+    // only; they must not use up the workspace's display window.
+    .where(or(isNull(auditEvents.subject), notInArray(auditEvents.subject, ["collaboration", "task", "operations"])))
     .orderBy(desc(auditEvents.at))
     .limit(limit)
     .all();
@@ -274,7 +274,7 @@ export type NewAudit = {
    * "account" for user administration, "collaboration" for chat room
    * administration; omitted for business records.
    */
-  subject?: "account" | "collaboration";
+  subject?: "account" | "collaboration" | "task";
   /** Branch of the account an "account" event concerns; null means group-wide. */
   branch?: string | null;
 };
@@ -326,6 +326,7 @@ export async function updateRecordWithAudit(
   changed: { status: string; payload: unknown; ownerId?: string },
   event: NewAudit,
   alsoCreate: NewRecord[] = [],
+  alsoWrite: BatchItem<"sqlite">[] = [],
 ): Promise<boolean> {
   const now = new Date();
   // A failed version guard deliberately violates NOT NULL, rolling back the
@@ -339,6 +340,7 @@ export async function updateRecordWithAudit(
         updatedAt: now,
       }).where(eq(businessRecords.id, id)),
       ...alsoCreate.map(record => insertRecord(db, record, now)),
+      ...alsoWrite,
       insertAudit(db, event),
     ]);
   } catch (cause) {

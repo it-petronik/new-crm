@@ -1,0 +1,122 @@
+.page {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+.list {
+  display: grid;
+  max-height: 65dvh;
+  overflow: auto;
+  position: relative;
+}
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid var(--e-border);
+  align-items: start;
+}
+.row:last-child {
+  border-bottom: 0;
+}
+.identity {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+.identity strong,
+.identity p {
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  color: var(--e-text-muted);
+  font-size: 12px;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  max-width: 380px;
+}
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+}
+.stat {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  background: var(--e-surface);
+  border: 1px solid var(--e-border);
+  border-radius: 12px;
+}
+.stat span,
+.hint {
+  color: var(--e-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.stat strong {
+  font-size: 22px;
+}
+.history {
+  display: grid;
+  gap: 10px;
+  max-height: 300px;
+  overflow: auto;
+  padding: 0;
+  list-style: none;
+}
+.history li {
+  display: grid;
+  gap: 4px;
+  border-bottom: 1px solid var(--e-border);
+  padding: 10px 0;
+  font-size: 12px;
+}
+.search {
+  width: min(360px, 100%);
+}
+.error {
+  padding: 12px;
+  border-radius: 8px;
+  color: var(--e-text);
+  border: 1px solid var(--e-danger);
+  background: var(--e-danger-soft);
+}
+.success {
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--e-border);
+  background: var(--e-success-soft);
+}
+.wide {
+  grid-column: 1/-1;
+}
+@media (max-width: 760px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 12px;
+  }
+  .actions {
+    justify-content: flex-start;
+    max-width: none;
+  }
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .list {
+    max-height: 70dvh;
+  }
+  .actions button {
+    min-height: 44px;
+  }
+}

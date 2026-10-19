@@ -116,6 +116,9 @@
   margin: 0 auto;
 }
 .content.content:has(:global(.ai-workspace)) { max-width:none; }
+.content.content:not(:global(.is-record)):has(:global([data-mail-view="email"])) { min-height:calc(100dvh - 64px); height:auto; max-width:none; padding:16px 20px; overflow:visible; }
+.content.content:has(:global([data-mail-view="email"]))>:global(.page-under-record){height:auto;min-height:0;}
+@media(max-width:720px){.content.content:not(:global(.is-record)):has(:global([data-mail-view="email"])) {min-height:calc(100dvh - 56px);height:auto;padding:10px;}}
 .preview {
   display: flex;
   gap: 7px;

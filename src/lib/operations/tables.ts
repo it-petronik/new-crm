@@ -1,0 +1,62 @@
+import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+// SQL migration owns constraints, foreign keys, indexes and ledger guards.
+export const purchases = sqliteTable("PurchaseOrder", {
+  id: text().primaryKey(),
+  company: text().notNull(),
+  branch: text().notNull(),
+  orderId: text().notNull(),
+  supplierId: text().notNull(),
+  productId: text().notNull(),
+  warehouse: text().notNull(),
+  unit: text().notNull(),
+  quantity: integer().notNull(),
+  priceCents: integer().notNull(),
+  totalCents: integer().notNull(),
+  currency: text().notNull(),
+  status: text().notNull(),
+  expectedDate: text().notNull(),
+  notes: text().notNull(),
+  createdBy: text().notNull(),
+  approvedBy: text(),
+  version: integer().notNull(),
+  createdAt: integer().notNull(),
+  updatedAt: integer().notNull(),
+});
+export const movements = sqliteTable("StockMovement", {
+  id: text().primaryKey(),
+  purchaseId: text().notNull(),
+  kind: text().notNull(),
+  quantity: integer().notNull(),
+  shipmentId: text(),
+  reversalOf: text(),
+  reference: text().notNull(),
+  date: text().notNull(),
+  notes: text().notNull(),
+  createdBy: text().notNull(),
+  createdAt: integer().notNull(),
+});
+export const invoices = sqliteTable("SupplierInvoice", {
+  id: text().primaryKey(),
+  purchaseId: text().notNull(),
+  company: text().notNull(),
+  supplierId: text().notNull(),
+  reference: text().notNull(),
+  normalized: text().notNull(),
+  amountCents: integer().notNull(),
+  date: text().notNull(),
+  dueDate: text().notNull(),
+  notes: text().notNull(),
+  createdBy: text().notNull(),
+  createdAt: integer().notNull(),
+});
+export const payments = sqliteTable("SupplierPayment", {
+  id: text().primaryKey(),
+  invoiceId: text().notNull(),
+  amountCents: integer().notNull(),
+  reference: text().notNull(),
+  date: text().notNull(),
+  notes: text().notNull(),
+  createdBy: text().notNull(),
+  createdAt: integer().notNull(),
+});
+export type Purchase = typeof purchases.$inferSelect;

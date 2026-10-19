@@ -4,6 +4,8 @@ import { currentActor, checkOrigin } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { listAllRecords, createRecordWithAudit } from "@/lib/data";
 import { type RecordItem } from "@/lib/domain";
+import { automationOutbox } from "@/lib/tasks/automation";
+import { runAutomation } from "@/lib/notify";
 
 // Employee self-service is separate from department access: no request can
 // read another owner's records.
@@ -64,6 +66,8 @@ export async function POST(request: Request) {
       createdAt: now,
       updatedAt: now,
     };
+    // An IT ticket's triage automation is enqueued in the same batch.
+    const outbox = await automationOutbox(db, { after: record });
     await createRecordWithAudit(
       db,
       {
@@ -74,7 +78,9 @@ export async function POST(request: Request) {
         id: crypto.randomUUID(), company: record.company, actorId: actor.id,
         actor: actor.name, action: `Submitted own ${record.kind} request`, recordId: record.id,
       },
+      outbox.statements,
     );
+    await runAutomation(db, outbox.ids);
     return NextResponse.json({ record }, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Check the required request details." }, { status: 400 });

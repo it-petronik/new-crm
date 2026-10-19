@@ -1,10 +1,11 @@
 /**
- * Controlled automation — the FOUNDATION (not yet wired to live triggers).
+ * Controlled automation.
  *
- * Rules are code-defined and typed: a trigger, conditions from a closed set,
- * and actions from a closed set. There is no user scripting, no eval, no
- * expressions, no SQL. Actions only notify, raise a signal or request a
- * human review — they never change business data by themselves, and no AI
+ * Rules are typed: a trigger, conditions from a closed set, and actions from
+ * a closed set. There is no user scripting, no eval, no expressions, no SQL.
+ * Actions only notify, raise a signal, request a human review or create an
+ * internal task (Phase 8, src/lib/tasks/automation.ts) — they never change
+ * business records, so an action can never raise another trigger. No AI
  * decides anything here.
  */
 
@@ -20,6 +21,10 @@ export type AutomationEvent = {
   currency?: string;
   recordId?: string;
   ownerId?: string;
+  /** Current status, branch and priority attribute of the record. */
+  status?: string;
+  branch?: string;
+  priority?: string;
 };
 
 /** Conditions: a closed, typed set. */
@@ -27,13 +32,17 @@ export type Condition =
   | { type: "kind_is"; kind: string }
   | { type: "status_to"; status: string }
   | { type: "status_from"; status: string }
-  | { type: "amount_at_least"; amount: number; currency: string };
+  | { type: "amount_at_least"; amount: number; currency: string }
+  | { type: "status_in"; statuses: string[] }
+  | { type: "branch_in"; branches: string[] }
+  | { type: "priority_in"; priorities: string[] };
 
 /** Actions: a closed, typed set — none writes business data. */
 export type AutomationAction =
   | { type: "CREATE_NOTIFICATION"; audience: "owner" | "approvers"; message: string }
   | { type: "CREATE_SIGNAL"; signal: string }
-  | { type: "REQUEST_REVIEW"; reviewer: "owner" | "manager"; reason: string };
+  | { type: "REQUEST_REVIEW"; reviewer: "owner" | "manager"; reason: string }
+  | { type: "CREATE_TASK"; assignee: "owner" | { userId: string | null }; dueDays: number; dueTime: string | null; priority: string };
 
 export type Rule = { id: string; trigger: Trigger; conditions: Condition[]; actions: AutomationAction[]; enabled: boolean };
 
@@ -48,6 +57,13 @@ const holds = (c: Condition, e: AutomationEvent) => {
     case "amount_at_least":
       // Same currency only — never converted.
       return e.currency === c.currency && (e.amount ?? 0) >= c.amount;
+    // An empty list means "any".
+    case "status_in":
+      return !c.statuses.length || c.statuses.includes(e.status ?? "");
+    case "branch_in":
+      return !c.branches.length || c.branches.includes(e.branch ?? "");
+    case "priority_in":
+      return !c.priorities.length || c.priorities.map((p) => p.toLowerCase()).includes((e.priority || "Normal").toLowerCase());
   }
 };
 
@@ -60,8 +76,8 @@ export function plan(rules: Rule[], event: AutomationEvent) {
 export function validRule(rule: unknown): rule is Rule {
   if (!rule || typeof rule !== "object") return false;
   const r = rule as Rule;
-  const conditionTypes = ["kind_is", "status_to", "status_from", "amount_at_least"];
-  const actionTypes = ["CREATE_NOTIFICATION", "CREATE_SIGNAL", "REQUEST_REVIEW"];
+  const conditionTypes = ["kind_is", "status_to", "status_from", "amount_at_least", "status_in", "branch_in", "priority_in"];
+  const actionTypes = ["CREATE_NOTIFICATION", "CREATE_SIGNAL", "REQUEST_REVIEW", "CREATE_TASK"];
   return (
     typeof r.id === "string" &&
     (TRIGGERS as readonly string[]).includes(r.trigger) &&

@@ -1,5 +1,33 @@
 # Deployment and Phase 6 recovery
 
+## Phase 11 release (19 October 2026)
+
+The user authorized production readiness and release with Phase 4 storage held.
+See [PHASE-11-PRODUCTION-READINESS.md](PHASE-11-PRODUCTION-READINESS.md) for current
+evidence, live verification and team acceptance requirements. The verified live
+schema upgraded from 0016 through 0021 using the five reviewed additive migrations.
+Use `BACKUP_SCHEMA_VERSION=mail-folders` after that upgrade (now the script default).
+Earlier phase-specific defaults and local-only status statements below describe
+their historical candidates, not the latest release authorization.
+
+No R2 bucket/binding, WhatsApp setup, bulk outreach, fictional user seeding or
+automatic rule enablement is part of this release. Local mailbox credentials are
+not copied to production. Live users connect their own authorized accounts.
+
+## Pending Phase 10 candidate
+
+Phase 10 preparation adds migration `0019_outbound.sql` and the explicit
+`communication` recovery profile, including all earlier checks. It is local only.
+The user will supply cPanel settings later; do not configure real credentials,
+enable outbound sending, apply remote migrations or deploy as part of local review.
+See [PHASE-10-COMMUNICATION.md](PHASE-10-COMMUNICATION.md).
+
+Before any separately approved release, verify the actual live migration history,
+take and validate a backup using its matching schema profile, rehearse upgrades
+and recovery, and verify that `OUTBOUND_ENABLED` is absent/disabled. After an
+authorized 0019 release, explicitly set the backup validation profile to
+`communication`. The existing backup default is intentionally unchanged.
+
 Enercore runs on Cloudflare Workers with D1. The checked-in `live` environment
 uses `APP_MODE=production`, `APP_URL=https://crm.enercore.ae`, and the live D1
 binding. The default Worker is a separate fictional-data preview. Verify actual
@@ -11,7 +39,75 @@ bootstrap users, seed production or backfill relationships as part of Phase 6.
 The commands below are a runbook, not authorization to release. Design approval
 alone does not authorize commit, push, remote migration or deployment.
 
+## Shared-options release (0016)
+
+For the UI release following Phase 7, only `0016_shared_options.sql` is new:
+one vocabulary table and its unique scope index. It does not modify existing
+records. Verify live migration history before applying it. Back up first with
+`BACKUP_SCHEMA_VERSION=phase7-apollo BACKUP_KEEP=0 npm run db:backup`.
+After 0016 and before 0017, select `BACKUP_SCHEMA_VERSION=shared-options`
+explicitly (the script now defaults to `tasks`); standalone validation and
+isolated restore require `--schema shared-options`. This profile retains
+all commercial relationship checks and validates the new table/index too.
+Older profile examples below describe the earlier Phase 6 rollout only.
+Do not seed fictional review data or enable R2 as part of this UI release.
+
+## Tasks and automation release (0017)
+
+Phase 8 adds only `0017_tasks_automation.sql`: tables `AutomationRule`, `Task`,
+`AutomationRun`, `AutomationEvent`, their indexes and five scope triggers. It
+writes no rows and changes no existing object. See `docs/PHASE-8-TASKS.md`.
+Not yet applied anywhere remote; this is the runbook for a later approved release.
+
+1. Confirm live migration history ends at `0016_shared_options.sql` and that
+   0017 is the only pending migration.
+2. Back up and validate with the previous profile:
+   `BACKUP_SCHEMA_VERSION=shared-options BACKUP_KEEP=0 npm run db:backup`.
+   Keep the off-device copy.
+3. Rehearse locally: `python3 tests/recovery_rehearsal.py --work work/recovery-rehearsal-NEW`
+   (now also upgrades through 0017 and restores under `--schema tasks`).
+4. Apply: `npx wrangler d1 migrations apply enercore-crm --remote --env live`.
+   Verify the four tables, indexes `Task_dedupeKey_key`, `AutomationRun_rule_key`,
+   `AutomationRule_company_preset_key` and triggers `Task_scope_insert`,
+   `Task_scope_update`, `AutomationRun_scope_insert`, `AutomationRun_scope_update`,
+   `AutomationRule_company_update`.
+5. Back up again; the script now defaults to the `tasks` profile
+   (`npm run db:backup`). Standalone validation/restore use `--schema tasks`.
+6. Build with `npm run cf:build` and deploy with `npm run cf:deploy:live`. The
+   existing `*/5 * * * *` cron now also runs the task automation sweep; no new
+   cron, binding, secret or R2 bucket is needed.
+7. Smoke test with an agreed scope: Tasks loads, a self-assigned task can be
+   created and completed. All rules start disabled; enabling one is a business
+   decision for the responsible manager, not part of the release. Do not seed
+   fictional review data.
+
+Rollback: 0017 is additive and an older Worker ignores the new tables (tasks
+and pending events simply wait). Disable rules rather than dropping tables;
+never drop Phase 8 tables holding task history.
+
 ## Local verification
+
+### Phase 9 operations (0018), local candidate
+
+`docs/PHASE-9-OPERATIONS.md` describes the new purchasing/stock ledger. Before
+release, inspect actual live history: Phase 8 migration 0017 may still be pending.
+Apply pending additive migrations in order only after release authorization.
+Neither 0017 nor 0018 seeds rules, purchases or financial data. R2 stays disabled.
+
+Use the backup profile matching the actual schema before migration: 0016 uses
+`shared-options`, 0017 uses `tasks`. After 0018 use
+`BACKUP_SCHEMA_VERSION=operations npm run db:backup` and `--schema operations`
+for explicit validation/isolated restore. Configure the scheduled backup's
+profile accordingly; the shell default remains `tasks` for Phase 8 compatibility.
+The recovery rehearsal now also upgrades through 0018 and validates stock
+reversal order and supplier payments. Do not restore an old backup over current
+production activity. Keep commercial writes paused during a separately approved
+rollout and preserve a compatible rollback candidate.
+
+Browser verification against a running fictional review workspace:
+`MAIL_REVIEW_SERVER=1 npx playwright test -c playwright.operations.config.ts`.
+
+### General checks
 
 Use Node as specified in `package.json`, Python 3 with SQLite JSON support,
 installed Chrome, and the local LiveKit test binary. No production credentials
@@ -26,6 +122,9 @@ npm run typecheck
 npx playwright test -c playwright.d1.config.ts
 npx playwright test -c playwright.collab.config.ts --workers=2
 npx playwright test -c playwright.collab-nofiles.config.ts
+# Phase 8 browser review against a running `npm run dev:review` (fictional data):
+MAIL_REVIEW_SERVER=1 TASKS_CONTROL_FILE=.wrangler/manual-review.NAME/control-token \
+  npx playwright test -c playwright.tasks.config.ts
 COLLAB_TEST_NO_R2=1 npx playwright test -c playwright.collab.config.ts commercial.spec.ts --workers=2
 ```
 

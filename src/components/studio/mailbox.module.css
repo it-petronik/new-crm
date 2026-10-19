@@ -1,0 +1,130 @@
+.card {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--e-border);
+  border-radius: 14px;
+  background: var(--e-surface);
+  min-width: 0;
+}
+.icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: var(--e-accent-soft);
+  color: var(--e-accent);
+}
+.copy {
+  flex: 1;
+  min-width: 180px;
+  display: grid;
+  gap: 6px;
+}
+.copy strong,
+.copy p {
+  overflow-wrap: anywhere;
+}
+.copy p {
+  margin: 0;
+  color: var(--e-text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.copy small {
+  color: var(--e-text-muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.full {
+  width: 100%;
+  font-size: 12px;
+  margin: 0;
+  line-height: 1.6;
+}
+.form {
+  display: grid;
+  gap: 18px;
+}
+.security {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--e-accent-soft);
+  padding: 14px;
+  border-radius: 10px;
+}
+.security svg {
+  flex: none;
+  color: var(--e-accent);
+}
+.security p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.settings {
+  display: grid;
+  gap: 8px;
+  background: var(--e-surface-sunken);
+  border: 1px solid var(--e-border);
+  padding: 16px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+.settings span {
+  color: var(--e-text-secondary);
+}
+.consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.consent input {
+  accent-color: var(--e-accent);
+  margin-top: 4px;
+}
+.hint {
+  font-size: 12px;
+  color: var(--e-text-muted);
+  line-height: 1.7;
+  margin: 0;
+}
+.card[data-connected="true"]{padding:9px 12px;gap:10px;border-radius:10px;flex:none;}
+.card[data-connected="true"] .icon{width:30px;height:30px;border-radius:8px;}
+.card[data-connected="true"] .copy{gap:2px;}
+.card[data-connected="true"] .copy strong{font-size:12px;}
+.card[data-connected="true"] .copy>p{display:none;}
+.card[data-connected="true"] .copy small{font-size:10px;}
+.card[data-connected="true"]{padding:6px 10px;border-radius:8px;}
+.card[data-connected="true"] .icon{width:25px;height:25px;}
+.card[data-connected="true"] .copy strong{font-size:11px;}
+.card[data-connected="true"] .copy small{font-size:9px;}
+.card[data-connected="true"] .actions button{min-height:30px;padding:5px 8px;font-size:11px;}
+@media (max-width: 640px) {
+  .card {
+    padding: 14px;
+    gap: 10px;
+  }
+  .actions {
+    width: 100%;
+  }
+  .actions button {
+    flex: 1;
+  }
+  .copy {
+    min-width: 0;
+    flex-basis: calc(100% - 56px);
+  }
+}

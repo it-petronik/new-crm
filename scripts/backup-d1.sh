@@ -37,7 +37,7 @@ DIR="${BACKUP_DIR:-$REPO_ROOT/backups}"
 KEEP="${BACKUP_KEEP:-30}"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 
-SCHEMA="${BACKUP_SCHEMA_VERSION:-phase6}"
+SCHEMA="${BACKUP_SCHEMA_VERSION:-mail-folders}"
 [[ "$DB" =~ ^[A-Za-z0-9_-]+$ ]] || { echo "Invalid backup database name" >&2; exit 1; }
 
 mkdir -p "$DIR"
@@ -68,6 +68,9 @@ fi
 # Rehearse the export in memory and validate the selected migration profile,
 # every expected index/trigger, all relationship guards, FK and integrity checks.
 # pre-phase6 is explicit for the backup immediately BEFORE migration 0013.
+# phase7-apollo is explicit for the backup immediately BEFORE migration 0016.
+# shared-options is explicit for the backup immediately BEFORE migration 0017.
+# mail-folders is the production default after the Phase 11 upgrade through 0021.
 if ! python3 scripts/d1-recovery.py validate "$TMP" --schema "$SCHEMA" --report "$VALIDATION" >"$LOG" 2>&1; then
   fail "export failed schema/data/relationship validation"
 fi

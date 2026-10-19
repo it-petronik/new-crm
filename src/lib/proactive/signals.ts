@@ -25,7 +25,7 @@ export const PROACTIVE_THRESHOLDS = {
   meetingReportWindowDays: 7,
 } as const;
 
-export const CATEGORIES = ["sales", "quotation", "customer", "meeting", "order", "logistics", "accounts", "data_quality", "approval", "management"] as const;
+export const CATEGORIES = ["sales", "quotation", "customer", "meeting", "order", "logistics", "accounts", "data_quality", "approval", "management", "task"] as const;
 export type Category = (typeof CATEGORIES)[number];
 export type Severity = "urgent" | "important" | "normal";
 
@@ -69,6 +69,8 @@ export type ProactiveSignal = {
    */
   fingerprint: string;
   meetingId?: string;
+  /** An open task about this record (Phase 8), shown on this item rather than as a second one. */
+  task?: { id: string; title: string };
 };
 
 export type ProactiveMeeting = SignalMeeting & {

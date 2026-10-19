@@ -45,6 +45,7 @@ References approved by the user:
 | Business tables, status views and mobile record cards | `src/components/studio/records.module.css`, `RecordTable` in `workspace.tsx` |
 | Record detail layout and commercial overview sections | `src/components/studio/detail.module.css` |
 | Action Center queue and responsive task rows | `src/components/studio/action-center.module.css` |
+| Tasks (My Day views, task rows, record Tasks section, automation rules) | `src/components/studio/tasks.module.css` |
 | Prospecting search, examples and first-use instructions | `src/components/studio/prospecting.module.css` |
 | Expanded dashboard analysis | `src/components/studio/analysis.module.css` |
 | Company-shared field choices | `src/components/ui/shared-select.tsx` and its CSS Module |
@@ -343,3 +344,31 @@ layout/foundation/navigation (12) and workflow polish (3). The layout matrix
 covers 23 routes at 1440/768/390px; the meeting time control also covers 320px.
 Light/dark and phone screenshots were visually reviewed. The refreshed preview
 remains local; nothing was committed, pushed or deployed.
+
+## Chart zoom correction and authorized live release — 4 October 2026
+
+Donut segments now retain equal stroke thickness during hover, selection and
+keyboard focus; entry fades no longer animate segment geometry. Card layouts
+wrap according to available width, and value labels have their own line instead
+of squeezing names into a narrow column at zoom. Half-percent shares remain
+visible. Chart reveal starts on intersection rather than requiring 15% of a
+potentially taller-than-viewport chart to be visible.
+
+Verification: 479 unit tests, typecheck and the OpenNext build passed. The final
+browser runs passed 21 scenarios: chart scaling (1), route layouts (12), shared
+choices authorization/persistence (1), motion controls (4) and workflow polish
+(3). Chart tests cover 100/125/150/200% CSS scaling, equivalent narrowed CSS
+viewports, phone layout, both themes, keyboard interaction and tall-chart reveal.
+These simulate zoom layout; they do not automate the browser's zoom menu.
+
+At the user's explicit deployment request, live migration 0016 and Worker
+`f4ef2d98-d747-44bc-8ae4-f7d16f18a79a` were published to `crm.enercore.ae`.
+Validated private local backups were taken before and after migration; all
+existing table hashes were unchanged except migration history. The new
+SharedOption table is empty. No fixture seeding, R2 enablement, commit or push.
+No off-device backup mirror was configured. The active version serves 100%
+traffic, retains the five existing secret bindings, and has no pending migration.
+Read-only live checks passed for login, assets, responsive width and anonymous
+API rejection. An initial API request timed out; independent requests and the
+repeat browser check returned the expected 401. Signed-in production workflows
+were not exercised; those were tested with fictional local accounts.

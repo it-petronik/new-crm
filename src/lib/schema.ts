@@ -1,5 +1,8 @@
 import { sql } from "drizzle-orm";
 import { sqliteTable, text, integer, real, index, uniqueIndex, primaryKey, check } from "drizzle-orm/sqlite-core";
+export { purchases, movements, invoices, payments } from "./operations/tables";
+export { communicationTemplates, outboundMessages, outboundEvents } from "./outbound/tables";
+export {mailboxConnections,mailboxMessages,mailboxDrafts,mailboxAttempts,mailboxRemoteMessages} from "./mail/tables";
 
 /**
  * D1 (SQLite) equivalent of the original MySQL schema.
@@ -134,9 +137,10 @@ export const auditEvents = sqliteTable(
      *
      * Deliberately a stored column rather than something derived from the
      * action text: those strings are user-facing and have already been
-     * renamed once.
+     * renamed once. "task" marks Phase 8 task history (recordId is a Task
+     * id); it is shown only in that task's history, never in Activity.
      */
-    subject: text("subject").$type<"account" | "collaboration" | null>(),
+    subject: text("subject").$type<"account" | "collaboration" | "task" | "operations" | null>(),
     /**
      * Branch scope for account events, so a branch-scoped administrator does
      * not see accounts outside their branch. NULL means group-wide, which
@@ -903,3 +907,87 @@ export const apolloAccountCache=sqliteTable("ApolloAccountCache",{
  id:text("id").primaryKey(),data:text("data",{mode:"json"}).$type<import("./prospecting/operations-model").AccountUsage>().notNull(),updatedAt:integer("updatedAt",{mode:"timestamp_ms"}).notNull(),
 });
 export const apolloGate=sqliteTable("ApolloGate",{id:text("id").primaryKey(),token:text("token").notNull(),until:integer("until").notNull()});
+
+/* ------------------------------------------------------------------------
+ * Phase 8: internal tasks and task automation (migration 0017). Tasks are
+ * internal work, not business records: they link to at most one record by id
+ * and never grant access to it. Triggers keep a task, its rule and its linked
+ * record in one company/branch.
+ * --------------------------------------------------------------------- */
+export const automationRules = sqliteTable("AutomationRule", {
+  id: text("id").primaryKey(),
+  company: text("company").notNull(),
+  name: text("name").notNull(),
+  preset: text("preset").$type<import("./tasks/model").Preset>().notNull(),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(false),
+  conditions: text("conditions", { mode: "json" }).$type<import("./tasks/model").RuleConditions>().notNull(),
+  assigneeId: text("assigneeId").references(() => users.id, { onDelete: "restrict" }),
+  dueDays: integer("dueDays").notNull().default(0),
+  dueTime: text("dueTime"),
+  priority: text("priority").$type<import("./tasks/model").TaskPriority>().notNull().default("normal"),
+  version: integer("version").notNull().default(1),
+  createdBy: text("createdBy").notNull().references(() => users.id, { onDelete: "restrict" }),
+  updatedBy: text("updatedBy").notNull().references(() => users.id, { onDelete: "restrict" }),
+  createdAt: integer("createdAt", { mode: "timestamp_ms" }).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp_ms" }).notNull(),
+}, (t) => [uniqueIndex("AutomationRule_company_preset_key").on(t.company, t.preset)]);
+
+export const tasks = sqliteTable("Task", {
+  id: text("id").primaryKey(),
+  company: text("company").notNull(),
+  branch: text("branch").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull().default(""),
+  assigneeId: text("assigneeId").notNull().references(() => users.id, { onDelete: "restrict" }),
+  createdBy: text("createdBy").notNull().references(() => users.id, { onDelete: "restrict" }),
+  priority: text("priority").$type<import("./tasks/model").TaskPriority>().notNull().default("normal"),
+  status: text("status").$type<import("./tasks/model").TaskStatus>().notNull().default("open"),
+  dueDate: text("dueDate").notNull(),
+  dueTime: text("dueTime"),
+  linkedRecordId: text("linkedRecordId").references(() => businessRecords.id, { onDelete: "restrict" }),
+  ruleId: text("ruleId").references(() => automationRules.id, { onDelete: "restrict" }),
+  dedupeKey: text("dedupeKey"),
+  version: integer("version").notNull().default(1),
+  createdAt: integer("createdAt", { mode: "timestamp_ms" }).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp_ms" }).notNull(),
+  completedAt: integer("completedAt", { mode: "timestamp_ms" }),
+}, (t) => [
+  uniqueIndex("Task_dedupeKey_key").on(t.dedupeKey).where(sql`"dedupeKey" IS NOT NULL`),
+  index("Task_assignee_status_due_idx").on(t.assigneeId, t.status, t.dueDate),
+  index("Task_scope_due_idx").on(t.company, t.branch, t.dueDate),
+  index("Task_linkedRecord_idx").on(t.linkedRecordId),
+  index("Task_createdBy_idx").on(t.createdBy),
+]);
+
+export const automationRuns = sqliteTable("AutomationRun", {
+  id: text("id").primaryKey(),
+  ruleId: text("ruleId").notNull().references(() => automationRules.id, { onDelete: "restrict" }),
+  company: text("company").notNull(),
+  dedupeKey: text("dedupeKey").notNull(),
+  trigger: text("trigger").notNull(),
+  recordId: text("recordId").references(() => businessRecords.id, { onDelete: "restrict" }),
+  taskId: text("taskId").references(() => tasks.id, { onDelete: "restrict" }),
+  status: text("status").$type<"success" | "skipped" | "failed">().notNull(),
+  message: text("message").notNull(),
+  attempts: integer("attempts").notNull().default(1),
+  createdAt: integer("createdAt", { mode: "timestamp_ms" }).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp_ms" }).notNull(),
+}, (t) => [
+  uniqueIndex("AutomationRun_rule_key").on(t.ruleId, t.dedupeKey),
+  index("AutomationRun_company_at_idx").on(t.company, t.createdAt),
+]);
+
+export const automationEvents = sqliteTable("AutomationEvent", {
+  id: text("id").primaryKey(),
+  company: text("company").notNull(),
+  trigger: text("trigger").$type<"RECORD_CREATED" | "STATUS_CHANGED">().notNull(),
+  recordId: text("recordId").notNull().references(() => businessRecords.id, { onDelete: "restrict" }),
+  data: text("data", { mode: "json" }).$type<Record<string, string>>().notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  lastError: text("lastError"),
+  createdAt: integer("createdAt", { mode: "timestamp_ms" }).notNull(),
+  processedAt: integer("processedAt", { mode: "timestamp_ms" }),
+}, (t) => [index("AutomationEvent_pending_idx").on(t.processedAt, t.createdAt)]);
+export type TaskRow = typeof tasks.$inferSelect;
+export type AutomationRuleRow = typeof automationRules.$inferSelect;
+export type AutomationRunRow = typeof automationRuns.$inferSelect;

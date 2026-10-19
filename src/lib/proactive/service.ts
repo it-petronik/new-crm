@@ -8,6 +8,8 @@ import { gstToday } from "../ai/context";
 import { AiError } from "../ai/gateway";
 import { readableRecords } from "../ai/records";
 import { isCashEntry } from "../cashbook";
+import { hasTeamScope } from "./team";
+import { withTaskSignals } from "../tasks/signals";
 import { proactiveSignals, isMine, type Category, type ProactiveMeeting, type ProactiveSignal } from "./signals";
 
 /**
@@ -18,7 +20,7 @@ import { proactiveSignals, isMine, type Category, type ProactiveMeeting, type Pr
  */
 
 export const GROUPS: Record<string, Category[]> = {
-  all: ["sales", "quotation", "customer", "meeting", "order", "logistics", "accounts", "data_quality", "approval", "management"],
+  all: ["sales", "quotation", "customer", "meeting", "order", "logistics", "accounts", "data_quality", "approval", "management", "task"],
   sales: ["sales", "quotation", "customer", "meeting", "approval"],
   operations: ["order", "logistics"],
   finance: ["accounts"],
@@ -26,7 +28,7 @@ export const GROUPS: Record<string, Category[]> = {
 };
 
 /** Roles that see a team scope (everyone else: their own work). */
-export const hasTeamScope = (actor: Actor) => ["MD", "MD Assistant", "Group Manager", "Branch Manager", "Sales Manager", "Logistics Manager", "Accounts Manager", "HR Manager"].includes(actor.role);
+export { hasTeamScope };
 
 async function meetingInputs(db: Database, actor: Actor): Promise<ProactiveMeeting[]> {
   const rows = await visibleMeetings(db, actor);
@@ -58,7 +60,8 @@ export async function signalsFor(db: Database, actor: Actor, scope: "mine" | "te
   const [records, meetings] = await Promise.all([readableRecords(db, actor), meetingInputs(db, actor)]);
   const all = [...proactiveSignals({ actor, records, meetings, today: gstToday() }), ...await executionSignals(db,actor,records)];
   const effective = scope === "team" && hasTeamScope(actor) ? "team" : "mine";
-  return { records, signals: effective === "team" ? all : all.filter((s) => isMine(s, actor.id)), scope: effective as "mine" | "team" };
+  const scoped = effective === "team" ? all : all.filter((s) => isMine(s, actor.id));
+  return { records, signals: await withTaskSignals(db, actor, scoped, effective), scope: effective as "mine" | "team" };
 }
 
 export async function actionCenter(db: Database, actor: Actor, options: { scope: "mine" | "team"; group: keyof typeof GROUPS }) {

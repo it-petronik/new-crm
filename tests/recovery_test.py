@@ -11,6 +11,8 @@ import sys
 import tempfile
 import unittest
 from recovery_fixture import r, database, export, insert
+from operations_fixture import operations_sql
+from outbound_fixture import outbound_sql
 
 class LocalTransport:
     target='enercore-recovery-unit'
@@ -62,6 +64,137 @@ class Recovery(unittest.TestCase):
     def test_pre_phase6_profile(self):
         db=database(False);export(db,self.backup);loaded=r.load_backup(self.backup,'pre-phase6');self.assertEqual(r.snapshot(db),r.snapshot(loaded));db.close();loaded.close()
         self.reject() # Never silently call a pre-Phase-6 export Phase-6-ready.
+    def test_shared_options_upgrade_preserves_records_and_restores_vocabulary(self):
+        before=r.snapshot(self.db)
+        for path in r.migrations('shared-options'):
+            if int(path.name[:4]) > 13:
+                self.db.executescript(path.read_text())
+                self.db.execute('INSERT INTO d1_migrations(name) VALUES(?)',(path.name,))
+                self.db.commit()
+        self.db.execute(insert('SharedOption',id='choice-1',company='Petronik',catalog='leads:source',label='Partner Network',normalized='partner network',createdBy='recovery-user',version=1,updatedAt=1700000000000))
+        self.db.commit()
+        for table, digest in before.items():
+            if table != 'd1_migrations':self.assertEqual(r.snapshot(self.db)[table],digest)
+        export(self.db,self.backup)
+        args=self.args();args.schema='shared-options'
+        target=LocalTransport();result=self.restore(target,args)
+        self.assertEqual(result['status'],'validated')
+        self.assertEqual(r.snapshot(self.db),r.snapshot(target.db))
+        self.assertEqual(r.schema(self.db),r.schema(target.db))
+        with self.assertRaises(r.RecoveryError):r.load_backup(self.backup,'phase7-apollo')
+        self.db.execute('DROP INDEX SharedOption_scope_key');export(self.db,self.backup)
+        with self.assertRaises(r.RecoveryError):r.load_backup(self.backup,'shared-options')
+    def upgrade_to_tasks(self):
+        for path in r.migrations('tasks'):
+            if int(path.name[:4]) > 13:
+                self.db.executescript(path.read_text())
+                self.db.execute('INSERT INTO d1_migrations(name) VALUES(?)',(path.name,))
+                self.db.commit()
+        self.db.execute(insert('AutomationRule',id='rule-1',company='Petronik',name='Fictional handoff',preset='quotation_handoff',enabled=1,conditions='{"branches":[]}',assigneeId='recovery-user',dueDays=1,dueTime='09:00',priority='high',version=2,createdBy='recovery-user',updatedBy='recovery-user',createdAt=1700000000000,updatedAt=1700000000000))
+        self.db.execute(insert('Task',id='task-1',company='Petronik',branch='Main',title="Fictional handoff; 'quoted'",description='Line one\nLine two Δ',assigneeId='recovery-user',createdBy='recovery-user',priority='high',status='open',dueDate='2026-10-09',dueTime='09:00',linkedRecordId='legacy',ruleId='rule-1',dedupeKey='rule-1:STATUS_CHANGED:legacy',version=1,createdAt=1700000000000,updatedAt=1700000000000,completedAt=None))
+        self.db.execute(insert('Task',id='task-2',company='Petronik',branch='Main',title='Fictional unlinked',description='',assigneeId='recovery-user',createdBy='recovery-user',priority='normal',status='completed',dueDate='2026-10-08',dueTime=None,linkedRecordId=None,ruleId=None,dedupeKey=None,version=3,createdAt=1700000000000,updatedAt=1700000000000,completedAt=1700000000000))
+        self.db.execute(insert('AutomationRun',id='run-1',ruleId='rule-1',company='Petronik',dedupeKey='STATUS_CHANGED:legacy',trigger='STATUS_CHANGED',recordId='legacy',taskId='task-1',status='success',message='Created a task',attempts=1,createdAt=1700000000000,updatedAt=1700000000000))
+        self.db.execute(insert('AutomationRun',id='run-2',ruleId='rule-1',company='Petronik',dedupeKey='STATUS_CHANGED:c-a',trigger='STATUS_CHANGED',recordId='c-a',taskId=None,status='skipped',message='Fictional person is inactive.',attempts=1,createdAt=1700000000000,updatedAt=1700000000000))
+        self.db.execute(insert('AutomationEvent',id='STATUS_CHANGED:legacy',company='Petronik',trigger='STATUS_CHANGED',recordId='legacy',data='{"orderId":"legacy-SO"}',attempts=1,lastError=None,createdAt=1700000000000,processedAt=1700000000000))
+        self.db.commit()
+    def test_tasks_upgrade_preserves_records_and_restores_tasks(self):
+        before=r.snapshot(self.db)
+        self.upgrade_to_tasks()
+        for table, digest in before.items():
+            if table != 'd1_migrations':self.assertEqual(r.snapshot(self.db)[table],digest)
+        export(self.db,self.backup)
+        args=self.args();args.schema='tasks'
+        target=LocalTransport();result=self.restore(target,args)
+        self.assertEqual(result['status'],'validated')
+        self.assertEqual(r.snapshot(self.db),r.snapshot(target.db))
+        self.assertEqual(r.schema(self.db),r.schema(target.db))
+        for table in ['Task','AutomationRule','AutomationRun','AutomationEvent']:self.assertGreater(result['tables'][table]['rows'],0)
+        # The previous profile never accepts a Phase 8 export, and vice versa.
+        with self.assertRaises(r.RecoveryError):r.load_backup(self.backup,'shared-options')
+    def upgrade_to_operations(self):
+        self.upgrade_to_tasks()
+        migration=r.ROOT/'drizzle/0018_operations.sql'
+        self.db.executescript(migration.read_text())
+        self.db.execute('INSERT INTO d1_migrations(name) VALUES(?)',(migration.name,))
+        self.db.commit()
+        self.db.executescript(operations_sql())
+        self.db.commit()
+    def test_operations_roundtrip_preserves_stock_reversals_and_payments(self):
+        self.upgrade_to_operations();export(self.db,self.backup)
+        args=self.args();args.schema='operations'
+        target=LocalTransport();result=self.restore(target,args)
+        self.assertEqual(result['status'],'validated')
+        self.assertEqual(r.snapshot(self.db),r.snapshot(target.db))
+        self.assertEqual(r.schema(self.db),r.schema(target.db))
+        self.assertEqual(target.db.execute('SELECT sum(quantity) FROM StockMovement').fetchone(),(4000000,))
+        self.assertEqual(target.db.execute('SELECT sum(amountCents) FROM SupplierPayment').fetchone(),(10000,))
+        with self.assertRaises(r.RecoveryError):r.load_backup(self.backup,'tasks')
+    def test_communication_roundtrip_retains_private_message_and_template_history(self):
+        self.upgrade_to_operations()
+        migration=r.ROOT/'drizzle/0019_outbound.sql'
+        self.db.executescript(migration.read_text())
+        self.db.execute('INSERT INTO d1_migrations(name) VALUES(?)',(migration.name,))
+        self.db.commit()
+        self.db.executescript(outbound_sql());self.db.commit();export(self.db,self.backup)
+        args=self.args();args.schema='communication'
+        target=LocalTransport();result=self.restore(target,args)
+        self.assertEqual(result['status'],'validated')
+        self.assertEqual(r.snapshot(self.db),r.snapshot(target.db))
+        self.assertEqual(r.schema(self.db),r.schema(target.db))
+        with self.assertRaises(r.RecoveryError):r.load_backup(self.backup,'operations')
+    def test_mailbox_roundtrip_retains_encrypted_private_data(self):
+        self.upgrade_to_operations()
+        for name in ['0019_outbound.sql','0020_private_mailboxes.sql']:
+            migration=r.ROOT/'drizzle'/name
+            self.db.executescript(migration.read_text())
+            self.db.execute('INSERT INTO d1_migrations(name) VALUES(?)',(name,))
+        owner=self.db.execute('SELECT id FROM User LIMIT 1').fetchone()[0]
+        self.db.execute("INSERT INTO MailboxConnection(ownerId,id,address,host,passwordSeal,createdAt) VALUES(?,'fixture-mailbox','fixture@example.invalid','mail.petronik.ae','fictional-encrypted-seal',1)",(owner,))
+        self.db.execute("INSERT INTO MailboxDraft(id,ownerId,connectionId,recipient,subject,body,status,updatedAt) VALUES('fixture-draft',?,'fixture-mailbox','buyer@example.invalid','Fixture','Private body','draft',1)",(owner,))
+        self.db.commit();export(self.db,self.backup)
+        args=self.args();args.schema='mailboxes'
+        target=LocalTransport();result=self.restore(target,args)
+        self.assertEqual(result['status'],'validated')
+        self.assertEqual(r.snapshot(self.db),r.snapshot(target.db))
+        self.assertEqual(r.schema(self.db),r.schema(target.db))
+        with self.assertRaises(r.RecoveryError):r.load_backup(self.backup,'communication')
+    def test_server_mail_folders_roundtrip(self):
+        self.upgrade_to_operations()
+        for name in ['0019_outbound.sql','0020_private_mailboxes.sql','0021_mail_remote_folders.sql']:
+            self.db.executescript((r.ROOT/'drizzle'/name).read_text());self.db.execute('INSERT INTO d1_migrations(name) VALUES(?)',(name,))
+        owner=self.db.execute('SELECT id FROM User LIMIT 1').fetchone()[0]
+        self.db.execute("INSERT INTO MailboxConnection(ownerId,id,address,host,passwordSeal,createdAt,folderState) VALUES(?,'mail-folder-fixture','fixture@example.invalid','mail.petronik.ae','ciphertext',1,'{}')",(owner,))
+        self.db.execute("INSERT INTO MailboxRemoteMessage(id,ownerId,connectionId,folder,path,uid,uidValidity,sender,recipient,subject,receivedAt) VALUES('remote-fixture',?,'mail-folder-fixture','sent','INBOX.Sent',1,'v1','fixture@example.invalid','buyer@example.invalid','Sent subject',1)",(owner,))
+        self.db.commit();export(self.db,self.backup);args=self.args();args.schema='mail-folders';target=LocalTransport();result=self.restore(target,args);self.assertEqual(result['status'],'validated');self.assertEqual(r.snapshot(self.db),r.snapshot(target.db))
+        with self.assertRaises(r.RecoveryError):r.load_backup(self.backup,'mailboxes')
+    def test_operations_profile_refuses_corrupt_stock_and_invoice_balances(self):
+        self.upgrade_to_operations();export(self.db,self.backup)
+        original=self.backup.read_text()
+        for statement in ["UPDATE StockMovement SET quantity=-9000000 WHERE id='z-dispatch'", "UPDATE SupplierPayment SET amountCents=30000", "UPDATE PurchaseOrder SET totalCents=100"]:
+            with self.subTest(statement=statement):
+                test=r.load_backup(self.backup,'operations')
+                for (name,) in test.execute("SELECT name FROM sqlite_master WHERE type='trigger'").fetchall():test.execute('DROP TRIGGER '+r.quote_name(name))
+                test.execute(statement);export(test,self.backup);test.close()
+                guards='\n'.join(sql+';' for (sql,) in self.db.execute("SELECT sql FROM sqlite_master WHERE type='trigger'"))
+                self.backup.write_text(self.backup.read_text()+guards)
+                with self.assertRaises(r.RecoveryError):r.load_backup(self.backup,'operations')
+                self.backup.write_text(original)
+    def test_tasks_profile_rejects_missing_objects_and_scope_drift(self):
+        self.upgrade_to_tasks();export(self.db,self.backup)
+        original=self.backup.read_text()
+        for name in ['Task','Task_dedupeKey_key','AutomationRun_rule_key','Task_scope_insert','AutomationRun_scope_update']:
+            with self.subTest(name=name):
+                self.backup.write_text('\n'.join(s for s in r.statements(original) if not (r.canonical(s).startswith('create ') and name.lower() in r.canonical(s).split())))
+                with self.assertRaises(r.RecoveryError):r.load_backup(self.backup,'tasks')
+        for sql in ["UPDATE BusinessRecord SET company='Afrilube',payload=json_set(payload,'$.company','Afrilube') WHERE id='legacy'", "UPDATE AutomationRule SET conditions='[1]'", "UPDATE AutomationRun SET company='Afrilube' WHERE id='run-2'"]:
+            with self.subTest(sql=sql):
+                copy=sqlite3.connect(':memory:');self.db.backup(copy)
+                for (name,) in copy.execute("SELECT name FROM sqlite_master WHERE type='trigger'").fetchall():copy.execute('DROP TRIGGER '+r.quote_name(name))
+                copy.execute('PRAGMA foreign_keys=OFF');copy.executescript(sql+';');export(copy,self.backup);copy.close()
+                reference=r.expected_schema('tasks')
+                guards='\n'.join(row[0]+';' for row in reference.execute("SELECT sql FROM sqlite_master WHERE type='trigger'"));reference.close()
+                self.backup.write_text(self.backup.read_text()+guards+'\n')
+                with self.assertRaises(r.RecoveryError):r.load_backup(self.backup,'tasks')
     def test_missing_tables_indexes_and_guards(self):
         original=self.backup.read_text()
         for name in ['Contact','Deal_lead_idx','BusinessRecord_customerId_idx','Contact_insert_guard','BusinessRecord_contact_active_update']:
@@ -137,7 +270,7 @@ class Recovery(unittest.TestCase):
                     broken='\n'.join(sql for sql in r.statements(original) if not r.canonical(sql).startswith('create trigger contact_insert_guard '))
                     self.assertNotEqual(broken,original)
                     self.backup.write_text(broken)
-                result=subprocess.run(['bash',str(repo/'scripts/backup-d1.sh')],capture_output=True,text=True,env={**os.environ,'PATH':str(bin_dir)+os.pathsep+os.environ['PATH'],'BACKUP_DIR':str(out),'D1_DATABASE':'enercore-recovery-fixture','RECOVERY_TEST_EXPORT':str(self.backup)})
+                result=subprocess.run(['bash',str(repo/'scripts/backup-d1.sh')],capture_output=True,text=True,env={**os.environ,'PATH':str(bin_dir)+os.pathsep+os.environ['PATH'],'BACKUP_DIR':str(out),'BACKUP_SCHEMA_VERSION':'phase6','D1_DATABASE':'enercore-recovery-fixture','RECOVERY_TEST_EXPORT':str(self.backup)})
                 if valid:
                     self.assertEqual(result.returncode,0,result.stderr)
                     exported=list(out.glob('*.sql'));self.assertEqual(len(exported),1)

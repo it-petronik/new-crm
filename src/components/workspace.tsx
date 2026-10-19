@@ -1,5 +1,6 @@
 "use client";
 import { companyName } from "@/lib/company-name";
+import { operationsAccess } from "@/lib/operations/model";
 import { recordsToCsv, exportFilename, downloadCsv } from "@/lib/export";
 import { isImportable, type ImportableKind } from "@/lib/import";
 import { attentionItems, isoDate, nextAction, operationalViews } from "@/lib/attention";
@@ -151,6 +152,8 @@ type QuoteDraftPrefill = { leadId: string; product: string; quantity: number; un
 const AiWorkspace = dynamic(() => import("./ai/ai-workspace"), { ssr: false });
 const ActionCenter = dynamic(() => import("./ai/action-center"), { ssr: false });
 const ActionDigest = dynamic(() => import("./ai/action-center").then((m) => m.ActionDigest), { ssr: false });
+const TasksPage = dynamic(() => import("./tasks/tasks-page"), { ssr: false });
+const OperationsPage = dynamic(() => import("./operations/operations-page"), { ssr: false });
 const CollaborationHub = dynamic(() => import("./collaboration/collaboration-hub"), {
   ssr: false,
   loading: () => <HubSkeleton />,
@@ -645,6 +648,11 @@ export default function Workspace({
     }
     // A meeting opens its pre-join screen; joining re-checks access.
     if (target.kind === "meeting") return openPrejoin(target.meetingId);
+    if (target.kind === "task") {
+      if (view === "tasks") window.dispatchEvent(new CustomEvent("enercore:open-task", { detail: { taskId: target.taskId } }));
+      else openView("tasks", `?task=${encodeURIComponent(target.taskId)}`);
+      return;
+    }
     await openRecordById(target.recordKind, target.recordId);
   }
   /** Opens one record's detail through the normal records API (its read rule applies). */
@@ -735,12 +743,21 @@ export default function Workspace({
       if (viewRef.current === "collaboration") window.dispatchEvent(new CustomEvent("enercore:open-conversation", { detail: { conversationId, messageId } }));
       else openViewRef.current("collaboration", `?c=${encodeURIComponent(conversationId)}${messageId ? `&m=${encodeURIComponent(messageId)}` : ""}`);
     };
+    // A task (from the Action Center or a notification): Tasks opens it.
+    const onTask = (e: Event) => {
+      if (viewRef.current === "tasks") return; // the Tasks page handles it
+      const { taskId } = (e as CustomEvent<{ taskId: string }>).detail;
+      setSelected(null);
+      openViewRef.current("tasks", `?task=${encodeURIComponent(taskId)}`);
+    };
+    window.addEventListener("enercore:open-task", onTask);
     window.addEventListener("enercore:open-record", onRecord);
     window.addEventListener("enercore:open-meeting-page", onMeeting);
     window.addEventListener("enercore:open-conversation-link", onConversation);
     window.addEventListener("enercore:quote-draft", onQuoteDraft);
     return () => {
       window.removeEventListener("enercore:quote-draft", onQuoteDraft);
+      window.removeEventListener("enercore:open-task", onTask);
       window.removeEventListener("enercore:open-record", onRecord);
       window.removeEventListener("enercore:open-meeting-page", onMeeting);
       window.removeEventListener("enercore:open-conversation-link", onConversation);
@@ -1418,7 +1435,7 @@ export default function Workspace({
                 />
               )}
               {view === "prospecting" && <Prospecting actor={actor} preview={preview} />}
-              {view === "mail" && <MailHub preview={preview} records={scoped.records} onCreate={(kind, message, suggestion) => {
+              {view === "mail" && <MailHub actor={actor} preview={preview} records={scoped.records} onCreate={(kind, message, suggestion) => {
                 const entity = company === "All companies" ? actor.companies[0] : company;
                 const source: RecordItem = { id:"", kind, company:entity, branch:actor.branches[0] || "Main",
                   title:kind === "it" ? suggestion.summary : suggestion.company, contact:suggestion.contact,
@@ -1437,6 +1454,15 @@ export default function Workspace({
                 ) : (
                   <ActionCenter />
                 ))}
+              {view === "tasks" &&
+                (preview ? (
+                  <section className="panel ai-unavailable">
+                    <p>Tasks aren&apos;t available in the preview — they are saved in the live CRM.</p>
+                  </section>
+                ) : (
+                  <TasksPage actor={actor} company={company} records={scoped.records} />
+                ))}
+              {view === "operations" && (preview ? <p>Operations requires the connected workspace.</p> : <OperationsPage actor={actor} company={company} records={scoped.records}/>)}
               {view === "appearance" && <AppearancePage />}
               {view === "notifications" && (
                 <NotificationsPage
@@ -1984,7 +2010,7 @@ export default function Workspace({
                 run: () => go(m),
               })),
               ...Object.entries(viewLabels)
-                .filter(([v]) => (v !== "prospecting" || canProspect(actor)) && (v !== "access" || canManageUsers(actor)) && (!["ai", "actions"].includes(v) || !preview))
+                .filter(([v]) => (v !== "operations" || (!preview && operationsAccess(actor).view)) && (v !== "prospecting" || canProspect(actor)) && (v !== "access" || canManageUsers(actor)) && (!["ai", "actions", "tasks"].includes(v) || !preview))
                 .map(([v, label]) => ({
                   id: v,
                   label,

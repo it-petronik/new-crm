@@ -13,6 +13,8 @@ import { Section, useMediaQuery } from "../ui/layout";
 import { StatusBadge } from "../ui/status-badge";
 import { RecordActivity } from "../record-tools";
 import RecordMeetings from "../meetings/record-meetings";
+import RecordTasks from "../tasks/record-tasks";
+import { LINKABLE_KINDS } from "@/lib/tasks/model";
 import { QuotationDocument, QuotationSummary } from "../quotation-document";
 import { CustomerCopilot, LeadCopilot } from "../ai/sales-copilot";
 import CommercialWorkspace from "./commercial-workspace";
@@ -137,6 +139,7 @@ export default function RecordWorkspace({
   const details = <RecordDetails record={r} />;
   const activity = (
     <>
+      {live && LINKABLE_KINDS.includes(r.kind) && <RecordTasks key={`tasks-${r.id}`} record={r} actor={actor} />}
       {live && MEETING_KINDS.includes(r.kind) && !isCashEntry(r) && (
         <RecordMeetings record={{ id: r.id, title: r.title, ownerId: r.ownerId, owner: r.owner }} meId={actor.id} canCreate={canRead(actor, r)} />
       )}
