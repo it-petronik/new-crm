@@ -78,6 +78,7 @@ export function ProfilePage({
             <p>{actor.email || "preview@example.invalid"}</p>
             <span className="badge blue">{actor.role}</span>
           </div>
+          <div className="profile-actions" role="group" aria-label="Profile actions">
           <Button className="secondary" onClick={onAppearance}>
             <Sun size={16} />
             Appearance preferences
@@ -115,6 +116,7 @@ export function ProfilePage({
               Sign out everywhere
             </Button>
           )}
+          </div>
         </div>
         <div className="profile-summary">
           <span>

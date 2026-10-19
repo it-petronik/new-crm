@@ -1,4 +1,5 @@
 "use client";
+import {LoadingState} from "./ui/async-state";
 
 import { useEffect, useState } from "react";
 import {
@@ -238,7 +239,7 @@ export function NotificationsPage({
           </Button>
         </div>
         {!loaded ? (
-          <p className="notify-empty muted">Loading notifications…</p>
+          <LoadingState label="Loading notifications"/>
         ) : error && !items.length ? (
           <p className="notify-empty" role="alert">
             Notifications couldn&apos;t be loaded. They&apos;ll appear when you&apos;re back online.

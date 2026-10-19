@@ -79,6 +79,38 @@ actual accounts; never interpret SMTP acceptance as delivery/read confirmation.
 
 ## Team handover
 
+### Responsive and shared UX follow-up — 19 October 2026
+
+Deployed to the existing live domain as Worker version
+`c70005db-030c-440e-b959-906121dcc8da`. No migrations or secret changes were
+part of this follow-up.
+Read-only live smoke passed at 390/1440 px with no browser errors or document
+overflow; eight private APIs still deny anonymous access and both test endpoints
+return 404. Authenticated live team acceptance remains separate.
+
+- Profile identity and actions now wrap independently, including inside narrow
+  content panels. The workspace header truncates its title instead of widening
+  the document on small screens.
+- Shared padded skeletons replace remaining primary loading text in Action
+  Center, Access control, Operations, outbound, notifications, task details,
+  automation history and meeting intelligence. Assignee selection has a field
+  skeleton. Existing dashboard, record-list, mail and collaboration placeholders
+  remain in place. Dropdown options use consistent padding and theme surfaces.
+- Shared request handling translates HTML/parser/network failures into helpful
+  messages, preserves field validation and offers retry or sign-in recovery.
+  Access control distinguishes a failed account request from a genuinely empty
+  account list. Reads can retry once; writes are never automatically replayed.
+- Verification: 566 unit tests; three browser UX scenarios covering keyboard
+  selection, held loading requests, HTML failures and successful retry; ten
+  operations/outbound/task/permission workflow regressions. Responsive audit:
+  28 routes at 320, 390, 768, 1024, 1280, 1440 and 1920 CSS pixels in light/dark
+  themes (392 combinations), no document overflow or captured browser errors.
+  These are fictional local checks, not authenticated live team acceptance.
+- This follow-up does not change roles, database schemas, mailbox storage,
+  provider activation or the Phase 4 hold. The exact upstream source of the
+  screenshot's HTML response is not established; friendly failure handling is
+  verified, not a claim that an unavailable upstream can never recur.
+
 1. An existing MD/IT administrator signs in at the live URL and checks team roles,
    assigned companies, branch scope and overrides. Do not share administrator
    accounts. Provision only actual staff through Access control.

@@ -1,4 +1,5 @@
 "use client";
+import {requestJson,readJsonResponse} from "@/lib/client-request";
 import { companyName } from "@/lib/company-name";
 import { operationsAccess } from "@/lib/operations/model";
 import { recordsToCsv, exportFilename, downloadCsv } from "@/lib/export";
@@ -498,10 +499,7 @@ export default function Workspace({
   const [hrTab, setHrTab] = useState<"people" | "leave">("people");
   const permitted = allowedModules(actor);
   async function reload() {
-    const response = await fetch("/api/records", { cache: "no-store" });
-    const result = await response.json();
-    if (!response.ok)
-      throw new Error(result.error || "Unable to load workspace.");
+    const result = await requestJson("/api/records",{},"Your workspace couldn’t refresh. Please try again.");
     setData(result);
     // Open Action Center / My Day digests recompute from the new data.
     window.dispatchEvent(new Event(RECORDS_CHANGED));
@@ -661,7 +659,7 @@ export default function Workspace({
     if (!record) {
       try {
         const response = await fetch(`/api/records?id=${encodeURIComponent(id)}`, { cache: "no-store" });
-        if (response.ok) record = ((await response.json()) as { record: RecordItem }).record;
+        if (response.ok) record = ((await readJsonResponse(response,"We couldn’t confirm the latest information. Refresh to check it before trying again.")) as { record: RecordItem }).record;
       } catch {}
     }
     if (!record || !canRead(actor, record)) {
@@ -682,7 +680,7 @@ export default function Workspace({
     if (!lead) {
       try {
         const response = await fetch(`/api/records?id=${encodeURIComponent(prefill.leadId)}`, { cache: "no-store" });
-        if (response.ok) lead = ((await response.json()) as { record: RecordItem }).record;
+        if (response.ok) lead = ((await readJsonResponse(response,"We couldn’t confirm the latest information. Refresh to check it before trying again.")) as { record: RecordItem }).record;
       } catch {}
     }
     if (!lead || !canRead(actor, lead)) {
@@ -962,7 +960,7 @@ export default function Workspace({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id: r.id, status }),
         });
-        const result = await response.json();
+        const result = await readJsonResponse(response,"We couldn’t confirm the latest information. Refresh to check it before trying again.");
         if (!response.ok) throw new Error(result.error);
         await reload();
       }
@@ -1039,7 +1037,7 @@ export default function Workspace({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id: r.id, ...action }),
         });
-        const result = await response.json();
+        const result = await readJsonResponse(response,"We couldn’t confirm the latest information. Refresh to check it before trying again.");
         if (!response.ok) throw new Error(result.error);
         await reload();
       }
@@ -1066,7 +1064,7 @@ export default function Workspace({
       }
     } else {
       const response = await fetch('/api/records',{method:existing?'PATCH':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(existing?{action:'edit',id:existing.id,expectedUpdatedAt:existing.updatedAt,values}:{...values,requestId})});
-      const result = await response.json();
+      const result = await readJsonResponse(response,"We couldn’t confirm the latest information. Refresh to check it before trying again.");
       if(!response.ok) throw new Error(result.error || 'Unable to save post plan.');
       await reload();
     }
@@ -1120,7 +1118,7 @@ export default function Workspace({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...values, requestId: createKey.current }),
         });
-        const result = await response.json();
+        const result = await readJsonResponse(response,"We couldn’t confirm the latest information. Refresh to check it before trying again.");
         if (!response.ok) {
           if (result.fields) setMutationFields(result.fields);
           throw new Error(result.error);
@@ -1151,7 +1149,7 @@ export default function Workspace({
       if (preview) setData(mutateRecord(data, actor, editing.id, editing.updatedAt, values));
       else {
         const response = await fetch("/api/records", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "edit", id: editing.id, expectedUpdatedAt: editing.updatedAt, values }) });
-        const result = await response.json();
+        const result = await readJsonResponse(response,"We couldn’t confirm the latest information. Refresh to check it before trying again.");
         if (!response.ok) throw new Error(result.error);
         await reload();
       }
@@ -1171,7 +1169,7 @@ export default function Workspace({
       if (preview) setData(mutateRecord(data, actor, deleting.id, deleting.updatedAt));
       else {
         const response = await fetch("/api/records", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete", id: deleting.id, expectedUpdatedAt: deleting.updatedAt }) });
-        const result = await response.json();
+        const result = await readJsonResponse(response,"We couldn’t confirm the latest information. Refresh to check it before trying again.");
         if (!response.ok) throw new Error(result.error);
         await reload();
       }

@@ -24,6 +24,15 @@
 
 .skeleton-text { display: flex; flex-direction: column; gap: 8px; }
 .skeleton-region { display: flex; flex-direction: column; gap: 16px; }
+.async-loading { padding:clamp(12px,2vw,24px); border:1px solid var(--e-border,var(--line)); border-radius:16px; background:var(--e-surface,var(--surface)); min-width:0; }
+.async-loading .skeleton-table,.async-loading .skeleton-card { box-shadow:none; }
+.async-error { display:flex; align-items:flex-start; flex-wrap:wrap; gap:12px; padding:18px 20px; margin:12px 0; border:1px solid color-mix(in srgb,var(--e-danger,#b23a36) 24%,var(--e-border,var(--line))); border-radius:14px; background:var(--e-surface,var(--surface)); }
+.async-error-icon { display:grid; place-items:center; flex:none; width:36px; height:36px; border-radius:10px; color:var(--e-danger,#b23a36); background:color-mix(in srgb,currentColor 8%,transparent); }
+.async-error > div:first-of-type { flex:1 1 200px; min-width:0; }
+.async-error h3 { margin:0 0 5px; font-size:14px; }
+.async-error p { margin:0; color:var(--e-text-secondary,var(--muted)); font-size:13px; line-height:1.6; overflow-wrap:anywhere; }
+.async-error-actions { display:flex; flex-wrap:wrap; gap:8px; }
+@media(max-width:480px){.async-error {padding:14px;}.async-error-actions {width:100%;}.async-error-actions > * {flex:1;justify-content:center;}}
 .skeleton-stack { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
 
 .skeleton-card { display: flex; flex-direction: column; gap: 10px; }

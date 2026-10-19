@@ -22,6 +22,8 @@ import {
 } from "@/lib/domain";
 import { leadership, mayAssign, branchesForRole } from "@/lib/access-control";
 import { check, required, minLength, email as emailRule } from "@/lib/validation";
+import {requestJson,readJsonResponse,friendlyError} from "@/lib/client-request";
+import {LoadingState,ErrorState} from "./ui/async-state";
 type User = Actor & { email: string; active: boolean };
 export default function UserAdmin({
   actor,
@@ -40,14 +42,13 @@ export default function UserAdmin({
   const [resetLink, setResetLink] = useState<{ link: string; name: string; minutes: number } | null>(null);
   const [copied, setCopied] = useState(false);
   const [ready, setReady] = useState(false);
+  const [loadError,setLoadError]=useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [review, setReview] = useState(false);
   const key = `enercore-user-preview-${actor.id}`;
   async function load() {
-    const r = await fetch("/api/users");
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.error);
-    setUsers(d.users);
+    setReady(false);setLoadError("");
+    try{const d=await requestJson<{users:User[]}>("/api/users",{},"The account list couldn’t load. Please try again.");if(!Array.isArray(d.users))throw new Error("The account list couldn’t load. Please try again.");setUsers(d.users);}catch(e){setLoadError(friendlyError(e));throw e;}finally{setReady(true);}
   }
   useEffect(() => {
     if (preview) {
@@ -77,7 +78,7 @@ export default function UserAdmin({
       setReady(true);
     } else
       load()
-        .catch((e) => setError(e.message))
+        .catch((e) => setLoadError(friendlyError(e)))
         .finally(() => setReady(true));
   }, [preview]);
   function persist(next: User[]) {
@@ -117,11 +118,11 @@ export default function UserAdmin({
       <div className="panel-heading">
         <div>
           <h2>Team access</h2>
-          <p>{users.length} accounts · Role, company and module controls</p>
+          <p>{!ready?"Loading team accounts…":loadError?"Account list temporarily unavailable":`${users.length} accounts · Role, company and module controls`}</p>
         </div>
         <Button
           className="primary"
-          disabled={!ready}
+          disabled={!ready||Boolean(loadError)}
           onClick={() =>
             edit(
               {
@@ -141,6 +142,7 @@ export default function UserAdmin({
           Add user
         </Button>
       </div>
+      {!ready?<LoadingState label="Loading team accounts"/>:loadError?<ErrorState message={loadError} title="The account list couldn’t load" onRetry={()=>void load().catch(e=>setLoadError(friendlyError(e)))}/>:<>
       <ListFilters {...pagination} label="users" sortable={false} />
       {error && !editor && (
         <p className="error" role="alert">
@@ -201,7 +203,7 @@ export default function UserAdmin({
                               headers: { "Content-Type": "application/json" },
                               body: JSON.stringify({ userId: u.id }),
                             });
-                            const result = await response.json();
+                            const result = await readJsonResponse(response,"We couldn’t confirm this account change. Refresh to check it before trying again.");
                             if (!response.ok) throw new Error(result.error);
                             setCopied(false);
                             setResetLink({ link: result.link, name: result.user.name, minutes: result.expiresInMinutes });
@@ -240,7 +242,7 @@ export default function UserAdmin({
                                   active: !u.active,
                                 }),
                               });
-                              const d = await r.json();
+                              const d = await readJsonResponse(r,"We couldn’t confirm this account change. Refresh to check it before trying again.");
                               if (!r.ok) throw new Error(d.error);
                               await load();
                             }
@@ -269,6 +271,7 @@ export default function UserAdmin({
       </div>
       <ListEmpty {...pagination} label="users" />
       <Pagination {...pagination} label="users" />
+      </>}
       </>}
       <DialogPresence>
         {resetLink && (
@@ -405,7 +408,7 @@ export default function UserAdmin({
                             },
                       ),
                     });
-                    const d = await r.json();
+                    const d = await readJsonResponse(r,"We couldn’t confirm this account change. Refresh to check it before trying again.");
                     if (!r.ok) throw new Error(d.error);
                     await load();
                   }

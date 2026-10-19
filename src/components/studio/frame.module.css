@@ -59,7 +59,13 @@
 .topLeft :global(.current) {
   color: var(--e-text);
   font-weight: 600;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
 }
+.topLeft { flex:1 1 auto; overflow:hidden; }
+.topLeft :global(.breadcrumb) { flex:1; overflow:hidden; }
+.topRight { flex:0 0 auto; }
 .topRight .search {
   display: flex;
   gap: 10px;

@@ -3,6 +3,7 @@
 import type { AiResult } from "../ai/client";
 import type { RecordItem } from "../domain";
 import type { ProactiveSignal } from "./signals";
+import {requestJson} from "../client-request";
 
 /** Client side of the Action Center: types and the calls the UI makes. No server code. */
 
@@ -33,10 +34,7 @@ export type ChangesView = {
 };
 
 async function call<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, { cache: "no-store", ...init });
-  const body = (await response.json().catch(() => ({}))) as T & { error?: string };
-  if (!response.ok) throw new Error(body.error || "The Action Center couldn't load. Try again.");
-  return body;
+  return requestJson<T>(url,init,"The Action Center couldn’t load. Please try again.");
 }
 const post = <T>(url: string, body: unknown) => call<T>(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 const patchRecord = (body: unknown) => call<unknown>("/api/records", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });

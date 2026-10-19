@@ -1,4 +1,5 @@
 "use client";
+import {LoadingState} from "../ui/async-state";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Eye, History, Settings2 } from "lucide-react";
 import styles from "../studio/tasks.module.css";
@@ -342,7 +343,7 @@ function HistoryDialog({ view, onClose }: { view: RuleView; onClose: () => void 
           {error}
         </p>
       )}
-      {!runs && !error && <p className="muted small">Loading…</p>}
+      {!runs && !error && <LoadingState label="Loading automation history"/>}
       {runs && !runs.length && <EmptyState title="No runs yet" detail="Runs appear here once the rule is enabled and something happens." />}
       {runs && runs.length > 0 && (
         <ul className={styles.runs} aria-label="Run history">

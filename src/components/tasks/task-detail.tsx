@@ -1,4 +1,5 @@
 "use client";
+import {LoadingState} from "../ui/async-state";
 import { useCallback, useEffect, useState } from "react";
 import { Link2, Lock, Workflow } from "lucide-react";
 import styles from "../studio/tasks.module.css";
@@ -61,7 +62,7 @@ export function TaskDetail({ taskId, onClose, onEdit }: { taskId: string; onClos
           {error}
         </p>
       )}
-      {!task && !error && <p className="muted small">Loading…</p>}
+      {!task && !error && <LoadingState label="Loading task details" variant="detail"/>}
       {task && (
         <>
           <dl className={styles.facts}>

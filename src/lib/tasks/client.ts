@@ -1,4 +1,5 @@
 "use client";
+import {readJsonResponse} from "../client-request";
 import type { TaskHistoryItem, TaskView } from "./store";
 import type { RuleView } from "./automation";
 import type { TaskPriority, TaskStatus, TaskViewName } from "./model";
@@ -43,7 +44,7 @@ async function call<T>(url: string, init?: RequestInit): Promise<T> {
   } catch {
     throw new TaskRequestError(0, "You appear to be offline. Nothing was saved.");
   }
-  const body = await response.json().catch(() => ({}));
+  const body = await readJsonResponse(response,"Tasks couldn’t load. Please try again.");
   if (!response.ok) throw new TaskRequestError(response.status, body.error || "Something went wrong. Try again.", body.fields);
   return body as T;
 }

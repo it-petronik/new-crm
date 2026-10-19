@@ -8,6 +8,7 @@ import FollowUpControl from "../follow-up-control";
 import { AiAnswerView, AiLoading, useAiStatus } from "./ai-answer";
 import { DraftDialog } from "./sales-copilot";
 import type { AiResult } from "@/lib/ai/client";
+import {LoadingState,ErrorState} from "../ui/async-state";
 import { businessTime } from "@/lib/gst";
 import { MISSING_LABELS, type MissingField } from "@/lib/proactive/signals";
 import { proactive, RECORDS_CHANGED, announceRecordsChanged, tomorrowMorning, type ActionCenterView, type ActionGroup, type ActionScope, type ChangesView, type ProactiveSignal } from "@/lib/proactive/client";
@@ -515,6 +516,7 @@ export default function ActionCenter() {
 
   const load = useCallback(() => {
     const n = ++seq.current;
+    setError("");
     proactive.center(scope, group).then(
       (v) => {
         if (n !== seq.current) return;
@@ -581,12 +583,8 @@ export default function ActionCenter() {
         )}
       </div>
 
-      {error && (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      )}
-      {!view && !error && <p className="muted small">Loading…</p>}
+      {error && <ErrorState message={error} title="The Action Center couldn’t load" onRetry={load}/>}
+      {!view && !error && <LoadingState label="Loading the Action Center" variant="cards"/>}
 
       {view?.summary && (
         <section className="panel action-summary" aria-label="Exceptions">

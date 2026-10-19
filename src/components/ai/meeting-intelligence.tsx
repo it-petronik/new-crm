@@ -1,4 +1,5 @@
 "use client";
+import {LoadingState} from "../ui/async-state";
 
 import { useEffect, useState } from "react";
 import { AlertTriangle, FileText, Printer, RotateCcw, Sparkles } from "lucide-react";
@@ -137,7 +138,7 @@ export default function MeetingIntelligence({ meetingId, meeting }: { meetingId:
           </span>
         )}
       </header>
-      {!view && !error && <p className="muted small">Loading…</p>}
+      {!view && !error && <LoadingState label="Loading meeting details" variant="detail"/>}
       {view && !report && (
         <div className="meet-intel-empty">
           <p className="ai-scope">No transcript is available. An AI report would use meeting details, attendance, Meeting Chat ({view.coverage.chatMessages} message{view.coverage.chatMessages === 1 ? "" : "s"}) and meeting notes ({view.coverage.notes}).</p>

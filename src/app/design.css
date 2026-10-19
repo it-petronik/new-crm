@@ -1341,16 +1341,14 @@ textarea:focus {
   max-width: calc(100vw - 24px);
   overflow: hidden;
   border: 1px solid var(--e-border);
-  background: #fff;
-  box-shadow:
-    0 8px 40px #133d2b20,
-    0 2px 8px #12332509;
-  border-radius: 11px;
+  background: var(--e-surface);
+  box-shadow: var(--e-shadow-overlay);
+  border-radius: 12px;
   animation: popover-in 150ms var(--ease);
   transform-origin: var(--radix-select-content-transform-origin);
 }
 .ui-select-viewport {
-  padding: 5px;
+  padding: 7px;
 }
 .ui-select-option {
   position: relative;
@@ -1358,9 +1356,9 @@ textarea:focus {
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  min-height: 37px;
-  padding: 9px 11px;
-  border-radius: 6px;
+  min-height: 40px;
+  padding: 10px 12px;
+  border-radius: 8px;
   font-size: 12px;
   color: var(--e-text-secondary);
   cursor: pointer;

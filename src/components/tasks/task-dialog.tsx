@@ -1,4 +1,5 @@
 "use client";
+import {Skeleton} from "../ui/skeleton";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link2, X } from "lucide-react";
 import styles from "../studio/tasks.module.css";
@@ -154,13 +155,13 @@ export function TaskDialog({
             {!editing && (
               <Field error={fields.assigneeId} hint={people && people.length === 1 ? "Only team leads can assign tasks to others." : undefined}>
                 Assignee
-                <Select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} disabled={!people}>
+                {!people?<span role="status" aria-label="Loading assignees"><Skeleton h={40}/></span>:<Select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
                   {(people ?? [{ id: assigneeId, name: assigneeId === actor.id ? actor.name : "Loading…", role: "" }]).map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.id === actor.id ? `${p.name} (me)` : p.name}
                     </option>
                   ))}
-                </Select>
+                </Select>}
               </Field>
             )}
             <Field>

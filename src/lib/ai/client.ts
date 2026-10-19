@@ -34,11 +34,9 @@ export type AiStatus = {
 
 export type { Reference, Suggestion };
 
+import {requestJson} from "../client-request";
 async function call<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, { cache: "no-store", ...init });
-  const body = (await response.json().catch(() => ({}))) as T & { error?: string };
-  if (!response.ok) throw new Error(body.error || "Enercore AI couldn't answer right now. Try again.");
-  return body;
+  return requestJson<T>(url,init,"Enercore AI couldn’t answer right now. Please try again.");
 }
 
 let status: Promise<AiStatus | null> | null = null;

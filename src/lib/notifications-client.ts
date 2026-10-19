@@ -1,4 +1,5 @@
 "use client";
+import {readJsonResponse} from "./client-request";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useCollabEvents } from "./collab-client";
@@ -27,7 +28,7 @@ async function call<T>(path: string, init?: { method: string; body: unknown }): 
     headers: init ? { "Content-Type": "application/json" } : undefined,
     body: init ? JSON.stringify(init.body) : undefined,
   });
-  const result = await response.json().catch(() => ({}));
+  const result = await readJsonResponse(response,"Notifications are temporarily unavailable. Please try again.");
   if (!response.ok) throw new Error((result as { error?: string }).error || "Notifications are unavailable.");
   return result as T;
 }

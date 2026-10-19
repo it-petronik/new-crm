@@ -33,7 +33,7 @@ export function SkeletonText({ lines = 3, width = ["92%", "78%", "56%"] }: { lin
 /** Wraps a loading region: one announcement, no placeholder noise. */
 export function SkeletonRegion({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="skeleton-region" aria-busy="true" aria-live="polite">
+    <div className="skeleton-region" role="status" aria-label={label} aria-busy="true" aria-live="polite">
       <span className="visually-hidden">{label}</span>
       {children}
     </div>

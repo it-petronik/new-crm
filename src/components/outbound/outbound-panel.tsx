@@ -1,4 +1,6 @@
 "use client";
+import {LoadingState} from "../ui/async-state";
+import {requestJson,readJsonResponse} from "@/lib/client-request";
 import { useCallback, useEffect, useState } from "react";
 import {
   CalendarClock,
@@ -85,13 +87,10 @@ export default function OutboundPanel({
     [confirmed, setConfirmed] = useState(false);
   const available = records.filter((r) => canCommunicate(actor, r));
   const load = useCallback(async (signal?: AbortSignal) => {
-    const response = await fetch("/api/outbound", {
+    const result = await requestJson("/api/outbound", {
       cache: "no-store",
       signal,
-    });
-    const result = await response.json();
-    if (!response.ok)
-      throw new Error(result.error || "Could not load communication.");
+    },"Your communication workspace couldn’t load. Please try again.");
     setData(result);
   }, []);
   useEffect(() => {
@@ -120,7 +119,7 @@ export default function OutboundPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(value),
       });
-      const result = await response.json();
+      const result = await readJsonResponse(response,"We couldn’t confirm this update. Refresh to check its status before trying again.");
       if (!response.ok)
         throw new Error(result.error || "Could not save communication.");
       setForm(null);
@@ -268,7 +267,7 @@ export default function OutboundPanel({
           browser preview.
         </p>
       ) : loading ? (
-        <p role="status">Loading your communication…</p>
+        <LoadingState label="Loading your communication" variant="cards"/>
       ) : (
         <>
           <div className={styles.toolbar}>

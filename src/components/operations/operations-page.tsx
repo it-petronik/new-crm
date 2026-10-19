@@ -1,4 +1,6 @@
 "use client";
+import {LoadingState} from "../ui/async-state";
+import {requestJson} from "@/lib/client-request";
 import { useCallback, useEffect, useId, useState } from "react";
 import { Plus, Package, Truck, Wallet, ClipboardList } from "lucide-react";
 import {
@@ -47,17 +49,13 @@ async function api<T>(
   body?: unknown,
   signal?: AbortSignal,
 ): Promise<T> {
-  const response = await fetch(url, {
+  return requestJson<T>(url, {
     method: body ? "POST" : "GET",
     headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
     cache: "no-store",
     signal,
-  });
-  const result = await response.json();
-  if (!response.ok)
-    throw new Error(result.error || "The operation could not be completed.");
-  return result;
+  },"Operations couldn’t load. Please try again.");
 }
 
 export default function OperationsPage({
@@ -212,9 +210,7 @@ export default function OperationsPage({
         </Button>
       </Toolbar>
       {!data && !error && (
-        <p className={styles.hint} role="status">
-          Loading operations…
-        </p>
+        <LoadingState label="Loading operations" variant="cards"/>
       )}
       {data?.truncated && (
         <p className={styles.hint}>
