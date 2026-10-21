@@ -1,10 +1,10 @@
 import { fakeProspectingInterpretation } from "../tests/support/fake-prospecting-ai";
 /**
- * TEST ONLY — a stand-in for the Workers AI binding in the local
+ * TEST ONLY — a fictional inference service for the local
  * Collaboration/AI suites (never deployed, never bound to preview or live).
  *
- * Bound to the app Worker as `AI` through a service binding to the FakeAi
- * entrypoint, it answers `run(model, input)` like Workers AI, so the real
+ * Bound only as `AI_TEST` behind the local Groq transport interceptor,
+ * it answers `run(model, input)` so the real
  * gateway, validation, fallback, limits and usage logging all run — without
  * inference or quota. Every call's prompt is stored in the local test D1
  * (FakeAiCall) so tests can prove what did and didn't reach the model.
@@ -15,6 +15,7 @@ import { fakeProspectingInterpretation } from "../tests/support/fake-prospecting
 import { WorkerEntrypoint } from "cloudflare:workers";
 import type { D1Database } from "@cloudflare/workers-types";
 import { AI_MODELS } from "../src/lib/ai/config";
+import { detectInquiry } from "../src/lib/ai/capture-fields";
 
 type Env = { DB: D1Database };
 type Input = { messages: { role: string; content: string }[]; response_format?: { json_schema?: { properties?: Record<string, unknown> } } };
@@ -197,11 +198,15 @@ export class FakeAi extends WorkerEntrypoint<Env> {
 
     const mode = last(prompt, /\[\[fake:([A-Za-z0-9_-]+)\]\]/g) ?? "echo";
     const primary = model === AI_MODELS.primary;
-    if (mode === "quota") throw new Error("4006: you have used up your daily free allocation of 10,000 neurons, please upgrade to Cloudflare's Workers Paid plan");
+    if (mode === "quota") throw new Error("Fictional account quota reached");
     if (mode === "throw-primary" && primary) throw new Error("5007: Internal model error");
     if (mode === "invalid-both" || (mode === "invalid-primary" && primary)) return { response: "I am not JSON, sorry." };
 
     const usage = { prompt_tokens: Math.ceil((system.length + prompt.length) / 4), completion_tokens: 42 };
+    if (system.includes("Extract draft lead fields explicitly")) {
+      const text = prompt.split(">\n").slice(1).join(">\n").replace(/\n<\/untrusted>$/, "");
+      return {response: {items: Object.entries(detectInquiry(text)).map(([field, value]) => ({field, value, evidence: value}))}, usage};
+    }
     const props = input.response_format?.json_schema?.properties ?? {};
     if (system.includes("APOLLO_SEARCH_INTERPRETATION")) {
       const query=JSON.parse(prompt).query;

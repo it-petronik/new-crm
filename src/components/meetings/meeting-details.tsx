@@ -1,4 +1,6 @@
 "use client";
+import { Form, Input } from '@/components/ui/controls';
+
 
 import { useCallback, useEffect, useId, useState } from "react";
 import { ArrowLeft, Circle, Copy, Download, ExternalLink, FileText, Link2, NotebookPen, RefreshCw, Trash2 } from "lucide-react";
@@ -215,7 +217,7 @@ export default function MeetingDetailsView({ meetingId, meId, onBack, onReport }
               <>
                 <p className="meet-link-label">For clients and other people outside Enercore</p>
                 <div className="meet-link-row">
-                  <input readOnly value={data.guestLink.url} aria-label="Guest link" onFocus={(e) => e.currentTarget.select()} />
+                  <Input readOnly value={data.guestLink.url} aria-label="Guest link" onFocus={(e) => e.currentTarget.select()} />
                   <Button className="secondary compact" onClick={() => void copy(data.guestLink!.url!, "Guest link copied — anyone with it can ask to join.")}>
                     Copy
                   </Button>
@@ -437,7 +439,7 @@ function OutcomeDialog({
 
   return (
     <Dialog title="Log meeting outcome" onClose={() => !busy && onClose()} dismissOnOutside={!busy && !dirty} className="dialog-compact">
-      <form
+      <Form
         id={formId}
         className="ui-form-stack"
         noValidate
@@ -473,7 +475,7 @@ function OutcomeDialog({
           </p>
         )}
         <DialogActions onCancel={onClose} primary={{ type: "submit", form: formId, label: "Save outcome", pendingLabel: "Saving…", pending: busy }} />
-      </form>
+      </Form>
     </Dialog>
   );
 }

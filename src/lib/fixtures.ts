@@ -48,7 +48,13 @@ export function storedPreviewActor(): Actor {
     const saved = window.localStorage.getItem(previewActorKey);
     if (!saved) return previewActor;
     const parsed = JSON.parse(saved) as Actor;
-    return demoAccounts.some((a) => a.actor.id === parsed.id) ? parsed : previewActor;
+    if (!demoAccounts.some((a) => a.actor.id === parsed.id)) return previewActor;
+    // Keep an existing fictional all-brand administrator preview current with
+    // the fifth brand. Live account upgrades use the audited D1 migration.
+    if (["MD", "MD Assistant", "IT Administrator"].includes(parsed.role) &&
+      ["Petronik", "Afrilube", "Petronex", "Istanegry"].every(c=>parsed.companies.includes(c)) &&
+      !parsed.companies.includes("Enercore")) parsed.companies = [...parsed.companies, "Enercore"];
+    return parsed;
   } catch {
     return previewActor;
   }

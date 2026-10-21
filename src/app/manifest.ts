@@ -9,7 +9,7 @@ export default function manifest(): MetadataRoute.Manifest {
     background_color: "#f4f6f8",
     theme_color: "#102326",
     icons: [
-      { src: "/brands/enercore.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
+      { src: "/brands/enercore-flame.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
     ],
   };
 }

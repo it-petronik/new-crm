@@ -1,10 +1,14 @@
 "use client";
+import { CrmTable } from "@/components/ui/crm-table";
+import { Form } from '@/components/ui/controls';
+
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import styles from "../studio/action-center.module.css";
 import { AlarmClock, ArrowRight, ArrowUpRight, CalendarClock, CheckCircle2, Copy, EyeOff, FileText, ListChecks, MessageSquare, RotateCcw, Sparkles, Undo2, XCircle, Target, Truck, Wallet, Database } from "lucide-react";
 import { Button, Dialog, DialogActions, DialogPresence, Field, Input } from "../ui/controls";
 import FollowUpControl from "../follow-up-control";
+import { ListFilters, SortHeader, usePagination } from "../pagination";
 import { AiAnswerView, AiLoading, useAiStatus } from "./ai-answer";
 import { DraftDialog } from "./sales-copilot";
 import type { AiResult } from "@/lib/ai/client";
@@ -113,7 +117,7 @@ export function QuickCompleteDialog({ signal, onClose, onSaved }: { signal: Proa
 
   return (
     <Dialog title={`Complete details · ${signal.entity.title}`} onClose={onClose} className="quick-complete-dialog" dismissOnOutside={!busy}>
-      <form id={formId} className="quick-complete" onSubmit={submit} noValidate>
+      <Form id={formId} className="quick-complete" onSubmit={submit} noValidate>
         <p className="muted small">Only what this {KIND_LABELS[signal.entity.type]?.toLowerCase() ?? "record"} is missing at its current stage ({signal.entity.status}). Nothing else changes.</p>
         {fields.includes("contact") && (
           <fieldset className="quick-complete-group">
@@ -174,7 +178,7 @@ export function QuickCompleteDialog({ signal, onClose, onSaved }: { signal: Proa
             {error}
           </p>
         )}
-      </form>
+      </Form>
       <DialogActions
         start={
           <Button className="secondary" onClick={() => openEntity(signal)}>
@@ -228,19 +232,22 @@ export function FollowUpDialog({ items, onClose, onDone }: { items: ProactiveSig
   }
 
   const byId = new Map((results ?? []).map((r) => [r.id, r]));
+  const list=usePagination(items.map(s=>({...s,id:s.entity.id,name:s.entity.title,due:s.entity.due||"",status:done?(byId.get(s.entity.id)?.ok?"Updated":"Not updated"):"Pending"})));
   return (
     <Dialog title={items.length === 1 ? `Set follow-up · ${items[0].entity.title}` : `Set follow-up for ${items.length} records`} onClose={onClose} className="follow-up-review-dialog" dismissOnOutside={!busy}>
       {!done && <FollowUpControl busy={busy} onChoose={(d) => setDate(d)} compact />}
-      <table className="action-preview" aria-label="Changes to review">
+      <p className="muted small">Review view only · The action applies to all {items.length} records, regardless of filters.</p>
+      <ListFilters {...list} label="changes to review" sortable={false}/>
+      <CrmTable className="action-preview" aria-label="Changes to review">
         <thead>
           <tr>
-            <th>Record</th>
-            <th>Next follow-up</th>
-            {done && <th>Result</th>}
+            <SortHeader sortKey="name" query={list.query} setQuery={list.setQuery}>Record</SortHeader>
+            <SortHeader sortKey="due" query={list.query} setQuery={list.setQuery}>Next follow-up</SortHeader>
+            {done && <SortHeader sortKey="status" query={list.query} setQuery={list.setQuery}>Result</SortHeader>}
           </tr>
         </thead>
         <tbody>
-          {items.map((s) => {
+          {list.matched.map((s) => {
             const r = byId.get(s.entity.id);
             return (
               <tr key={s.entity.id}>
@@ -259,7 +266,7 @@ export function FollowUpDialog({ items, onClose, onDone }: { items: ProactiveSig
             );
           })}
         </tbody>
-      </table>
+      </CrmTable>
       <p className="ai-fineprint">Each change is saved as your own note with the new date, and appears in the record&apos;s history. Nothing is sent to anyone.</p>
       {done ? (
         <DialogActions cancel="Close" />
@@ -303,7 +310,7 @@ function SignalCard({
   return (
     <li className={`action-card is-${s.severity}`} data-signal={s.type}>
       {selectable ? (
-        <input type="checkbox" className="action-card-check" aria-label={`Select ${s.entity.title}`} checked={selected} onChange={(e) => onSelect(e.target.checked)} />
+        <Input type="checkbox" className="action-card-check" aria-label={`Select ${s.entity.title}`} checked={selected} onChange={(e) => onSelect(e.target.checked)} />
       ) : (
         <span className="action-card-check" aria-hidden="true" />
       )}

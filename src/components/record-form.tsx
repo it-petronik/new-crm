@@ -1,4 +1,6 @@
 "use client";
+import { Form } from '@/components/ui/controls';
+
 import { CustomerSelection } from "./commercial/relationship-picker";
 import { companyName } from "@/lib/company-name";
 import { specError } from "@/lib/validation";
@@ -204,7 +206,10 @@ export default function RecordForm({
   const formId = useId();
   // Everyday fields first; the rest wait under "More details" (still part
   // of the form, so nothing is lost when it is closed).
-  const shownFields = profile.fields.filter((field) => !locked || correctionFields.includes(field.name));
+  // These legacy values remain stored, but are not fields on the supplied
+  // quotation/proforma example. Hiding them must not erase old metadata.
+  const referenceExtras = ["attributes.signatoryName", "attributes.signatoryTitle", "attributes.senderTaxNumber", "attributes.customerTaxNumber", "attributes.amountWords", "attributes.senderPhone", "attributes.senderEmail", "attributes.senderWebsite", "attributes.footerMessage", "email", "phone"];
+  const shownFields = profile.fields.filter((field) => (!locked || correctionFields.includes(field.name)) && (kind !== "quotations" || !referenceExtras.includes(field.name)));
   const { basic: basicFields, additional: advancedFields } = entryFields(kind, shownFields, editing && kind !== "quotations");
   const renderField = (field: FieldSpec) => {
             const rawInitial = initial ? recordFieldValue(initial, field.name) : "";
@@ -212,9 +217,7 @@ export default function RecordForm({
             // does not inherit an empty 0 for numbers it has not been told.
             const initialValue = !editing && field.type === "number" && Number(rawInitial) === 0 ? "" : rawInitial;
             const fallback =
-              field.name === "attributes.signatoryName"
-                ? "Peiman Hussain"
-                : field.name.startsWith("attributes.sender") &&
+              field.name === "attributes.leadType" ? (editing ? "Unclassified" : "Buyer inquiry") : field.name.startsWith("attributes.sender") &&
                     senderDefaults?.[field.name.slice(11)]
                   ? senderDefaults[field.name.slice(11)]
                   : field.name === "attributes.amountWords"
@@ -340,8 +343,7 @@ export default function RecordForm({
           <span>Started from</span> <b>{context}</b>
         </p>
       )}
-      {!editing && <p className="small muted">Start with the essentials. Add other details only when you need them.</p>}
-      <form
+      <Form
         id={formId}
         noValidate
         // Editing any field clears that field's message immediately, so a
@@ -562,6 +564,7 @@ export default function RecordForm({
         {quoteEditor && (
           <div className="quotation-items-section">
             <LineEditor
+              catalogScope={{ company: entity, live, kind: "quotations" }}
               lines={lines}
               onChange={(value) => { setLines(value); unsaved.markDirty({}); }}
               products={sources.products}
@@ -619,7 +622,7 @@ export default function RecordForm({
             pending: busy,
           }}
         />
-      </form>
+      </Form>
       {unsaved.confirm}
     </Dialog>
   );

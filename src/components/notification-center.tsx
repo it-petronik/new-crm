@@ -15,7 +15,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "./ui/controls";
-import { PageTitle } from "./workspace-pages";
+import { PageTitle } from "./ui/layout";
 import { businessStamp, businessTime, businessToday } from "@/lib/gst";
 import type { NotificationCategory, NotificationPreferences, NotificationView } from "@/lib/notification-types";
 import { desktopPermission, desktopSupported } from "@/lib/notifications-client";

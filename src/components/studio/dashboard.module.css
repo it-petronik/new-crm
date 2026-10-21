@@ -1,14 +1,13 @@
 .dashboard {
   display: grid;
-  gap: 20px;
+  gap: 16px;
 }
 .toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  border-bottom: 1px solid var(--e-border);
-  padding-bottom: 16px;
+  min-height: 28px;
 }
 .toolbar > :last-child {
   width: 100px;
@@ -30,10 +29,28 @@
   background: var(--e-text);
   color: var(--e-surface);
 }
-.tabs button:hover { background: var(--e-accent-soft); color: var(--e-accent); }
-.tabs button[aria-pressed="true"]:hover { background: var(--e-text); color: var(--e-surface); }
-.tabs button[aria-pressed="true"] span { color: inherit; background: color-mix(in srgb, currentColor 18%, transparent); }
-.tabs button:hover span { color: inherit; }
+.tabs button:hover {
+  background: var(--e-accent-soft);
+  color: var(--e-accent);
+}
+.tabs button[aria-pressed="true"]:hover {
+  background: var(--e-text);
+  color: var(--e-surface);
+}
+:global([data-theme="dark"]) .tabs button[aria-pressed="true"],
+:global([data-theme="dark"]) .tabs button[aria-pressed="true"]:hover {
+  background: var(--e-accent-soft);
+  color: var(--e-accent-strong);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--e-accent) 22%, transparent);
+}
+.tabs button[aria-pressed="true"] span {
+  color: inherit;
+  background: color-mix(in srgb, currentColor 18%, transparent);
+}
+.tabs button:hover span {
+  color: inherit;
+}
 .tabs span {
   padding: 2px 5px;
   background: var(--e-accent-soft);
@@ -45,16 +62,21 @@
 .metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
+  gap: 0;
+  border: 1px solid var(--e-border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--e-surface);
 }
 .metric {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 22px;
+  gap: 8px;
+  padding: 14px 16px;
   text-align: left;
-  border: 1px solid var(--e-border);
-  border-radius: 16px;
+  border: 0;
+  border-right: 1px solid var(--e-border);
+  border-radius: 0;
   background: var(--e-surface);
   color: var(--e-text);
   min-width: 0;
@@ -63,8 +85,8 @@
     border-color 0.15s;
 }
 .metric:hover {
-  border-color: var(--e-accent);
-  box-shadow: 0 5px 16px #17212b09;
+  background: var(--e-surface-sunken);
+  box-shadow: none;
 }
 .metricLabel,
 .metricNote {
@@ -79,49 +101,122 @@
   color: var(--e-accent);
 }
 .metric strong {
-  font-size: clamp(24px, 2.5vw, 34px);
-  letter-spacing: -1.4px;
+  font-size: 24px;
+  letter-spacing: -0.7px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+.metricValue {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  min-width: 0;
+}
+.featured .metricValue svg {
+  color: var(--e-accent);
 }
 .metricNote {
   font-size: 10px;
   line-height: 1.5;
 }
 .featured {
-  background: var(--brand-action);
-  border-color: var(--brand-action);
-  color: white;
+  box-shadow: none;
   position: relative;
   overflow: hidden;
 }
 .featured .metricLabel,
 .featured .metricNote,
 .featured .metricLabel svg {
-  color: #fff;
-}
-.featured:after {
-  content: "";
-  position: absolute;
-  pointer-events: none;
-  right: -34px;
-  top: 45px;
-  width: 160px;
-  height: 160px;
-  border-radius: 50%;
-  border: 26px solid #ffffff0c;
+  color: var(--e-accent);
 }
 .grid {
   display: grid;
   grid-template-columns: minmax(0, 1.75fr) minmax(280px, 1fr);
-  gap: 20px;
+  gap: 16px;
   align-items: start;
+}
+.metric:last-child {
+  border-right: 0;
+}
+.summaryLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--e-text-secondary);
+}
+.attentionBar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--e-border);
+  border-radius: 6px;
+  background: var(--e-surface);
+}
+.attentionBar h2 {
+  font-size: 13px;
+  margin: 0 0 4px;
+  font-weight: 600;
+}
+.attentionBar h2 span {
+  font-size: 11px;
+  color: var(--e-accent);
+  margin-left: 5px;
+}
+.attentionBar small {
+  font-size: 11px;
+  color: var(--e-text-secondary);
+}
+.attentionItems {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+.attentionItems button {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  text-align: left;
+  border: 0;
+  border-left: 1px solid var(--e-border);
+  padding: 0 12px;
+  background: transparent;
+  color: var(--e-text);
+  font: inherit;
+  cursor: pointer;
+}
+.attentionItems strong {
+  font-size: 12px;
+  font-weight: 550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.attentionItems small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.report {
+  border-top: 1px solid var(--e-border);
+  padding-top: 8px;
+}
+.report > summary {
+  font-size: 12px;
+  font-weight: 550;
+  cursor: pointer;
+}
+.report[open] > .grid {
+  margin-top: 16px;
 }
 .card {
   background: var(--e-surface);
   border: 1px solid var(--e-border);
-  border-radius: 16px;
-  padding: 22px;
+  border-radius: 6px;
+  padding: 18px;
   min-width: 0;
 }
 .cardHead {
@@ -279,7 +374,7 @@
   flex-direction: column;
 }
 .focus h2 {
-  font-size: 23px;
+  font-size: 20px;
   letter-spacing: -0.8px;
   margin-top: 12px;
 }
@@ -309,7 +404,7 @@
   margin-bottom: 12px;
 }
 .focusCount strong {
-  font-size: 46px;
+  font-size: 32px;
   font-weight: 550;
   letter-spacing: -2px;
 }
@@ -457,10 +552,23 @@
   scrollbar-color: var(--e-border) transparent;
   padding-right: 8px;
 }
-.priorities:focus-visible { outline: 2px solid var(--e-accent); outline-offset: 4px; border-radius: 6px; }
-.priorities::-webkit-scrollbar { width: 6px; }
-.priorities::-webkit-scrollbar-thumb { background: var(--e-border); border-radius: 4px; }
-.scrollHint { margin: 12px 0 0; color: var(--e-text-secondary); font-size: 11px; }
+.priorities:focus-visible {
+  outline: 2px solid var(--e-accent);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+.priorities::-webkit-scrollbar {
+  width: 6px;
+}
+.priorities::-webkit-scrollbar-thumb {
+  background: var(--e-border);
+  border-radius: 4px;
+}
+.scrollHint {
+  margin: 12px 0 0;
+  color: var(--e-text-secondary);
+  font-size: 11px;
+}
 .priorities button {
   display: flex;
   width: 100%;
@@ -495,7 +603,7 @@
 }
 @media (max-width: 1200px) {
   .metrics {
-    gap: 12px;
+    gap: 16px;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .grid {
@@ -503,16 +611,31 @@
   }
 }
 @media (max-width: 640px) {
-  .priorities { max-height: 300px; margin-top: 12px; }
+  .priorities {
+    max-height: 300px;
+    margin-top: 12px;
+  }
   .metric {
-    padding: 16px;
-    gap: 16px;
+    padding: 12px;
+    gap: 6px;
   }
   .metricLabel {
     font-size: 11px;
   }
   .metric strong {
-    font-size: 26px;
+    font-size: 24px;
+  }
+  .metricValue {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+  .metricValue svg {
+    width: 64px;
+    max-width: 64px;
+    height: 24px;
+    flex: 0 0 24px;
+    min-width: 0;
   }
   .metricLabel svg {
     display: none;
@@ -541,10 +664,48 @@
   }
 }
 
-.chartReadout { display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; padding:10px 12px; min-height:50px; margin-top:18px; border-radius:9px; background:var(--e-surface-sunken); font-size:10px; color:var(--e-text-secondary); }
-.chartReadout strong { color:var(--e-text); font-size:11px; }
-.chartReadout b { margin-left:4px; color:var(--e-text); font-variant-numeric:tabular-nums; }
-.bars button { transform-origin:bottom; animation:growBar 650ms cubic-bezier(.2,.8,.2,1) both; transition:height 350ms ease, opacity 150ms ease, filter 150ms ease; }
-.bars button:focus-visible { outline:2px solid var(--e-text); outline-offset:3px; }
-@keyframes growBar { from { transform:scaleY(0); } }
-@media(prefers-reduced-motion:reduce) { .bars button { animation:none; transition:none; } }
+.chartReadout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 10px 12px;
+  min-height: 50px;
+  margin-top: 18px;
+  border-radius: 9px;
+  background: var(--e-surface-sunken);
+  font-size: 10px;
+  color: var(--e-text-secondary);
+}
+.chartReadout strong {
+  color: var(--e-text);
+  font-size: 11px;
+}
+.chartReadout b {
+  margin-left: 4px;
+  color: var(--e-text);
+  font-variant-numeric: tabular-nums;
+}
+.bars button {
+  transform-origin: bottom;
+  animation: growBar 650ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  transition:
+    height 350ms ease,
+    opacity 150ms ease,
+    filter 150ms ease;
+}
+.bars button:focus-visible {
+  outline: 2px solid var(--e-text);
+  outline-offset: 3px;
+}
+@keyframes growBar {
+  from {
+    transform: scaleY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bars button {
+    animation: none;
+    transition: none;
+  }
+}

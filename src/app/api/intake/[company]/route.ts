@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getDb, isPreview } from "@/lib/db";
 import { findUserById, findRecord, createRecordWithAudit, recordLoginAttempt } from "@/lib/data";
 import { type RecordItem, companies } from "@/lib/domain";
+import { initializeLead } from "@/lib/lead-desk";
 
 const payload = z.object({
   eventId: z.string().min(8).max(100),
@@ -81,14 +82,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ com
     if (
       !owner?.active ||
       !owner.companies.includes(company) ||
-      !["MD", "Group Manager", "Branch Manager", "Sales Manager", "Sales Executive"].includes(owner.role)
+      !["MD", "MD Assistant", "IT Administrator", "Group Manager", "Branch Manager", "Sales Manager", "Sales Executive"].includes(owner.role)
     )
       return NextResponse.json({ error: "Lead routing needs configuration." }, { status: 503 });
     const id = "WEB-" + (await sha256Hex(`${company}:${input.eventId}`)).slice(0, 40);
     // Deterministic id makes a repeated delivery a duplicate, not a new lead.
     if (await findRecord(db, id)) return NextResponse.json({ id, duplicate: true }, { status: 200 });
     const now = new Date().toISOString();
-    const record: RecordItem = {
+    const record: RecordItem = initializeLead({
       id, kind: "leads", company, branch: owner.branches[0] || "Main",
       title: input.title, contact: input.contact, email: input.email, phone: input.phone || "",
       product: input.product, quantity: input.quantity, unit: "MT", amount: 0, currency: "USD",
@@ -96,7 +97,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ com
       due: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
       destination: input.destination, detail: input.message || "",
       source: `Website: ${input.website}`, createdAt: now, updatedAt: now,
-    };
+    }, { id: "website-intake", name: "Website intake", role: "System" }, { receivedAt: now });
     try {
       await createRecordWithAudit(
         db,

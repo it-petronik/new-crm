@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { Button, Field, Input, Select } from "../ui/controls";
 import type { Contact } from "@/lib/commercial/model";
-import type { RecordItem } from "@/lib/domain";
+import type { Actor, RecordItem } from "@/lib/domain";
 export async function commercialCall<T>(body: unknown): Promise<T> {
   const res = await fetch("/api/commercial", {
     method: "POST",
@@ -95,6 +95,9 @@ export function CustomerSelection({
   contactId,
   onChange,
   onCreated,
+  live = true,
+  actor,
+  forProforma = false,
 }: {
   company: string;
   branch: string;
@@ -107,6 +110,9 @@ export function CustomerSelection({
     title?: string,
   ) => void;
   onCreated?: (r: RecordItem) => void;
+  live?: boolean;
+  actor?: Actor;
+  forProforma?: boolean;
 }) {
   const [people, setPeople] = useState<Contact[]>([]);
   const [quick, setQuick] = useState(false);
@@ -124,7 +130,7 @@ export function CustomerSelection({
   useEffect(() => {
     let alive = true;
     setPeople([]);
-    if (customerId)
+    if (live && customerId)
       fetch(
         `/api/commercial?view=contacts&id=${encodeURIComponent(customerId)}`,
       )
@@ -138,11 +144,16 @@ export function CustomerSelection({
     return () => {
       alive = false;
     };
-  }, [customerId]);
+  }, [customerId, live]);
   async function create(createAnyway = false) {
     setBusy(true);
     setError("");
     try {
+      if (!live && actor) {
+        const now = new Date().toISOString();
+        const record: RecordItem = { id: crypto.randomUUID(), kind: "customers", company, branch, title: name.trim(), contact: person, email, phone, product: "", quantity: 0, unit: "", amount: 0, currency: "USD", due: "", detail: "", source: "Proforma quick create", status: "Active", ownerId: actor.id, owner: actor.name, createdAt: now, updatedAt: now, attributes: { country } };
+        onCreated?.(record); onChange(record.id, null, record.title); setQuick(false); return;
+      }
       const d = await commercialCall<{
         record?: RecordItem;
         duplicates?: typeof possible;
@@ -157,6 +168,7 @@ export function CustomerSelection({
         phone,
         requestId,
         createAnyway,
+        ...(forProforma ? { forProforma: true } : {}),
       });
       if (d.duplicates) {
         setPossible(d.duplicates);
@@ -181,13 +193,13 @@ export function CustomerSelection({
   }
   return (
     <div className="commercial-selection">
-      <RecordPicker
+      {live && <RecordPicker
         kind="customers"
         company={company}
         branch={branch}
         label="Search customer"
         onSelect={(id, title) => onChange(id, null, title)}
-      />
+      />}
       {customerId && (
         <>
           <p className="muted small">

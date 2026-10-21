@@ -1,5 +1,5 @@
 import { type Actor } from "./domain";
-import { canManageUsers } from "./domain";
+import { canManageUsers, isFullAdmin } from "./domain";
 import { inAdminScope, leadership } from "./access-control";
 
 /**
@@ -55,7 +55,7 @@ export function mayIssueReset(
   if (target.id === actor.id) return false;
   if (!target.active) return false;
   if (!inAdminScope(actor, target.companies, target.branches)) return false;
-  if (actor.role !== "MD" && leadership.includes(target.role)) return false;
+  if (!isFullAdmin(actor) && leadership.includes(target.role)) return false;
   return true;
 }
 

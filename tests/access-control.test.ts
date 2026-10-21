@@ -35,11 +35,11 @@ test("administrators cannot edit themselves or assign beyond company and branch 
     false,
   );
 });
-test("IT administrators cannot create or modify leadership access", () => {
+test("IT administrators share MD leadership administration but honor read-only restrictions", () => {
   const it: Actor = { ...previewActor, role: "IT Administrator" };
   assert.equal(mayAssign(it, target, requested), true);
-  assert.equal(mayAssign(it, null, { ...requested, role: "MD" }), false);
-  assert.equal(mayAssign(it, { ...target, role: "MD" }, requested), false);
+  assert.equal(mayAssign(it, null, { ...requested, role: "MD" }), true);
+  assert.equal(mayAssign(it, { ...target, role: "MD" }, requested), true);
   assert.equal(
     mayAssign({ ...it, moduleAccess: { settings: "read" } }, target, requested),
     false,

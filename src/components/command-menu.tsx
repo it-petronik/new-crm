@@ -44,13 +44,13 @@ export default function CommandMenu({
   useEffect(()=>{
     const controller=new AbortController();setRemote([]);
     if(!live||query.trim().length<2)return()=>controller.abort();
-    fetch(`/api/commercial?q=${encodeURIComponent(query)}`,{signal:controller.signal,cache:"no-store"}).then(r=>r.json()).then(data=>{
+    const timer=setTimeout(()=>{void fetch(`/api/commercial?q=${encodeURIComponent(query)}`,{signal:controller.signal,cache:"no-store"}).then(r=>r.json()).then(data=>{
       setRemote((data.results||[]).map((r:{id:string;parentId:string;kind:string;targetKind?:string;label:string;detail:string})=>({
         id:`commercial-${r.id}`,label:r.label,detail:r.kind === "customers" ? `${r.detail} · Ref ${r.id.slice(-8)}` : r.detail,record:true,group:"Commercial records",
         run:()=>window.dispatchEvent(new CustomEvent("enercore:open-record",{detail:{id:r.parentId,kind:r.targetKind||r.kind}})),
       })));
-    }).catch(()=>{});
-    return()=>controller.abort();
+    }).catch(()=>{});},180);
+    return()=>{clearTimeout(timer);controller.abort();};
   },[query,live]);
 
 

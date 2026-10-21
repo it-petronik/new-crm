@@ -1,12 +1,15 @@
 "use client";
-import { useEffect, useState, type SelectHTMLAttributes } from "react";
-import { Pencil, Plus, Trash2, Settings2, Users } from "lucide-react";
+import { useEffect, useState, type ReactNode, type SelectHTMLAttributes } from "react";
+import { Pencil, Plus, Trash2, Users } from "lucide-react";
 import { Button, Dialog, DialogActions, Field, Input, Select } from "./controls";
 import { capitalizeOption, optionKey, type SharedOption } from "@/lib/shared-options";
 import styles from "./shared-select.module.css";
+import { readJsonResponse } from "@/lib/client-request";
 
-export function SharedSelect({ catalog, company, live, options, label, onOptions, ...props }: SelectHTMLAttributes<HTMLSelectElement> & {
-  catalog: string; company: string; live: boolean; options: string[]; label: string; onOptions: (options: string[]) => void;
+function CatalogPanel({ children }: { children: ReactNode; title: string; description: string; onClose: () => void; className: string; dismissOnOutside: boolean }) { return <section className="catalog-panel">{children}</section>; }
+
+export function SharedSelect({ catalog, company, live, options, label, onOptions, inlineManager = false, allowEditing = true, ...props }: SelectHTMLAttributes<HTMLSelectElement> & {
+  catalog: string; company: string; live: boolean; options: string[]; label: string; onOptions: (options: string[]) => void; inlineManager?: boolean; allowEditing?: boolean;
 }) {
   const [rows, setRows] = useState<SharedOption[]>([]);
   const [canAdd, setCanAdd] = useState(false);
@@ -17,7 +20,7 @@ export function SharedSelect({ catalog, company, live, options, label, onOptions
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const key = `enercore-preview-options:${company}:${catalog}`;
-  const initial = String(props.defaultValue || options[0] || "");
+  const initial = String(props.defaultValue ?? props.value ?? options[0] ?? "");
   const [selected, setSelected] = useState(initial);
   const current = String(props.value ?? selected);
   const endpoint = `/api/shared-options?${new URLSearchParams({ company, catalog })}`;
@@ -29,11 +32,11 @@ export function SharedSelect({ catalog, company, live, options, label, onOptions
   async function refresh() {
     if (!live) {
       try { merge(JSON.parse(localStorage.getItem(key) || "[]")); } catch { merge([]); }
-      setCanAdd(true);
+      setCanAdd(allowEditing);
       return;
     }
     const response = await fetch(endpoint, { cache: "no-store" });
-    const data = await response.json();
+    const data = await readJsonResponse<{ options: SharedOption[]; canAdd: boolean; error?: string }>(response);
     if (!response.ok) throw new Error(data.error || "Choices could not be loaded.");
     merge(data.options); setCanAdd(data.canAdd);
   }
@@ -54,7 +57,7 @@ export function SharedSelect({ catalog, company, live, options, label, onOptions
     try {
       if (live) {
         const response = await fetch("/api/shared-options", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ company, catalog, ...(row ? { id: row.id, version: row.version } : {}), ...(method !== "DELETE" ? { label: nextLabel } : {}) }) });
-        const data = await response.json();
+        const data = await readJsonResponse<{ error?: string }>(response);
         if (!response.ok) throw new Error(data.error || "The change could not be saved.");
         await refresh();
       } else {
@@ -66,19 +69,20 @@ export function SharedSelect({ catalog, company, live, options, label, onOptions
     } catch (e) { setError(e instanceof Error ? e.message : "Couldn't save the choice."); }
     finally { setBusy(false); }
   }
+  const Manager = inlineManager ? CatalogPanel : Dialog;
   return <div className={styles.control}>
-    <Select {...props} value={current} onChange={e => { setSelected(e.target.value); props.onChange?.(e); }}>
+    {!inlineManager && <><Select {...props} value={current} onChange={e => { setSelected(e.target.value); props.onChange?.(e); }}>
       {choices.map(value => <option key={value} value={value}>{capitalizeOption(value)}</option>)}
     </Select>
-    <Button type="button" className={styles.manage} aria-label={`Manage ${label.toLowerCase()} choices`} disabled={props.disabled} onClick={() => { setOpen(true); void refresh().catch(e => setError(e.message)); }}><Settings2 size={13} />Manage choices</Button>
-    {open && <Dialog title={`${label} choices`} description="Shared vocabulary for your company" onClose={() => !busy && setOpen(false)} className="option-manager-dialog" dismissOnOutside={!busy}>
+    <Button type="button" className={styles.manage} aria-label={`Manage ${label.toLowerCase()} choices`} disabled={props.disabled} onClick={() => { setOpen(true); void refresh().catch(e => setError(e.message)); }}><Plus size={13} />Add / manage choices</Button></>}
+    {(open || inlineManager) && <Manager title={`${label} choices`} description="Shared vocabulary for your company" onClose={() => !busy && setOpen(false)} className="option-manager-dialog" dismissOnOutside={!busy}>
       <div className={styles.manager}>
         <p className={styles.notice}><Users size={16} />{live ? `People with access to ${company} can use these choices.` : "Preview only · saved in this browser, not shared with other people."}</p>
         <p className={styles.hint}>Built-in choices stay fixed. Renaming or deleting a custom choice never changes saved records.</p>
         {error && <p className="form-error" role="alert">{error}</p>}
         <div className={styles.list}>
           {options.map(option => <div className={styles.row} key={option}><span>{capitalizeOption(option)}</span><small>Built-in</small></div>)}
-          {rows.map(row => <div className={styles.row} key={row.id}><span>{row.label}</span>{row.canManage ? <div><Button type="button" className="icon-button" aria-label={`Edit ${row.label}`} disabled={busy} onClick={() => { setEditing(row); setRemoving(null); setText(row.label); }}><Pencil size={14} /></Button><Button type="button" className="icon-button danger" aria-label={`Delete ${row.label}`} disabled={busy} onClick={() => setRemoving(row)}><Trash2 size={14} /></Button></div> : <small>Shared choice</small>}</div>)}
+          {rows.map(row => <div className={styles.row} key={row.id}><span>{row.label}</span>{row.canManage && allowEditing ? <div><Button type="button" className="icon-button" aria-label={`Edit ${row.label}`} disabled={busy} onClick={() => { setEditing(row); setRemoving(null); setText(row.label); }}><Pencil size={14} /></Button><Button type="button" className="icon-button danger" aria-label={`Delete ${row.label}`} disabled={busy} onClick={() => setRemoving(row)}><Trash2 size={14} /></Button></div> : <small>Shared choice</small>}</div>)}
         </div>
         {removing ? <div className={styles.confirm}><p>Remove “{removing.label}” from future selections? Existing records keep their value.</p><Button type="button" className="secondary compact" onClick={() => setRemoving(null)}>Keep choice</Button><Button type="button" className="danger-button compact" disabled={busy} onClick={() => void save("DELETE", removing)}>Delete choice</Button></div> : canAdd && <div className={styles.editor}>
           <Field>{editing ? "Rename choice" : "New choice"}<Input value={text} maxLength={catalog.endsWith(":unit") ? 20 : 60} placeholder="e.g. Partner referral" onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); void save(editing ? "PATCH" : "POST", editing || undefined); } }} /></Field>
@@ -86,7 +90,7 @@ export function SharedSelect({ catalog, company, live, options, label, onOptions
           {editing && <Button type="button" className="ghost compact" onClick={() => { setEditing(null); setText(""); }}>Cancel edit</Button>}
         </div>}
       </div>
-      <DialogActions cancel="Done" pending={busy} />
-    </Dialog>}
+      {!inlineManager && <DialogActions cancel="Done" pending={busy} />}
+    </Manager>}
   </div>;
 }

@@ -1,1 +1,1 @@
-export { default, dynamic } from "../../page";
+export { default, dynamic, viewport } from "../../page";

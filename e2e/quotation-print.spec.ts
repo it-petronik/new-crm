@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { makePreview } from "../src/lib/fixtures";
+import { expectContinuousFooter } from "./pdf-footer-check";
 
 // Fresh browser contexts and synthetic preview records only; no database writes.
 for (const [count, company] of [
@@ -17,6 +18,7 @@ for (const [count, company] of [
       (record) => record.kind === "quotations" && record.company === "Petronik",
     )!;
     quote.company = company;
+    quote.attributes = { ...quote.attributes, signatoryName: "Fictional Authorized Signatory" };
     quote.lines = Array.from({ length: count }, (_, index) => ({
       description: `Print test product ${index + 1}`,
       quantity: 240,
@@ -43,8 +45,10 @@ for (const [count, company] of [
     await expect(page.locator("body")).toHaveCSS("background-color","rgb(255, 255, 255)");
     await expect(page.locator(".pdf-footer-band")).toBeHidden();
     await expect(
-      page.getByText("Peiman Hussain", { exact: true }),
+      page.locator(".reference-document").getByText("Authorized Signatory", { exact: true }),
     ).toBeVisible();
+    await expect(page.locator(".reference-document")).not.toContainText("Fictional Authorized Signatory");
+    await expect(page.locator(".reference-document")).not.toContainText("Client Representative");
     await expect(page.locator(".pdf-sheet-row--commercial")).toHaveCSS(
       "break-after",
       "auto",
@@ -67,5 +71,6 @@ for (const [count, company] of [
       .length;
     if (count === 1) expect(pageCount).toBe(1);
     else expect(pageCount).toBeGreaterThan(1);
+    expectContinuousFooter(testInfo.outputPath(`quotation-${count}.pdf`), pageCount);
   });
 }

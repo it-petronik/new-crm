@@ -349,7 +349,7 @@ test("roles, actor, branch, company and expired stages are enforced for export a
   const f = await fixture();
   for (const actor of [
     md,
-    { ...sales, role: "IT Administrator" as const },
+    { ...sales, role: "HR Manager" as const },
     { ...sales, companies: ["Other"] },
     { ...sales, branches: ["Other"] },
   ]) {
@@ -555,7 +555,7 @@ test("existing Contact match and selected enrichment keep unselected authoritati
   const d = await ops.dataset(f.db, sales, [ref]);
   assert.equal(d[0].match, "Existing Contact");
 });
-test("crafted export cannot recover CRM-linked prospect after Lead ownership changes", async () => {
+test("prospect creator keeps access after assignment, but unrelated authorship cannot restore it", async () => {
   const f = await fixture();
   const r = await importProspect(f.db, sales, {
     ...f.refs[0],
@@ -572,6 +572,9 @@ test("crafted export cannot recover CRM-linked prospect after Lead ownership cha
   f.sqlite
     .prepare("UPDATE BusinessRecord SET ownerId=?,payload=? WHERE id=?")
     .run("other", JSON.stringify(p), r.leadId!);
+  assert.equal((await ops.dataset(f.db, sales, [f.refs[0]])).length,1);
+  p.attributes.leadCapturedById = "someone-else";
+  f.sqlite.prepare("UPDATE BusinessRecord SET payload=? WHERE id=?").run(JSON.stringify(p),r.leadId!);
   await assert.rejects(ops.dataset(f.db, sales, [f.refs[0]]));
 });
 test("CSV and XLSX retain Unicode, newlines, commas and text; formulas and markup cannot execute", async () => {

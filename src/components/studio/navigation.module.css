@@ -13,8 +13,13 @@
 .toggle, .expand { display:grid; place-items:center; flex:none; width:28px; height:32px; min-height:0; padding:0; background:none; color:var(--e-text-muted); border:0; border-radius:6px; }
 .expand { width:36px; color:var(--e-accent); }
 .nav { flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; scrollbar-width:thin; scrollbar-color:var(--e-border) transparent; }
-.group { margin:0 0 14px; }
+.group { margin:0 0 10px; }
 .groupTitle { margin:0; padding:8px 10px 5px; color:var(--e-text-muted); font-size:9px; font-weight:600; letter-spacing:.09em; text-transform:uppercase; }
+.groupToggle { display:flex; align-items:center; justify-content:space-between; width:100%; min-height:28px; padding:0; border:0; font:inherit; letter-spacing:inherit; text-transform:inherit; color:inherit; background:transparent; cursor:pointer; text-align:left; }
+.groupToggle svg { transition:rotate var(--motion-fast) ease; }
+.groupToggle[aria-expanded="false"] svg { rotate:-90deg; }
+.groupToggle:hover { color:var(--e-text); }
+.group > div[hidden] { display:none; }
 .item { display:flex; align-items:center; position:relative; gap:10px; width:100%; min-height:35px; padding:7px 10px; margin:2px 0; border:0; border-radius:8px; color:var(--e-text-secondary); background:none; font-size:12px; font-weight:450; text-align:left; text-decoration:none; }
 .item svg { flex:none; opacity:.8; }
 .item { transition:background-color var(--motion-fast) ease, color var(--motion-fast) ease; }
@@ -40,7 +45,8 @@
 .compact .person { justify-content:center; padding:8px 0 0; }
 .overlay { position:fixed; inset:0; background:var(--e-overlay); z-index:100; backdrop-filter:blur(3px); }
 .mobile { position:fixed; inset:0 auto 0 0; z-index:101; display:flex; width:min(280px,88vw); background:var(--e-surface); box-shadow:var(--e-shadow-overlay); }
-.mobile .item { min-height:40px; font-size:13px; }
+.mobile .item { min-height:44px; font-size:13px; }
+.mobile .groupToggle { min-height:44px; }
 .mobile .panel { padding-top:max(18px,env(safe-area-inset-top)); padding-bottom:max(12px,env(safe-area-inset-bottom)); }
 .mobile[data-state="open"] { animation:drawerEnter var(--motion-layout) var(--ease); }
 .mobile[data-state="closed"] { animation:drawerExit var(--motion-fast) ease-in; }

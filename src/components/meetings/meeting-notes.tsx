@@ -1,4 +1,6 @@
 "use client";
+import { Form, Select } from '@/components/ui/controls';
+
 
 import { useEffect, useState } from "react";
 import { CheckSquare, Gavel, ListChecks, NotebookPen, Trash2 } from "lucide-react";
@@ -132,7 +134,7 @@ export default function MeetingNotes({ meetingId, compact = false }: { meetingId
         ))}
       </div>
       {kind && (
-        <form
+        <Form
           className="meet-note-form"
           onSubmit={(e) => {
             e.preventDefault();
@@ -151,13 +153,13 @@ export default function MeetingNotes({ meetingId, compact = false }: { meetingId
               </div>
               <label>
                 What was said about it
-                <select className="ui-input" value={status} onChange={(e) => setStatus(e.target.value)}>
+                <Select className="ui-input" value={status} onChange={(e) => setStatus(e.target.value)}>
                   {STATUSES.map(([v, l]) => (
                     <option key={v} value={v}>
                       {l}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
             </>
           ) : (
@@ -186,7 +188,7 @@ export default function MeetingNotes({ meetingId, compact = false }: { meetingId
               {busy ? "Saving…" : `Add ${KIND_LABEL[kind].toLowerCase()}`}
             </Button>
           </div>
-        </form>
+        </Form>
       )}
       {error && (
         <p className="form-error" role="alert">

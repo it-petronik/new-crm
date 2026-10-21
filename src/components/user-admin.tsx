@@ -1,7 +1,23 @@
 "use client";
+import { CrmTable } from "@/components/ui/crm-table";
+import { Form } from "@/components/ui/controls";
+
 import { companyName } from "@/lib/company-name";
+import { previewTeamKey } from "@/lib/team-preview";
 import { Avatar } from "./avatar";
-import { Pagination, ListFilters, ListEmpty, SortHeader, usePagination } from "./pagination";
+import {
+  Pagination,
+  ListFilters,
+  ListEmpty,
+  SortHeader,
+  usePagination,
+} from "./pagination";
+import {
+  SelectionActions,
+  SelectionHeader,
+  SelectionCell,
+  useRowSelection,
+} from "./row-selection";
 import { useEffect, useState } from "react";
 import { Plus, ShieldCheck, X, KeyRound } from "lucide-react";
 import {
@@ -18,12 +34,22 @@ import {
   labels,
   roleModules,
   canManageUsers,
+  isFullAdmin,
   type Actor,
 } from "@/lib/domain";
 import { leadership, mayAssign, branchesForRole } from "@/lib/access-control";
-import { check, required, minLength, email as emailRule } from "@/lib/validation";
-import {requestJson,readJsonResponse,friendlyError} from "@/lib/client-request";
-import {LoadingState,ErrorState} from "./ui/async-state";
+import {
+  check,
+  required,
+  minLength,
+  email as emailRule,
+} from "@/lib/validation";
+import {
+  requestJson,
+  readJsonResponse,
+  friendlyError,
+} from "@/lib/client-request";
+import { LoadingState, ErrorState } from "./ui/async-state";
 type User = Actor & { email: string; active: boolean };
 export default function UserAdmin({
   actor,
@@ -39,21 +65,41 @@ export default function UserAdmin({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   // Holds the generated link for exactly one viewing; never persisted.
-  const [resetLink, setResetLink] = useState<{ link: string; name: string; minutes: number } | null>(null);
+  const [resetLink, setResetLink] = useState<{
+    link: string;
+    name: string;
+    minutes: number;
+  } | null>(null);
   const [copied, setCopied] = useState(false);
   const [ready, setReady] = useState(false);
-  const [loadError,setLoadError]=useState("");
+  const [loadError, setLoadError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [review, setReview] = useState(false);
   const key = `enercore-user-preview-${actor.id}`;
   async function load() {
-    setReady(false);setLoadError("");
-    try{const d=await requestJson<{users:User[]}>("/api/users",{},"The account list couldn’t load. Please try again.");if(!Array.isArray(d.users))throw new Error("The account list couldn’t load. Please try again.");setUsers(d.users);}catch(e){setLoadError(friendlyError(e));throw e;}finally{setReady(true);}
+    setReady(false);
+    setLoadError("");
+    try {
+      const d = await requestJson<{ users: User[] }>(
+        "/api/users",
+        {},
+        "The account list couldn’t load. Please try again.",
+      );
+      if (!Array.isArray(d.users))
+        throw new Error("The account list couldn’t load. Please try again.");
+      setUsers(d.users);
+    } catch (e) {
+      setLoadError(friendlyError(e));
+      throw e;
+    } finally {
+      setReady(true);
+    }
   }
   useEffect(() => {
     if (preview) {
       try {
-        const saved = localStorage.getItem(key);
+        const saved =
+          localStorage.getItem(previewTeamKey) || localStorage.getItem(key);
         setUsers(
           saved
             ? JSON.parse(saved)
@@ -82,7 +128,10 @@ export default function UserAdmin({
         .finally(() => setReady(true));
   }, [preview]);
   function persist(next: User[]) {
-    if (preview) localStorage.setItem(key, JSON.stringify(next));
+    if (preview) {
+      localStorage.setItem(key, JSON.stringify(next));
+      localStorage.setItem(previewTeamKey, JSON.stringify(next));
+    }
     setUsers(next);
   }
   function edit(user: User, isNew = false) {
@@ -93,13 +142,21 @@ export default function UserAdmin({
   }
   const assignableRoles = roles.filter(
     (r) =>
-      r !== "Branch Manager" &&
-      (actor.role === "MD" || !leadership.includes(r)),
+      r !== "Branch Manager" && (isFullAdmin(actor) || !leadership.includes(r)),
   );
   const editable = (user: User) =>
     user.id !== actor.id &&
-    (actor.role === "MD" || !leadership.includes(user.role));
+    (isFullAdmin(actor) || !leadership.includes(user.role));
   const pagination = usePagination(users);
+  const selection = useRowSelection(
+    pagination.matched,
+    JSON.stringify([
+      actor.id,
+      actor.role,
+      pagination.query.search,
+      pagination.query.status,
+    ]),
+  );
   if (!canManageUsers(actor))
     return (
       <div className="error">
@@ -108,174 +165,311 @@ export default function UserAdmin({
     );
   return (
     <section className="panel filterable-table-panel">
-      {profile ? <div className="access-profile">
-        <Button className="secondary" onClick={() => setProfile(null)}>← Back to users</Button>
-        <div className="access-profile-heading"><Avatar name={profile.name} size={44} /><div><h2>{profile.name}</h2><p>{profile.role}</p></div><span className={`badge ${profile.active ? "green" : "red"}`}>{profile.active ? "Active" : "Inactive"}</span></div>
-        <dl className="access-profile-grid"><div><dt>Email</dt><dd>{profile.email}</dd></div><div><dt>Companies</dt><dd>{profile.companies.map(companyName).join(", ")}</dd></div><div><dt>Role</dt><dd>{profile.role}</dd></div></dl>
-        <h3>Module access</h3><div className="access-profile-grid">{Object.entries(labels).filter(([m])=>roleModules(profile.role).includes(m as never)).map(([m,label])=><div key={m}><strong>{label}</strong><p>{profile.moduleAccess?.[m as keyof NonNullable<Actor["moduleAccess"]>] || "Role default"}</p></div>)}</div>
-        <p className="muted">Account details and assigned access. Personal HR information is not included here.</p>
-      </div> : <>
-      <div className="panel-heading">
-        <div>
-          <h2>Team access</h2>
-          <p>{!ready?"Loading team accounts…":loadError?"Account list temporarily unavailable":`${users.length} accounts · Role, company and module controls`}</p>
+      {profile ? (
+        <div className="access-profile">
+          <Button className="secondary" onClick={() => setProfile(null)}>
+            ← Back to users
+          </Button>
+          <div className="access-profile-heading">
+            <Avatar name={profile.name} size={44} />
+            <div>
+              <h2>{profile.name}</h2>
+              <p>{profile.role}</p>
+            </div>
+            <span className={`badge ${profile.active ? "green" : "red"}`}>
+              {profile.active ? "Active" : "Inactive"}
+            </span>
+          </div>
+          <dl className="access-profile-grid">
+            <div>
+              <dt>Email</dt>
+              <dd>{profile.email}</dd>
+            </div>
+            <div>
+              <dt>Companies</dt>
+              <dd>{profile.companies.map(companyName).join(", ")}</dd>
+            </div>
+            <div>
+              <dt>Role</dt>
+              <dd>{profile.role}</dd>
+            </div>
+          </dl>
+          <h3>Module access</h3>
+          <div className="access-profile-grid">
+            {Object.entries(labels)
+              .filter(([m]) => roleModules(profile.role).includes(m as never))
+              .map(([m, label]) => (
+                <div key={m}>
+                  <strong>{label}</strong>
+                  <p>
+                    {profile.moduleAccess?.[
+                      m as keyof NonNullable<Actor["moduleAccess"]>
+                    ] || "Role default"}
+                  </p>
+                </div>
+              ))}
+          </div>
+          <p className="muted">
+            Account details and assigned access. Personal HR information is not
+            included here.
+          </p>
         </div>
-        <Button
-          className="primary"
-          disabled={!ready||Boolean(loadError)}
-          onClick={() =>
-            edit(
-              {
-                id: "",
-                name: "",
-                email: "",
-                role: "Sales Executive",
-                companies: [actor.companies[0]],
-                branches: actor.branches.length ? actor.branches : ["Main"],
-                active: true,
-              },
-              true,
-            )
-          }
-        >
-          <Plus size={16} />
-          Add user
-        </Button>
-      </div>
-      {!ready?<LoadingState label="Loading team accounts"/>:loadError?<ErrorState message={loadError} title="The account list couldn’t load" onRetry={()=>void load().catch(e=>setLoadError(friendlyError(e)))}/>:<>
-      <ListFilters {...pagination} label="users" sortable={false} />
-      {error && !editor && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
-      <div className="table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <SortHeader sortKey="name" query={pagination.query} setQuery={pagination.setQuery}>Person</SortHeader>
-              <SortHeader sortKey="role" query={pagination.query} setQuery={pagination.setQuery}>Role</SortHeader>
-              <th>Companies</th>
-              <SortHeader sortKey="active" query={pagination.query} setQuery={pagination.setQuery}>Status</SortHeader>
-              <th>Access</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pagination.items.map((u) => (
-              <tr key={u.id}>
-                <td>
-                  {/* The email stays outside the button so its accessible
+      ) : (
+        <>
+          <div className="panel-heading">
+            <div>
+              <h2>Team access</h2>
+              <p>
+                Add a person, choose their role and brands. Sales users then
+                appear in “Assign to salesperson” on leads.
+              </p>
+              <p>
+                {!ready
+                  ? "Loading team accounts…"
+                  : loadError
+                    ? "Account list temporarily unavailable"
+                    : `${users.length} accounts · Role, company and module controls`}
+              </p>
+            </div>
+            <Button
+              className="primary"
+              disabled={!ready || Boolean(loadError)}
+              onClick={() =>
+                edit(
+                  {
+                    id: "",
+                    name: "",
+                    email: "",
+                    role: "Sales Executive",
+                    companies: [actor.companies[0]],
+                    branches: actor.branches.length ? actor.branches : ["Main"],
+                    active: true,
+                  },
+                  true,
+                )
+              }
+            >
+              <Plus size={16} />
+              Add user
+            </Button>
+          </div>
+          {!ready ? (
+            <LoadingState label="Loading team accounts" />
+          ) : loadError ? (
+            <ErrorState
+              message={loadError}
+              title="The account list couldn’t load"
+              onRetry={() =>
+                void load().catch((e) => setLoadError(friendlyError(e)))
+              }
+            />
+          ) : (
+            <>
+              <ListFilters {...pagination} label="users" sortable={false} />
+              <SelectionActions
+                selected={selection.selected}
+                title="Team access"
+                onClear={selection.clear}
+              />
+              {error && !editor && (
+                <p className="error" role="alert">
+                  {error}
+                </p>
+              )}
+              <div className="table-scroll">
+                <CrmTable>
+                  <thead>
+                    <tr>
+                      <SelectionHeader
+                        selection={selection}
+                        rows={pagination.items}
+                        label="users"
+                      />
+                      <SortHeader
+                        sortKey="name"
+                        query={pagination.query}
+                        setQuery={pagination.setQuery}
+                      >
+                        Person
+                      </SortHeader>
+                      <SortHeader
+                        sortKey="role"
+                        query={pagination.query}
+                        setQuery={pagination.setQuery}
+                      >
+                        Role
+                      </SortHeader>
+                      <th>Companies</th>
+                      <SortHeader
+                        sortKey="active"
+                        query={pagination.query}
+                        setQuery={pagination.setQuery}
+                      >
+                        Status
+                      </SortHeader>
+                      <th>Access</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pagination.items.map((u) => (
+                      <tr
+                        key={u.id}
+                        data-selected={selection.has(u.id) || undefined}
+                      >
+                        <SelectionCell
+                          selection={selection}
+                          row={u}
+                          label={u.name}
+                        />
+                        <td>
+                          {/* The email stays outside the button so its accessible
                       name remains just the person's name. */}
-                  <div className="avatar-name">
-                    <Avatar name={u.name} size={32} />
-                    <span>
-                      <Button className="record-link" onClick={() => setProfile(u)}>{u.name}</Button>
-                      <small>{u.email}</small>
-                    </span>
-                  </div>
-                </td>
-                <td>{u.role}</td>
-                <td>{u.companies.map(companyName).join(", ")}</td>
-                <td>
-                  <span className={`badge ${u.active ? "green" : "red"}`}>
-                    {u.active ? "Active" : "Inactive"}
-                  </span>
-                </td>
-                <td>
-                  {editable(u) ? (
-                    <div className="access-actions">
-                      <Button
-                        className="secondary"
-                        disabled={busy}
-                        onClick={() => edit(u)}
-                      >
-                        Manage access
-                      </Button>
-                      <Button
-                        className="secondary"
-                        disabled={busy}
-                        onClick={async () => {
-                          setBusy(true);
-                          setError("");
-                          try {
-                            const response = await fetch("/api/users/reset-link", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ userId: u.id }),
-                            });
-                            const result = await readJsonResponse(response,"We couldn’t confirm this account change. Refresh to check it before trying again.");
-                            if (!response.ok) throw new Error(result.error);
-                            setCopied(false);
-                            setResetLink({ link: result.link, name: result.user.name, minutes: result.expiresInMinutes });
-                          } catch (e) {
-                            setError(e instanceof Error ? e.message : "Unable to generate a reset link.");
-                          } finally {
-                            setBusy(false);
-                          }
-                        }}
-                      >
-                        <KeyRound size={15} />
-                        Reset password
-                      </Button>
-                      <Button
-                        className="text-button"
-                        disabled={busy}
-                        onClick={async () => {
-                          setBusy(true);
-                          try {
-                            if (preview)
-                              persist(
-                                users.map((x) =>
-                                  x.id === u.id
-                                    ? { ...x, active: !x.active }
-                                    : x,
-                                ),
-                              );
-                            else {
-                              const r = await fetch("/api/users", {
-                                method: "PATCH",
-                                headers: {
-                                  "Content-Type": "application/json",
-                                },
-                                body: JSON.stringify({
-                                  id: u.id,
-                                  active: !u.active,
-                                }),
-                              });
-                              const d = await readJsonResponse(r,"We couldn’t confirm this account change. Refresh to check it before trying again.");
-                              if (!r.ok) throw new Error(d.error);
-                              await load();
-                            }
-                          } catch (e) {
-                            setError(
-                              e instanceof Error ? e.message : "Update failed",
-                            );
-                          } finally {
-                            setBusy(false);
-                          }
-                        }}
-                      >
-                        {u.active ? "Deactivate" : "Activate"}
-                      </Button>
-                    </div>
-                  ) : (
-                    <span className="muted">
-                      {u.id === actor.id ? "Your account" : "MD managed"}
-                    </span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <ListEmpty {...pagination} label="users" />
-      <Pagination {...pagination} label="users" />
-      </>}
-      </>}
+                          <div className="avatar-name">
+                            <Avatar name={u.name} size={32} />
+                            <span>
+                              <Button
+                                className="record-link"
+                                onClick={() => setProfile(u)}
+                              >
+                                {u.name}
+                              </Button>
+                              <small>{u.email}</small>
+                            </span>
+                          </div>
+                        </td>
+                        <td>{u.role}</td>
+                        <td>{u.companies.map(companyName).join(", ")}</td>
+                        <td>
+                          <span
+                            className={`badge ${u.active ? "green" : "red"}`}
+                          >
+                            {u.active ? "Active" : "Inactive"}
+                          </span>
+                        </td>
+                        <td>
+                          {editable(u) ? (
+                            <div className="access-actions">
+                              <Button
+                                className="secondary"
+                                disabled={busy}
+                                onClick={() => edit(u)}
+                              >
+                                Manage access
+                              </Button>
+                              <Button
+                                className="secondary"
+                                disabled={busy}
+                                onClick={async () => {
+                                  setBusy(true);
+                                  setError("");
+                                  try {
+                                    const response = await fetch(
+                                      "/api/users/reset-link",
+                                      {
+                                        method: "POST",
+                                        headers: {
+                                          "Content-Type": "application/json",
+                                        },
+                                        body: JSON.stringify({ userId: u.id }),
+                                      },
+                                    );
+                                    const result = await readJsonResponse(
+                                      response,
+                                      "We couldn’t confirm this account change. Refresh to check it before trying again.",
+                                    );
+                                    if (!response.ok)
+                                      throw new Error(result.error);
+                                    setCopied(false);
+                                    setResetLink({
+                                      link: result.link,
+                                      name: result.user.name,
+                                      minutes: result.expiresInMinutes,
+                                    });
+                                  } catch (e) {
+                                    setError(
+                                      e instanceof Error
+                                        ? e.message
+                                        : "Unable to generate a reset link.",
+                                    );
+                                  } finally {
+                                    setBusy(false);
+                                  }
+                                }}
+                              >
+                                <KeyRound size={15} />
+                                Reset password
+                              </Button>
+                              <Button
+                                className="text-button"
+                                disabled={busy}
+                                onClick={async () => {
+                                  setBusy(true);
+                                  try {
+                                    if (preview)
+                                      persist(
+                                        users.map((x) =>
+                                          x.id === u.id
+                                            ? { ...x, active: !x.active }
+                                            : x,
+                                        ),
+                                      );
+                                    else {
+                                      const r = await fetch("/api/users", {
+                                        method: "PATCH",
+                                        headers: {
+                                          "Content-Type": "application/json",
+                                        },
+                                        body: JSON.stringify({
+                                          id: u.id,
+                                          active: !u.active,
+                                        }),
+                                      });
+                                      const d = await readJsonResponse(
+                                        r,
+                                        "We couldn’t confirm this account change. Refresh to check it before trying again.",
+                                      );
+                                      if (!r.ok) throw new Error(d.error);
+                                      await load();
+                                    }
+                                  } catch (e) {
+                                    setError(
+                                      e instanceof Error
+                                        ? e.message
+                                        : "Update failed",
+                                    );
+                                  } finally {
+                                    setBusy(false);
+                                  }
+                                }}
+                              >
+                                {u.active ? "Deactivate" : "Activate"}
+                              </Button>
+                            </div>
+                          ) : (
+                            <span className="muted">
+                              {u.id === actor.id
+                                ? "Your account"
+                                : "MD managed"}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </CrmTable>
+              </div>
+              <ListEmpty {...pagination} label="users" />
+              <Pagination {...pagination} label="users" />
+            </>
+          )}
+        </>
+      )}
       <DialogPresence>
         {resetLink && (
-          <Dialog title="Password reset link" onClose={() => setResetLink(null)}>
+          <Dialog
+            title="Password reset link"
+            onClose={() => setResetLink(null)}
+          >
             <p>
               Give this link to <strong>{resetLink.name}</strong> in person or
               through a channel you trust. It works once and expires in{" "}
@@ -285,7 +479,12 @@ export default function UserAdmin({
               This is shown once. It is not stored anywhere and cannot be shown
               again — if you lose it, generate a new link.
             </p>
-            <Input readOnly value={resetLink.link} aria-label="Reset link" onFocus={(e) => e.currentTarget.select()} />
+            <Input
+              readOnly
+              value={resetLink.link}
+              aria-label="Reset link"
+              onFocus={(e) => e.currentTarget.select()}
+            />
             <DialogActions
               cancel="Close"
               primary={{
@@ -331,12 +530,15 @@ export default function UserAdmin({
                 : "Access changes revoke this person's existing sessions."}{" "}
               Your own access cannot be changed here.
             </p>
-            <form
+            <Form
               noValidate
               id="user-access-form"
               onInput={(e) => {
                 const name = (e.target as HTMLElement & { name?: string }).name;
-                if (name) setFieldErrors((prev) => (prev[name] ? { ...prev, [name]: "" } : prev));
+                if (name)
+                  setFieldErrors((prev) =>
+                    prev[name] ? { ...prev, [name]: "" } : prev,
+                  );
               }}
               onSubmit={async (e) => {
                 e.preventDefault();
@@ -344,9 +546,15 @@ export default function UserAdmin({
                 if (creating) {
                   const entered = new FormData(e.currentTarget);
                   const found: Record<string, string> = {};
-                  const nameError = check(editor.name, [required("Name"), minLength("Name", 2)]);
+                  const nameError = check(editor.name, [
+                    required("Name"),
+                    minLength("Name", 2),
+                  ]);
                   if (nameError) found.name = nameError;
-                  const emailError = check(editor.email, [required("Work email"), emailRule]);
+                  const emailError = check(editor.email, [
+                    required("Work email"),
+                    emailRule,
+                  ]);
                   if (emailError) found.email = emailError;
                   if (!preview) {
                     const password = String(entered.get("password") ?? "");
@@ -359,7 +567,9 @@ export default function UserAdmin({
                   setFieldErrors(found);
                   const first = Object.keys(found)[0];
                   if (first) {
-                    const el = e.currentTarget.querySelector("[name=\"" + first + "\"]");
+                    const el = e.currentTarget.querySelector(
+                      '[name="' + first + '"]',
+                    );
                     setTimeout(() => (el as HTMLElement | null)?.focus(), 0);
                     return;
                   }
@@ -408,7 +618,10 @@ export default function UserAdmin({
                             },
                       ),
                     });
-                    const d = await readJsonResponse(r,"We couldn’t confirm this account change. Refresh to check it before trying again.");
+                    const d = await readJsonResponse(
+                      r,
+                      "We couldn’t confirm this account change. Refresh to check it before trying again.",
+                    );
                     if (!r.ok) throw new Error(d.error);
                     await load();
                   }
@@ -467,6 +680,14 @@ export default function UserAdmin({
                       ))}
                     </Select>
                   </Field>
+                  {editor.role === "IT Administrator" && (
+                    <p className="muted small">
+                      IT has the same permissions as MD, including HR, finance
+                      and user administration, within the selected brands and
+                      module limits. Only give this role to a trusted
+                      administrator.
+                    </p>
+                  )}
                 </div>
                 <h3 className="section-caption">Company access</h3>
                 <div className="choice-grid">
@@ -526,7 +747,10 @@ export default function UserAdmin({
                 </div>
               </fieldset>
               {creating && !preview && (
-                <Field error={fieldErrors.password} hint="At least 14 characters">
+                <Field
+                  error={fieldErrors.password}
+                  hint="At least 14 characters"
+                >
                   Initial password
                   <Input
                     name="password"
@@ -565,12 +789,19 @@ export default function UserAdmin({
                 start={
                   <span className="ui-dialog-note">
                     <ShieldCheck size={14} aria-hidden="true" />
-                    {preview ? "Saved only in this browser" : "Changes are audited"}
+                    {preview
+                      ? "Saved only in this browser"
+                      : "Changes are audited"}
                   </span>
                 }
                 secondary={
                   review && (
-                    <Button type="button" className="secondary" disabled={busy} onClick={() => setReview(false)}>
+                    <Button
+                      type="button"
+                      className="secondary"
+                      disabled={busy}
+                      onClick={() => setReview(false)}
+                    >
                       Back to edit
                     </Button>
                   )
@@ -583,7 +814,7 @@ export default function UserAdmin({
                   pending: busy,
                 }}
               />
-            </form>
+            </Form>
           </Dialog>
         )}
       </DialogPresence>

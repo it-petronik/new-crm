@@ -1,4 +1,6 @@
 "use client";
+import { Input } from '@/components/ui/controls';
+
 
 import { useState, type ReactNode } from "react";
 import { Link2 } from "lucide-react";
@@ -98,7 +100,7 @@ export function useMeetingLink(onCopied?: (outcome: Outcome, message: string) =>
       {manual && (
         <Dialog title={manual.kind === "guest" ? "Guest link" : "Internal link"} onClose={() => setManual(null)} className="dialog-compact meet-dialog">
           <p className="small muted">Copying isn&apos;t available here. Select the link and copy it.</p>
-          <input className="ui-input meet-link-input" readOnly value={manual.url} aria-label={manual.kind === "guest" ? "Guest link" : "Internal link"} onFocus={(e) => e.currentTarget.select()} autoFocus />
+          <Input className="ui-input meet-link-input" readOnly value={manual.url} aria-label={manual.kind === "guest" ? "Guest link" : "Internal link"} onFocus={(e) => e.currentTarget.select()} autoFocus />
           <DialogActions cancel="Close" onCancel={() => setManual(null)} />
         </Dialog>
       )}

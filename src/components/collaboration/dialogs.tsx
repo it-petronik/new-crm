@@ -311,7 +311,7 @@ export function NewRoomDialog({
         <fieldset className="collab-visibility">
           <legend>Who can find it</legend>
           <label className={visibility === "private" ? "is-selected" : ""}>
-            <input
+            <Input
               type="radio"
               name="visibility"
               checked={visibility === "private"}
@@ -323,7 +323,7 @@ export function NewRoomDialog({
             </span>
           </label>
           <label className={visibility === "workspace" ? "is-selected" : ""}>
-            <input
+            <Input
               type="radio"
               name="visibility"
               checked={visibility === "workspace"}

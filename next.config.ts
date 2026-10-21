@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 const config: NextConfig = {
   // No standalone output: the Cloudflare adapter produces its own bundle.
   poweredByHeader: false,
+  // Keep the local preview's floating Quick add unobstructed on phones.
+  // Compile/runtime errors still surface; this only hides the dev badge.
+  devIndicators: false,
   async headers() {
     const headers = [
           { key: "X-Content-Type-Options", value: "nosniff" },
@@ -33,6 +36,8 @@ const config: NextConfig = {
     return [
       {source:"/(.*)",headers:headers.filter(h=>!["Content-Security-Policy","X-Frame-Options"].includes(h.key))},
       {source:"/((?!api/mail/render).*)",headers:headers.filter(h=>["Content-Security-Policy","X-Frame-Options"].includes(h.key))},
+      // Protected HR downloads must not inherit the application's script-enabled policy.
+      {source:"/api/hr/files/:path*",headers:[{key:"Content-Security-Policy",value:"sandbox; default-src 'none'"}]},
     ];
   },
 };

@@ -1,4 +1,6 @@
 "use client";
+import { Input, Textarea } from '@/components/ui/controls';
+
 
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
@@ -387,7 +389,7 @@ const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer({
             >
               <Paperclip size={18} />
             </Button>
-            <input
+            <Input
               ref={filePicker}
               type="file"
               multiple
@@ -417,7 +419,7 @@ const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer({
             ))}
           </ul>
         )}
-        <textarea
+        <Textarea
           ref={input}
           className="ui-field-bare collab-composer-input"
           rows={1}

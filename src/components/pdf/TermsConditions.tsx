@@ -27,7 +27,7 @@ export function TermsConditions({
             className="mb-3 text-base font-bold uppercase"
             style={{ color: "var(--pdf-heading)" }}
           >
-            Terms and Conditions
+            {config.referenceFieldsOnly ? `${config.title === "QUOTATION" ? "Quotation" : "Proforma Invoice"} Terms & Conditions` : "Terms and Conditions"}
           </h2>
           <TermsBody text={customText} />
         </>

@@ -188,7 +188,6 @@ test("buy costs absent from sales Deal aggregate, history, search and AI", async
 });
 for (const role of [
   "HR Manager",
-  "IT Administrator",
   "Accounts Manager",
   "Sales Executive",
 ] as const)
@@ -284,7 +283,7 @@ test("RFQ, Offer and Scenario guessed IDs are denied across the full restricted-
     { ...sales, id: "other" },
     { ...md, companies: ["Other"] },
     { ...md, role: "Branch Manager" as const, branches: ["Other"] },
-    ...(["HR Manager", "IT Administrator", "Accounts Manager"] as const).map(
+    ...(["HR Manager", "Accounts Manager"] as const).map(
       (role) => ({ ...md, role }),
     ),
   ];

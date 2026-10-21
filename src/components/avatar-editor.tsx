@@ -1,4 +1,6 @@
 "use client";
+import { Input } from '@/components/ui/controls';
+
 import { useEffect, useRef, useState } from "react";
 import { Camera, Trash2, ZoomIn } from "lucide-react";
 import { Button, Dialog, DialogActions, DialogPresence } from "./ui/controls";
@@ -100,7 +102,7 @@ function Cropper({
       </div>
       <label className="crop-zoom">
         <span><ZoomIn size={15} aria-hidden="true" /> Zoom</span>
-        <input
+        <Input
           type="range"
           min={1}
           max={3}
@@ -132,7 +134,7 @@ export function AvatarEditor({
     <div className="avatar-editor">
       <span className="avatar-editor-photo">
         <Avatar name={name} image={current} avatarId={id} size={size} />
-        <input
+        <Input
           ref={file}
           type="file"
           accept="image/png,image/jpeg,image/webp,image/gif"

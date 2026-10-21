@@ -2,7 +2,7 @@ import { z } from "zod";
 
 /**
  * The only shape an Enercore AI answer may take. The model is constrained
- * to it (JSON schema on Workers AI) and the result is validated again here;
+ * to it (provider JSON schema) and the result is validated again here;
  * anything else is rejected, never shown.
  */
 
@@ -43,7 +43,7 @@ export const answerSchema = z.object({
 
 export type AiAnswer = z.infer<typeof answerSchema>;
 
-/** JSON schema handed to Workers AI (its JSON mode). */
+/** JSON schema passed through the hosted provider adapter. */
 export const answerJsonSchema = z.toJSONSchema(answerSchema, { target: "draft-7", io: "output" });
 
 /* ------------------------------------------------ management question router */
@@ -64,7 +64,7 @@ export const MANAGEMENT_TOOLS = [
 export const routeSchema = z.object({
   tool: z.enum(MANAGEMENT_TOOLS),
   company: z.string().max(40).nullable().default(null),
-  kind: z.enum(["leads", "quotations", "orders", "logistics", "accounts", "customers"]).nullable().default(null),
+  kind: z.enum(["leads", "quotations", "orders", "logistics", "accounts", "customers", "suppliers", "products", "hr", "marketing", "it"]).nullable().default(null),
   /** Search terms (search tool only): product, grade, port, customer words. */
   terms: z.array(z.string().trim().min(2).max(40)).max(5).default([]),
   /** Why this tool answers the question (for the audit trail, not shown). */
@@ -128,4 +128,4 @@ export const ANSWER_FORMAT = `Output format — one JSON object with these field
 - "missing": up to 5 short items the answer would need but CONTEXT doesn't have.
 Keep every text short. Never put the whole answer into "summary".`;
 
-export const ROUTE_FORMAT = `Output format — one JSON object: {"tool": one tool name from the list, or "none"; "company": a company name from the allowed list, or null; "kind": "leads" | "quotations" | "orders" | "logistics" | "accounts" | "customers" (status_breakdown only), or null; "terms": for "search" only, 1–5 short search words from the question (e.g. ["SN500"], ["asphalt"], ["Mombasa"]), otherwise []; "because": a few words}.`;
+export const ROUTE_FORMAT = `Output format — one JSON object: {"tool": one tool name from the list, or "none"; "company": a company name from the allowed list, or null; "kind": "leads" | "quotations" | "orders" | "logistics" | "accounts" | "customers" | "suppliers" | "products" | "hr" | "marketing" | "it" (status_breakdown only), or null; "terms": for "search" only, 1–5 short search words from the question (e.g. ["SN500"], ["asphalt"], ["Mombasa"]), otherwise []; "because": a few words}.`;

@@ -1,4 +1,6 @@
 "use client";
+import { Form } from '@/components/ui/controls';
+
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -568,7 +570,7 @@ export default function MailHub({
                   />
                 </div>
               ) : (
-                <form
+                <Form
                   id="mail-compose-form"
                   onSubmit={(e) => {
                     e.preventDefault();
@@ -651,7 +653,7 @@ export default function MailHub({
                       disabled: busy,
                     }}
                   />
-                </form>
+                </Form>
               )}
             </Dialog>
           )}

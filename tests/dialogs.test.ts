@@ -52,5 +52,5 @@ test("source PDF template receives safe commercial data, never activity notes or
   assert.equal(doc.to.address, "Customer address");
   assert.equal(doc.signatory.signatureUrl, undefined);
   assert.ok(!JSON.stringify(doc).includes("Private activity"));
-  assert.equal(doc.footerWebsite, "example.test");
+  assert.equal(doc.footerWebsite, "www.petronik.ae");
 });

@@ -1,4 +1,6 @@
 "use client";
+import { Form } from '@/components/ui/controls';
+
 import {LoadingState} from "../ui/async-state";
 import {requestJson} from "@/lib/client-request";
 import { useCallback, useEffect, useId, useState } from "react";
@@ -735,7 +737,7 @@ function OperationDialog({
             {p.warehouse}
           </p>
         )}
-        <form id={formId} onSubmit={submit} onChangeCapture={unsaved.markDirty}>
+        <Form id={formId} onSubmit={submit} onChangeCapture={unsaved.markDirty}>
           {error && (
             <p className={styles.error} role="alert">
               {error}
@@ -908,7 +910,7 @@ function OperationDialog({
               </Field>
             </FormGrid>
           )}
-        </form>
+        </Form>
         <DialogActions
           onCancel={unsaved.guard(onClose)}
           pending={busy}

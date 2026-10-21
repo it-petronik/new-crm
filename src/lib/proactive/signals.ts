@@ -1,5 +1,6 @@
 import { canApprove, canRead, money, outstanding, type Actor, type RecordItem } from "../domain";
 import { isCashEntry } from "../cashbook";
+import { isProforma } from "../domain";
 import { SALES_THRESHOLDS, businessDateOf, dayDiff, isHighValue, lastActivity, recordSignals, type SignalMeeting } from "../sales/signals";
 
 /**
@@ -279,7 +280,7 @@ export function proactiveSignals(input: { actor: Actor; records: RecordItem[]; m
     }
 
     /* Accounts (invoices, not cashbook entries). */
-    if (r.kind === "accounts" && !isCashEntry(r) && !["Paid", "Cancelled"].includes(r.status)) {
+    if (r.kind === "accounts" && !isCashEntry(r) && !isProforma(r) && !["Paid", "Cancelled"].includes(r.status)) {
       const owed = outstanding(r);
       const late = due && due < today ? dayDiff(due, today) : 0;
       if (owed > 0 && r.status !== "Draft" && (r.status === "Overdue" || late > 0))

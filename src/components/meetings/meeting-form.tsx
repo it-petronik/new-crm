@@ -1,4 +1,6 @@
 "use client";
+import { Form } from '@/components/ui/controls';
+
 
 import { useEffect, useId, useMemo, useState } from "react";
 import { CalendarPlus, Search, Video, X } from "lucide-react";
@@ -138,7 +140,7 @@ export default function MeetingForm({ mode, onClose, onDone }: { mode: Mode; onC
       dismissOnOutside={!busy && !dirty}
       className="meet-form-dialog"
     >
-      <form
+      <Form
         id={formId}
         className="ui-form-stack"
         noValidate
@@ -229,7 +231,7 @@ export default function MeetingForm({ mode, onClose, onDone }: { mode: Mode; onC
             icon: mode.kind === "edit" ? undefined : when === "now" ? <Video size={16} aria-hidden="true" /> : <CalendarPlus size={16} aria-hidden="true" />,
           }}
         />
-      </form>
+      </Form>
     </Dialog>
   );
 }
@@ -273,7 +275,7 @@ function InviteePicker({ value, onChange }: { value: InviteeView[]; onChange: (v
       )}
       <label className="meet-invitee-search">
         <Search size={15} aria-hidden="true" />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or role" aria-label="Search people to invite" />
+        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or role" aria-label="Search people to invite" />
       </label>
       {options.length > 0 && (
         <ul className="meet-invitee-results" role="listbox" aria-label="People">

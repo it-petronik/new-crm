@@ -1,4 +1,6 @@
 "use client";
+import { Input } from '@/components/ui/controls';
+
 
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { ExternalLink, Info, Link2, Lock, X } from "lucide-react";
@@ -131,7 +133,7 @@ function InfoPanel({ session, onClose, onCopy }: { session: RoomSession; onClose
       <div className="meet-info-link">
         <span className="meet-link-label">{linkKind === "guest" ? "Meeting link" : "Internal link — Enercore sign-in required"}</span>
         {link ? (
-          <input readOnly value={link} aria-label={linkKind === "guest" ? "Meeting link" : "Internal link"} onFocus={(e) => e.currentTarget.select()} />
+          <Input readOnly value={link} aria-label={linkKind === "guest" ? "Meeting link" : "Internal link"} onFocus={(e) => e.currentTarget.select()} />
         ) : (
           <p className="small muted">{failed ? "Couldn't load the link." : m ? "No guest link yet — Copy link creates one." : "Loading…"}</p>
         )}

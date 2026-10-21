@@ -65,6 +65,7 @@ const command = z.discriminatedUnion("action", [
       phone: z.string().max(50).optional(),
       requestId: id,
       createAnyway: z.boolean().optional(),
+      forProforma: z.boolean().optional(),
     })
     .strict(),
 ]);

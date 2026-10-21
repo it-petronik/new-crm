@@ -44,11 +44,11 @@
 }
 
 :root {
-  --brand-action: #6253b7;
-  --brand-hover: #51439f;
-  --brand-soft: #f0edfa;
-  --brand-text: #5748a6;
-  --brand-highlight: #b8aaf1;
+  --brand-action: #174762;
+  --brand-hover: #10384f;
+  --brand-soft: #edf4f7;
+  --brand-text: #174762;
+  --brand-highlight: #7ac7df;
   --brand-gold: #c99d40;
 }
 :root[data-company="Petronik"] {

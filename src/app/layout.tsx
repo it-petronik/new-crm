@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   description: "One workspace for every part of your energy business.",
   manifest: "/manifest.webmanifest",
   // Without an explicit icon the browser probes /favicon.ico, which 404s.
-  icons: { icon: "/brands/enercore.svg", shortcut: "/brands/enercore.svg", apple: "/brands/enercore.svg" },
+  icons: { icon: { url: "/brands/enercore-flame.svg", type: "image/svg+xml" }, shortcut: "/brands/enercore-flame.svg", apple: "/brands/enercore-flame.svg" },
 };
 export const viewport: Viewport = {
   width: "device-width",

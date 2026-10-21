@@ -1,0 +1,62 @@
+/* Corporate document workspaces: quiet hierarchy, aligned controls and real
+   paper geometry. No changes to role permissions or saved business values. */
+@media screen {
+  .modal.ui-dialog.proforma-dialog,
+  .modal.ui-dialog.quotation-preview-dialog { border-radius: 16px; border-color: var(--e-border); box-shadow: 0 24px 80px rgb(9 26 43 / 22%); }
+  .modal.ui-dialog.quotation-preview-dialog { width: min(1080px, calc(100vw - 32px)); max-width: min(1080px, calc(100vw - 32px)); }
+  .quotation-preview-dialog .dialog-body { padding: 20px 24px; background: var(--e-bg); }
+  .document-preview-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
+  .document-preview-toolbar > div { display: grid; gap: 4px; }
+  .document-preview-toolbar strong { font-size: 12px; letter-spacing: .01em; color: var(--e-text); }
+  .document-preview-toolbar span, .document-print-guidance { color: var(--e-text-secondary); font-size: 11px; line-height: 1.6; }
+  .document-print-guidance { text-align: center; max-width: 660px; margin: 16px auto 0; }
+  .document-preview-stage { width: 100%; min-width: 0; overflow-x: auto; padding: 2px 0 12px; display: flex; align-items: start; justify-content: safe center; }
+  .document-preview-space {position:relative;flex:none;min-width:0;margin-inline:auto}
+  .document-preview-stage[data-preview-mode="fit"] {overflow-x:hidden}
+  .document-preview-sheet { width: 794px; position:absolute; top:0; left:0; transform-origin:top left; zoom:1; }
+  .document-preview-sheet .reference-document { zoom: 1; width: 794px; min-height: 1123px; margin: 0; border: 1px solid #dce2e8; border-radius: 2px; box-shadow: 0 3px 16px rgb(13 34 52 / 7%); }
+  .modal.proforma-dialog .dialog-heading { padding-block: 18px; }
+  .proforma-form { gap: 20px; }
+  .proforma-form .proforma-grid { align-items: start; gap: 18px 20px; }
+  .proforma-form .ui-field { min-width: 0; gap: 7px; }
+  .proforma-form .ui-field-heading { height: 26px; min-height: 26px; }
+  .proforma-form .ui-field-label { font-size: 12px; line-height: 18px; color: var(--e-text-secondary); font-weight: 500; }
+  .proforma-form :is(.ui-input, .ui-select-trigger, .ui-date-trigger) { height: 42px; min-height: 42px; padding: 9px 12px; border-radius: 8px; font-size: 13px; line-height: 22px; background: var(--e-surface); color: var(--e-text); }
+  .proforma-form :is(.ui-select-trigger, .ui-date-trigger) { display: flex; align-items: center; justify-content: space-between; }
+  .proforma-form .line-editor-row { grid-template-columns: minmax(180px, 2.3fr) minmax(80px, .75fr) minmax(130px, 1.15fr) minmax(110px, 1fr) auto; align-items: start; gap: 12px; }
+  .proforma-form .line-item-name { max-width: none; }
+  .proforma-form .line-editor-item { gap: 16px; padding: 16px 0; border-top: 1px solid var(--e-border); }
+  .proforma-form .line-editor > h3 { margin-bottom: 4px; font-size: 14px; font-weight: 600; }
+  .modal.ui-dialog.proforma-dialog .proforma-form .line-editor { padding: 0; margin: 0; border: 0; background: transparent; box-shadow: none; }
+  .proforma-form .line-editor-row .ui-field-heading { height: 26px; min-height: 26px; }
+  .proforma-form .commercial-selection { display: flex; flex-wrap: wrap; align-items: start; gap: 12px 18px; }
+  .proforma-form .commercial-selection > .commercial-picker { flex: 1 1 320px; }
+  .proforma-form .commercial-selection > .ui-field { flex: 1 1 240px; max-width: 380px; }
+  .proforma-form .commercial-selection > .ui-button { align-self: end; flex: 0 0 auto; width: auto; min-height: 36px; padding: 8px 12px; }
+  .proforma-form .commercial-selection > p { flex-basis: 100%; margin: 0; }
+  .proforma-form .commercial-selection > .form-grid { flex-basis: 100%; padding: 16px 0; grid-template-columns: repeat(3, minmax(0,1fr)); }
+  .proforma-form .proforma-notice { border-left-width: 2px; padding: 10px 14px; font-size: 12px; border-radius: 0 7px 7px 0; }
+  .proforma-form .form-steps button { border-radius: 8px; background: transparent; }
+  .proforma-form .form-steps button[aria-current] { background: var(--e-accent-soft); box-shadow: inset 0 -2px var(--e-accent); }
+  :root[data-theme="dark"] .proforma-form :is(.ui-input, .ui-select-trigger, .ui-date-trigger) { background: var(--e-surface-sunken); color: var(--e-text); }
+  @media (max-width: 850px) {
+    .role-home .stats-grid:has(> :nth-child(n)) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .proforma-form .line-editor-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .proforma-form .commercial-selection > .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 600px) {
+    .role-home .stat-value-row { flex-wrap: wrap; gap: 6px; }
+    .modal.ui-dialog.quotation-preview-dialog { width: calc(100vw - 16px); max-width: calc(100vw - 16px); }
+    .quotation-preview-dialog .dialog-body { padding: 14px; }
+    .proforma-form :is(.ui-input, .ui-select-trigger, .ui-date-trigger) { height: 44px; min-height: 44px; font-size: 16px; }
+    .proforma-form .line-editor-row, .proforma-form .commercial-selection > .form-grid { grid-template-columns: minmax(0,1fr); }
+    .proforma-form .commercial-selection > .ui-field { max-width: none; }
+    .document-preview-toolbar span { display: none; }
+  }
+  @media (pointer: coarse) { .proforma-form .ui-field-heading, .proforma-form .line-editor-row .ui-field-heading { height: 32px; min-height: 32px; } }
+}
+@media print {
+  .modal.ui-dialog.quotation-preview-dialog { display: block !important; }
+}
+.bank-account-fields { min-width: 0; padding-block: 12px; }
+.bank-account-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-block: 16px 8px; }

@@ -5,6 +5,7 @@ node_modules/
 *.tsbuildinfo
 work/
 test-results/
+test-results-*/
 playwright-report/
 .DS_Store
 .dev.vars
@@ -23,3 +24,19 @@ __pycache__/
 *.py[cod]
 /test-results-print/
 /test-results-premium/
+/test-results-proforma/
+/test-results-catalog/
+/test-results-documents/
+/test-results-theme/
+/test-results-seals/
+
+# Generated commercial-document previews and exports, not source assets.
+/output/pdf/
+/test-results-watermarks/
+/test-results-lead-desk/
+test-results-experience/
+test-results-density/
+test-results-worklist/
+test-results-desktop-phone/
+test-results-management/
+test-results-management-live/

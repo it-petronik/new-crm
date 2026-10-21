@@ -1,4 +1,6 @@
 "use client";
+import { Form } from '@/components/ui/controls';
+
 
 import { useRef, useState } from "react";
 import { Send, ShieldCheck, Sparkles, Plus } from "lucide-react";
@@ -8,6 +10,7 @@ import type { Actor } from "@/lib/domain";
 import { AiAnswerView, AiLoading, useAiStatus } from "./ai-answer";
 import { SalesHome } from "./sales-copilot";
 import {friendlyError} from "@/lib/client-request";
+import { roleAiFocus } from "@/lib/ai/role-focus";
 
 /**
  * The Enercore AI workspace: ask a management question in plain words.
@@ -22,6 +25,7 @@ export default function AiWorkspace({ actor, preview }: { actor: Actor; preview:
   const [question, setQuestion] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
   const [pending, setPending] = useState(false);
+  const [salesOpen, setSalesOpen] = useState(false);
   const next = useRef(1);
   const running = useRef(false);
 
@@ -49,9 +53,9 @@ export default function AiWorkspace({ actor, preview }: { actor: Actor; preview:
       <div className="page-heading">
         <div>
           <span className="ai-orb" aria-hidden="true"><Sparkles size={30}/></span>
-          <span className="eyebrow">YOUR WORKSPACE ASSISTANT</span>
+          <span className="eyebrow">{actor.role} · YOUR WORKSPACE ASSISTANT</span>
           <h1>Enercore AI</h1>
-          <p>{turns.length?"Your questions. Clear answers. Useful next steps.":`What can I help you with, ${actor.name.split(" ")[0]}?`}</p>
+          <p>{roleAiFocus(actor)}</p>
         </div>
         {turns.length>0&&<Button variant="secondary" disabled={pending} onClick={()=>{setTurns([]);setQuestion("");}}><Plus size={16}/>New conversation</Button>}
       </div>
@@ -72,7 +76,7 @@ export default function AiWorkspace({ actor, preview }: { actor: Actor; preview:
         </section>
       ) : (
         <>
-          <form
+          {status.features.ask ? <Form
             className="panel ai-ask"
             onSubmit={(e) => {
               e.preventDefault();
@@ -110,7 +114,7 @@ export default function AiWorkspace({ actor, preview }: { actor: Actor; preview:
               </div>
             )}
             <p className="ai-composer-note"><ShieldCheck size={13}/>Permission-checked workspace answers · Shift + Enter for a new line</p>
-          </form>
+          </Form> : <p className="panel ai-unavailable">Your workspace insights are available on the records and tools included in your role.</p>}
 
           {turns.length === 0 ? (
             <details className="ai-about">
@@ -141,7 +145,7 @@ export default function AiWorkspace({ actor, preview }: { actor: Actor; preview:
               ))}
             </ol>
           )}
-          {status.features.sales && <details className="ai-sales-disclosure"><summary><Sparkles size={16}/>Your sales copilot<span>Daily priorities and account insights</span></summary><SalesHome actor={actor} /></details>}
+          {status.features.sales && <details className="ai-sales-disclosure" open={salesOpen} onToggle={e => setSalesOpen(e.currentTarget.open)}><summary><Sparkles size={16}/>Your sales copilot<span>Daily priorities and account insights</span></summary>{salesOpen && <SalesHome actor={actor} />}</details>}
         </>
       )}
     </div>

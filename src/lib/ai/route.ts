@@ -8,6 +8,7 @@ import { AiError, answerOver, checkLimits } from "./gateway";
 import type { AiContext } from "./context";
 import type { AiFeature, AiTier } from "./config";
 import { reviewSuggestions } from "./suggestions";
+import { roleAiFocus } from "./role-focus";
 
 /**
  * Every Enercore AI endpoint: a signed-in employee (never a guest, never
@@ -36,7 +37,8 @@ export async function aiEndpoint(request: Request, run: (ctx: { actor: Actor; db
 
 /** Runs one answer over a prepared context and reviews its suggestions. */
 export async function respond(db: Database, actor: Actor, feature: AiFeature, context: AiContext, instructions: string, question?: string, scope?: string, tier?: AiTier) {
-  const { answer, model, cached, generatedAt } = await answerOver({ db, actor, feature, instructions, context, question, tier });
+  const roleInstructions = `The signed-in employee's role is ${actor.role}. Prioritize ${roleAiFocus(actor)} Tailor wording and proposed next actions to this role. Role context never grants additional access or authority; use only supplied facts and references.\n\n${instructions}`;
+  const { answer, model, cached, generatedAt } = await answerOver({ db, actor, feature, instructions: roleInstructions, context, question, tier });
   const suggestions = await reviewSuggestions(db, actor, answer, context);
   return {
     feature,

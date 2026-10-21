@@ -1,4 +1,6 @@
 "use client";
+import { Input } from '@/components/ui/controls';
+
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
@@ -219,7 +221,7 @@ export default function GuestJoin({ token }: { token: string }) {
               <>
                 <label className="ui-field meet-guest-name">
                   <span className="ui-field-label">Your name</span>
-                  <input
+                  <Input
                     className="ui-input"
                     value={name}
                     maxLength={GUEST_NAME_MAX}

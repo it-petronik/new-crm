@@ -17,10 +17,10 @@ export function Header({
   config: DocumentTypeConfig;
 }) {
   return (
-    <div className="flex items-start justify-between">
+    <div className="pdf-header flex items-start justify-between">
       <div>
         <div
-          className="inline-flex rounded border bg-white px-2 py-0.5 text-[11px] font-bold"
+          className="pdf-reference inline-flex rounded border bg-white px-2 py-0.5 text-[11px] font-bold"
           style={{
             borderColor: "var(--pdf-accent)",
             color: "var(--pdf-heading)",
@@ -38,6 +38,7 @@ export function Header({
         <img
           src={doc.from.logoUrl}
           alt={doc.from.name}
+          loading="eager"
           className="pdf-company-logo object-contain"
         />
       )}

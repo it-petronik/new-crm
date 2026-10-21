@@ -2,15 +2,15 @@
 import { useState } from "react";
 import * as PopoverPrimitive from "@radix-ui/react-popover";
 import { CalendarClock } from "lucide-react";
-import { Button, Input } from "@/components/ui/controls";
+import { Button, Field, Input, Select } from "@/components/ui/controls";
 import { followUpPresets } from "@/lib/attention";
 
 /**
  * Setting the next follow-up.
  *
  * Typing a date is the step people skip, and a skipped follow-up is how a
- * lead goes quiet. The common answers are therefore one tap, with a date
- * field kept for the genuine exceptions rather than as the default path.
+ * lead goes quiet. A single labelled choice keeps common answers easy to find,
+ * with a date field only when the person chooses a custom date.
  */
 export default function FollowUpControl({
   onChoose,
@@ -25,40 +25,41 @@ export default function FollowUpControl({
   compact?: boolean;
   value?: string;
 }) {
-  const [custom, setCustom] = useState("");
+  const [customDate, setCustomDate] = useState(false);
+  const [localDate, setLocalDate] = useState<string | undefined>(value);
+  const date = value ?? localDate;
+  const presets = followUpPresets();
+  const preset = presets.find(item => item.date === date);
+  const selection = customDate || (date && !preset) ? "custom" : preset?.date || (onClear ? "none" : "choose");
   return (
     <div className={`follow-up-control${compact ? " is-compact" : ""}`}>
       <span className="follow-up-label">
         <CalendarClock size={14} aria-hidden="true" /> Follow up
       </span>
-      <div className="follow-up-presets">
-        {followUpPresets().map((preset) => (
-          <Button
-            key={preset.label}
-            className={`secondary${value === preset.date ? " is-selected" : ""}`}
-            aria-pressed={value === preset.date}
-            disabled={busy}
-            onClick={() => onChoose(preset.date, preset.label)}
-          >
-            {preset.label}
-          </Button>
-        ))}
-        <Input
+      <div className="follow-up-choices">
+        <Select aria-label="Follow-up timing" value={selection} disabled={busy} onChange={event => {
+          const next = event.target.value;
+          setCustomDate(next === "custom");
+          if (next === "none") { setLocalDate(undefined); onClear?.(); }
+          const chosen = presets.find(item => item.date === next);
+          if (chosen) { setLocalDate(chosen.date); onChoose(chosen.date, chosen.label); }
+        }}>
+          {!onClear && <option value="choose" disabled>Choose when to follow up</option>}
+          {presets.map(item => <option key={item.label} value={item.date}>{item.label}</option>)}
+          <option value="custom">Choose a date</option>
+          {onClear && <option value="none">No follow-up</option>}
+        </Select>
+        {selection === "custom" && <Field>Follow-up date<Input
           type="date"
           aria-label="Follow-up date"
-          value={value ?? custom}
+          value={date ?? ""}
           disabled={busy}
           onChange={(e) => {
             const value = e.target.value;
-            setCustom(value);
+            setLocalDate(value);
             if (value) onChoose(value, value);
           }}
-        />
-        {onClear && (
-          <Button className={`secondary${value === undefined ? " is-selected" : ""}`} aria-pressed={value === undefined} disabled={busy} onClick={()=>{setCustom("");onClear();}}>
-            No follow-up
-          </Button>
-        )}
+        /></Field>}
       </div>
     </div>
   );

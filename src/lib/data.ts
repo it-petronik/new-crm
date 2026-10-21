@@ -4,6 +4,7 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { users, sessions, businessRecords, auditEvents, loginAttempts, passwordResets, refreshTokens } from "./schema";
 import type { RefreshTokenRow } from "./schema";
 import type { UserRow } from "./schema";
+import { allowedModules, canSeeAllLeads, type Actor, type RecordItem } from "./domain";
 
 /**
  * The single data layer. API routes call these functions and never touch
@@ -217,6 +218,44 @@ export const listAllRecords = (db: Database) =>
 /** Upper bound on one workspace page, so a large table cannot exhaust CPU. */
 export const RECORD_PAGE_LIMIT = 1000;
 
+const leadVisibility = (actor: Actor) => canSeeAllLeads(actor) ? undefined : sql`(
+  ${businessRecords.kind} <> 'leads' OR ${businessRecords.ownerId} = ${actor.id}
+  OR json_extract(${businessRecords.payload}, '$.attributes.leadCapturedById') = ${actor.id}
+)`;
+
+/** Cursor paging for the consolidated Lead Desk; never a silent 1000-row
+ * dashboard truncation. Scope is enforced before pagination and again by
+ * canRead in the route. No full-table payload/audit query per page. */
+export function listLeadDeskPage(db: Database, actor: Actor, after = "", asOf = new Date()) {
+  const kinds = ["leads", "quotations", "orders"].filter(kind => allowedModules(actor).includes(kind as "leads" | "quotations" | "orders"));
+  if (!actor.companies.length || !kinds.includes("leads")) return Promise.resolve([]);
+  return db.select().from(businessRecords).where(and(
+    inArray(businessRecords.company, actor.companies),
+    actor.branches.length ? inArray(businessRecords.branch, actor.branches) : undefined,
+    inArray(businessRecords.kind, kinds),
+    leadVisibility(actor),
+    ["Sales Executive", "Logistics Executive", "Employee"].includes(actor.role) ? or(eq(businessRecords.kind, "leads"), eq(businessRecords.ownerId, actor.id)) : undefined,
+    after ? gt(businessRecords.id, after) : undefined,
+    sql`${businessRecords.createdAt} <= ${asOf.getTime()}`,
+  )).orderBy(businessRecords.id).limit(500).all();
+}
+
+/** Management reads complete, scoped pages without reloading audit history.
+ * The route enforces leadership access; module/company/branch limits apply
+ * here before paging and canRead is checked again before returning a row. */
+export function listManagementPage(db: Database, actor: Actor, after = "", asOf = new Date()) {
+  const kinds: string[] = allowedModules(actor).filter(k => !["overview", "approvals", "activity", "settings"].includes(k));
+  if (kinds.includes("hr")) kinds.push("leave");
+  if (!actor.companies.length || !kinds.length) return Promise.resolve([]);
+  return db.select().from(businessRecords).where(and(
+    inArray(businessRecords.company, actor.companies),
+    actor.branches.length ? inArray(businessRecords.branch, actor.branches) : undefined,
+    inArray(businessRecords.kind, kinds), leadVisibility(actor),
+    after ? gt(businessRecords.id, after) : undefined,
+    sql`${businessRecords.createdAt} <= ${asOf.getTime()}`,
+  )).orderBy(businessRecords.id).limit(500).all();
+}
+
 /**
  * Records the actor may see, filtered in the database rather than in JS.
  *
@@ -232,6 +271,8 @@ export function listRecordsForActor(
   branches: string[],
   limit = RECORD_PAGE_LIMIT,
   offset = 0,
+  actor?: Actor,
+  kind?: RecordItem["kind"],
 ) {
   if (!companies.length) return Promise.resolve([]);
   const scope = branches.length
@@ -240,7 +281,8 @@ export function listRecordsForActor(
   return db
     .select()
     .from(businessRecords)
-    .where(scope)
+    .where(and(scope, actor ? leadVisibility(actor) : undefined,
+      kind ? inArray(businessRecords.kind, kind === "hr" ? ["hr", "leave"] : [kind]) : undefined))
     .orderBy(desc(businessRecords.createdAt))
     .limit(Math.min(limit, RECORD_PAGE_LIMIT))
     .offset(offset)

@@ -16,6 +16,7 @@
 }
 .reference-document [data-print-document] {
   min-width: 680px;
+  padding: 9mm;
 }
 .reference-document .pdf-page-table > thead {
   display: none;
@@ -57,31 +58,44 @@
   object-fit: contain;
 }
 .reference-document [data-print-document] > div {
-  font-size: 11.5px !important;
+  font-size: 10px;
 }
 .reference-document .pdf-commercial table td {
-  padding: 10px 12px;
+  padding: 7px 6px;
 }
 .reference-document .pdf-commercial table th {
-  padding: 9px 12px;
+  padding: 7px 6px;
 }
 .reference-document .pdf-commercial h1 {
-  font-size: 24px;
+  font-size: 21px;
   line-height: 1.25;
 }
 .reference-document .pdf-commercial > div:first-child {
-  padding-top: 16px;
-  padding-bottom: 16px;
+  padding-top: 10px;
+  padding-bottom: 12px;
 }
 .reference-document .pdf-commercial > .mt-7 {
-  margin-top: 18px;
+  margin-top: 12px;
 }
 @media screen {
+  /* Fill the actual A4 paper, not just its commercial content. The footer's
+     auto margin absorbs spare space above it, never below the contact band. */
+  .reference-document.reference-document [data-print-document] { padding: 9mm; min-height: calc(297mm - 2px); display: flex; flex-direction: column; }
+  .reference-document [data-print-document] > .pdf-document { flex: 1; display: flex; flex-direction: column; width: 100%; max-width: none; }
+  .reference-document.reference-document .pdf-footer-group { flex-shrink: 0; margin: auto 0 -5mm; padding-top: 12px; }
+  .reference-document.reference-document .pdf-footer-band { display: flex; align-items: center; justify-content: center; margin: 0; padding: 2.25mm 3mm 1.75mm; height: auto; min-height: 7mm; }
   .reference-document {
     zoom: 0.82;
     margin: 12px auto;
   }
 }
+.reference-document .pdf-footer-contacts { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 3px 12px; text-align: center; font-family: Arial, sans-serif; font-size: 8.5px; line-height: 1.3; }
+.reference-document .pdf-footer-group > .pdf-thank-you { display: flex; align-items: center; justify-content: center; margin: 0; padding: 1mm 3mm; min-height: 6mm; text-align: center; color: var(--pdf-heading); font-family: Arial, sans-serif; font-size: 8.5px; line-height: 1.3; font-weight: 400; background: #fff; }
+.reference-document .pdf-footer-band :is(.pdf-contact-link, .pdf-contact-link:hover) { color: var(--pdf-heading); text-decoration-color: color-mix(in srgb, var(--pdf-heading) 40%, transparent); }
+.reference-document .pdf-footer-band .pdf-contact-link:focus-visible { outline-color: var(--pdf-heading); }
+.reference-document .pdf-contact-link { color: #17576b; text-decoration: underline; text-decoration-color: #a2bec7; text-underline-offset: 3px; overflow-wrap: anywhere; }
+.reference-document .pdf-contact-link:hover { color: #093a4b; text-decoration-color: currentColor; }
+.reference-document .pdf-contact-link:focus-visible { outline: 2px solid #17576b; outline-offset: 3px; border-radius: 2px; }
 @media print {
   @page {
     size: A4;
@@ -116,7 +130,7 @@
     height:auto !important;
   }
   body:has(.reference-document) .modal > *:not(.dialog-body),
-  body:has(.reference-document) .dialog-body > *:not(.reference-document) {
+  body:has(.reference-document) .dialog-body > *:not(.reference-document):not(.quotation-dialog-preview) {
     display: none !important;
   }
   body:has(.reference-document) .modal {
@@ -147,9 +161,8 @@
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }
-  .reference-document [data-print-document] {
-    min-width: 0;
-  }
+  .reference-document [data-print-document] { min-width: 0; padding: 0; }
+  .reference-document .pdf-contact-link { color: #18354a; text-decoration: none; }
   /* The outer table is a layout wrapper, not the line-item table. Allow
      ordinary document flow so long quotes can break at individual items. */
   .reference-document .pdf-page-table,
@@ -167,15 +180,18 @@
   }
   .reference-document .pdf-terms-sign {
     display: block;
-    padding-top: 6mm !important;
+    padding-top: 3mm !important;
   }
   .reference-document .pdf-terms-sign > * + * {
-    margin-top: 5mm;
+    margin-top: 2mm;
   }
   .reference-document .pdf-terms h2 {
     break-after: avoid;
   }
-  .reference-document .pdf-footer-band {
-    display: none !important;
-  }
+  /* The two-row footer is reproduced in page-margin boxes, not a fixed
+     body overlay. Every printed page reserves its own footer space. */
+  .reference-document .pdf-footer-group { display: none !important; }
+  .quotation-dialog-preview :is(.document-preview-toolbar, .document-print-guidance) { display: none !important; }
+  .quotation-dialog-preview :is(.document-preview-stage, .document-preview-space, .document-preview-sheet) { display: block !important; position:static!important; transform:none!important; width: auto !important; height:auto!important; padding: 0 !important; overflow: visible !important; zoom: 1 !important; }
+  .quotation-dialog-preview .reference-document { zoom: 1 !important; width: auto !important; min-height: 0 !important; }
 }

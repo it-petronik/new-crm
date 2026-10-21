@@ -44,7 +44,7 @@ const count = (s: DatabaseSync, t: string, where = "1") => Number((s.prepare(`SE
 const record = (id: string, values: Partial<RecordItem> = {}): RecordItem => ({
   id, kind: "leads", title: `Fictional ${id}`, company: "Petronik", branch: "Main", ownerId: "s1", owner: "Sara Seller", status: "New",
   contact: "", product: "Base Oil SN500", quantity: 0, unit: "MT", amount: 0, currency: "USD", due: TODAY, source: "Test", detail: "",
-  createdAt: "2026-10-01T10:00:00.000Z", updatedAt: "2026-10-01T10:00:00.000Z", ...values,
+  createdAt: "2026-10-01T10:00:00.000Z", updatedAt: "2026-10-01T10:00:00.000Z", attributes: { leadCapturedById: salesManager.id }, ...values,
 });
 function insert(sqlite: DatabaseSync, r: RecordItem) {
   sqlite.prepare("INSERT INTO BusinessRecord(id,kind,company,branch,ownerId,status,payload,version,createdAt,updatedAt) VALUES(?,?,?,?,?,?,?,1,1,1)").run(r.id, r.kind, r.company, r.branch, r.ownerId, r.status, JSON.stringify(r));

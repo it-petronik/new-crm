@@ -1,4 +1,6 @@
 "use client";
+import { Form } from '@/components/ui/controls';
+
 import {Skeleton} from "../ui/skeleton";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link2, X } from "lucide-react";
@@ -125,7 +127,7 @@ export function TaskDialog({
         dismissOnOutside={!unsaved.dirty && !busy}
         className="task-dialog"
       >
-        <form id={formId} onSubmit={submit} onInput={unsaved.markDirty} onChange={unsaved.markDirty} noValidate>
+        <Form id={formId} onSubmit={submit} onInput={unsaved.markDirty} onChange={unsaved.markDirty} noValidate>
           {error && (
             <p className="form-error" role="alert">
               {error}
@@ -235,7 +237,7 @@ export function TaskDialog({
               )}
             </div>
           </FormGrid>
-        </form>
+        </Form>
         <DialogActions
           pending={busy}
           primary={{ label: editing ? "Save changes" : "Create task", pendingLabel: "Saving…", type: "submit", form: formId, pending: busy }}

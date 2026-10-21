@@ -4,6 +4,7 @@ import { isPreview } from "@/lib/db";
 import { previewActor } from "@/lib/fixtures";
 import Workspace from "@/components/workspace";
 export const dynamic = "force-dynamic";
+export { desktopWorkspaceViewport as viewport } from "@/lib/workspace-viewport";
 export default async function Page() {
   const preview = isPreview();
   const actor = preview ? previewActor : await currentActor();

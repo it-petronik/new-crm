@@ -1,4 +1,6 @@
 "use client";
+import { Input } from '@/components/ui/controls';
+
 import { useState } from "react";
 import { Sparkles } from "lucide-react";
 import { Button } from "./ui/controls";
@@ -33,7 +35,7 @@ export default function MailIntakePanel({ message, records, onCreate }: IntakePr
       <dl><dt>Company</dt><dd>{s.company || "Not stated"}</dd><dt>Contact</dt><dd>{s.contact || "Not stated"}</dd><dt>Product</dt><dd>{s.product || "Not stated"}</dd><dt>Quantity</dt><dd>{s.quantity === null ? "Not stated" : `${s.quantity} ${s.unit}`}</dd></dl>
       <details><summary>Source excerpts</summary>{s.evidence.map((v,i) => <blockquote key={i}>{v}</blockquote>)}</details>
       {matches.length > 0 && <div role="status"><strong>Possible existing records</strong>{matches.slice(0,5).map(r => <p key={r.id}>{r.title} · {r.kind}</p>)}<p>Check these before creating a duplicate. Nothing is merged automatically.</p></div>}
-      <label className="mail-share-consent"><input type="checkbox" checked={reviewed} onChange={e => setReviewed(e.target.checked)}/><span>I reviewed these details. Saving shares the record’s fields with authorised module users. The full email stays private.</span></label>
+      <label className="mail-share-consent"><Input type="checkbox" checked={reviewed} onChange={e => setReviewed(e.target.checked)}/><span>I reviewed these details. Saving shares the record’s fields with authorised module users. The full email stays private.</span></label>
       <div className="mail-intake-actions">{(["leads","customers","it"] as const).map(kind => <Button key={kind} className="secondary" disabled={!reviewed} onClick={() => onCreate(kind,message,s)}>{kind === "leads" ? "Review lead" : kind === "customers" ? "Review customer" : "Review IT ticket"}</Button>)}</div><small>Nothing is created until you save the next form.</small>
     </div>}
   </section>;

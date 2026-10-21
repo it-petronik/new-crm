@@ -50,7 +50,7 @@ export type RuleConditions = {
 };
 
 /** People who see their team's tasks (same roles as the Action Center's team scope). */
-export const isTaskManager = (actor: Actor) => hasTeamScope(actor) && actor.role !== "MD Assistant";
+export const isTaskManager = (actor: Actor) => hasTeamScope(actor);
 export const teamTasksAllowed = hasTeamScope;
 
 type Scoped = { company: string; branch: string };
@@ -204,7 +204,7 @@ export function canEditRule(actor: Actor, company: string, preset: Preset) {
   if (!actor.companies.includes(company) || actor.branches.length) return false;
   const module = PRESET_INFO[preset].editModule;
   if (actor.moduleAccess?.[module] === "read" || !allowedModules(actor).includes(module)) return false;
-  if (["MD", "Group Manager"].includes(actor.role)) return true;
+  if (["MD", "MD Assistant", "IT Administrator", "Group Manager"].includes(actor.role)) return true;
   return (
     (preset === "lead_follow_up" && actor.role === "Sales Manager") ||
     (preset === "it_ticket_triage" && actor.role === "IT Administrator") ||

@@ -12,6 +12,7 @@ import { PartySection } from "./PartySection";
 import { Signature } from "./Signature";
 import { Totals } from "./Totals";
 import { TermsConditions } from "./TermsConditions";
+import { BrandMark } from "../brand-mark";
 
 const DEFAULT_THEME: PdfTheme = {
   accent: "#1e3a5f",
@@ -52,7 +53,7 @@ export function DocumentTemplate({ type, data, theme }: DocumentTemplateProps) {
 
   return (
     <div
-      className="mx-auto max-w-[210mm] bg-white text-[12.5px] leading-relaxed text-[#1a1a1a] print:max-w-none"
+      className="pdf-document mx-auto max-w-[210mm] bg-white text-[12.5px] leading-relaxed text-[#1a1a1a] print:max-w-none"
       style={
         {
           "--pdf-accent": resolvedTheme.accent,
@@ -62,6 +63,9 @@ export function DocumentTemplate({ type, data, theme }: DocumentTemplateProps) {
         } as CSSProperties
       }
     >
+      {(type === "quotation" || type === "proforma") && data.from.logoUrl && (
+        <BrandMark className="pdf-brand-watermark" src={data.from.logoUrl} label="" />
+      )}
       <table className="pdf-page-table w-full border-collapse">
         <thead>
           <tr>
@@ -79,17 +83,17 @@ export function DocumentTemplate({ type, data, theme }: DocumentTemplateProps) {
             <td>
               <div className="pdf-commercial">
                 <div
-                  className="-mx-[14mm] px-[14mm] pt-5 pb-6"
+                  className="pdf-letterhead -mx-[14mm] px-[14mm] pt-5 pb-6"
                   style={{ backgroundColor: "var(--pdf-panel)" }}
                 >
                   <Header doc={data} config={config} />
-                  <PartySection doc={data} />
+                  <PartySection doc={data} referenceFieldsOnly={config.referenceFieldsOnly} />
                 </div>
 
                 <DocumentInfo doc={data} config={config} />
 
                 <div className="mt-4">
-                  <ItemsTable doc={data} />
+                  <ItemsTable doc={data} referenceFieldsOnly={config.referenceFieldsOnly} />
                 </div>
 
                 <div className="mt-7">
@@ -97,16 +101,16 @@ export function DocumentTemplate({ type, data, theme }: DocumentTemplateProps) {
                 </div>
 
                 <div className="mt-3">
-                  <AmountInWords doc={data} />
+                  <AmountInWords doc={data} referenceFieldsOnly={config.referenceFieldsOnly} />
                 </div>
 
                 {!hasSecondarySheet && (
                   <div className="pdf-sign-block mt-6">
-                    <Signature doc={data} />
-                    <p className="mt-6 text-[10px] text-slate-400">
+                    <Signature doc={data} referenceFieldsOnly={config.referenceFieldsOnly} />
+                    {!config.referenceFieldsOnly && <p className="mt-6 text-[10px] text-slate-400">
                       Generated electronically by {data.from.name} - no physical
                       signature required unless otherwise agreed.
-                    </p>
+                    </p>}
                   </div>
                 )}
               </div>
@@ -119,16 +123,16 @@ export function DocumentTemplate({ type, data, theme }: DocumentTemplateProps) {
                 <div className="pdf-terms-sign flex flex-col gap-5">
                   {hasBank && (
                     <div className="pdf-bank-block mb-3">
-                      <BankDetails doc={data} />
+                      <BankDetails doc={data} referenceFieldsOnly={config.referenceFieldsOnly} />
                     </div>
                   )}
                   {hasTerms && <TermsConditions doc={data} config={config} />}
                   <div className="pdf-sign-block">
-                    <Signature doc={data} />
-                    <p className="mt-6 text-[10px] text-slate-400">
+                    <Signature doc={data} referenceFieldsOnly={config.referenceFieldsOnly} />
+                    {!config.referenceFieldsOnly && <p className="mt-6 text-[10px] text-slate-400">
                       Generated electronically by {data.from.name} - no physical
                       signature required unless otherwise agreed.
-                    </p>
+                    </p>}
                   </div>
                 </div>
               </td>
@@ -136,7 +140,6 @@ export function DocumentTemplate({ type, data, theme }: DocumentTemplateProps) {
           )}
         </tbody>
       </table>
-
       <Footer doc={data} config={config} />
     </div>
   );

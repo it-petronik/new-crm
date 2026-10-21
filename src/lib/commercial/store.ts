@@ -9,6 +9,7 @@ import {
 } from "../schema";
 import {
   allowedModules,
+  canSeeAllLeads,
   canRead,
   canWrite,
   stages,
@@ -22,6 +23,7 @@ import {
   updateRecordWithAudit,
 } from "../data";
 import { visibleMeetings } from "../meeting-data";
+import { canCreateProforma } from "../proforma";
 import {
   capabilityInput,
   contactInput,
@@ -47,8 +49,9 @@ export function recordScope(actor: Actor): SQL {
       : undefined,
     inArray(businessRecords.kind, kinds),
     sql`json_extract(${businessRecords.payload}, '$.deletedAt') IS NULL`,
+    !canSeeAllLeads(actor) ? sql`(${businessRecords.kind} <> 'leads' OR ${businessRecords.ownerId} = ${actor.id} OR json_extract(${businessRecords.payload}, '$.attributes.leadCapturedById') = ${actor.id})` : undefined,
     ["Sales Executive", "Logistics Executive", "Employee"].includes(actor.role)
-      ? sql`(${businessRecords.kind} IN ('products','customers') OR ${businessRecords.ownerId} = ${actor.id})`
+      ? sql`(${businessRecords.kind} IN ('leads','products','customers') OR ${businessRecords.ownerId} = ${actor.id})`
       : undefined,
   )!;
 }
@@ -569,6 +572,7 @@ export async function quickCustomer(
     phone?: string;
     requestId: string;
     createAnyway?: boolean;
+    forProforma?: boolean;
   },
 ) {
   const now = new Date().toISOString();
@@ -597,7 +601,9 @@ export async function quickCustomer(
     updatedAt: now,
     attributes: { country: input.country || "" },
   };
-  if (!canWrite(actor, record)) throw unavailable();
+  // Narrow create-only exception for Accounts preparing a customer proforma.
+  // It does not grant customer edit/delete, and honors both module overrides.
+  if (!canWrite(actor, record) && !(input.forProforma && canCreateProforma(actor, record.company, record.branch) && canRead(actor, record) && actor.moduleAccess?.customers !== "none" && actor.moduleAccess?.customers !== "read")) throw unavailable();
   const retry = await findRecord(db, id);
   if (retry) {
     await parent(db, actor, id, ["customers"]);

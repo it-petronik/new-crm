@@ -118,7 +118,7 @@ test("dashboard ranges use the local calendar, not the UTC day", () => {
 
 test("company labels are presentation only and spell Istanergy correctly", () => {
   assert.equal(companyName("Istanegry"), "Istanergy");
-  assert.equal(companyName("Petronik"), "PETRONIK FZCO");
+  assert.equal(companyName("Petronik"), "Petronik");
   assert.equal(companyName("Afrilube"), "Afrilube");
   assert.equal(companyName("Petronex"), "Petronex");
 });

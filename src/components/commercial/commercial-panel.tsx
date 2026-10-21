@@ -1,4 +1,6 @@
 "use client";
+import { Form } from '@/components/ui/controls';
+
 import { useUnsavedChanges } from "../use-unsaved";
 import Prospecting from "./prospecting";
 import { canProspect } from "@/lib/execution/model";
@@ -551,7 +553,7 @@ export function LinkEditor({
       )}
       {changed && (
         <label>
-          <input
+          <Input
             type="checkbox"
             checked={confirm}
             onChange={(e) => setConfirm(e.target.checked)}
@@ -620,7 +622,7 @@ export function ContactEditor({
   );
   return (
     <Dialog variant="drawer" className="commercial-editor" title={contact ? "Edit contact" : "Add contact"} description={record.title} onClose={close}>
-      <form
+      <Form
         id={formId}
         onChange={unsaved.markDirty}
         onInput={unsaved.markDirty}
@@ -704,7 +706,7 @@ export function ContactEditor({
           </Field>
         </div>
         <label>
-          <input
+          <Input
             type="checkbox"
             name="active"
             defaultChecked={contact?.active ?? true}
@@ -733,7 +735,7 @@ export function ContactEditor({
             pending: busy,
           }}
         />
-      </form>
+      </Form>
       {unsaved.confirm}
     </Dialog>
   );
@@ -760,7 +762,7 @@ export function CapabilityEditor({
         Record reviewed knowledge of what this supplier can supply. This is not
         an offer or availability confirmation.
       </p>
-      <form
+      <Form
         id={formId}
         onSubmit={async (e) => {
           e.preventDefault();
@@ -836,7 +838,7 @@ export function CapabilityEditor({
           </Field>
         </div>
         <label>
-          <input
+          <Input
             type="checkbox"
             name="active"
             defaultChecked={c?.active ?? true}
@@ -859,7 +861,7 @@ export function CapabilityEditor({
             disabled: !productId,
           }}
         />
-      </form>
+      </Form>
     </Dialog>
   );
 }

@@ -19,6 +19,7 @@ const REDACTIONS: [RegExp, string][] = [
   // PEM keys.
   [/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, "[redacted key]"],
   // Common API key shapes (cloud providers, payment providers, git hosts).
+  [/\bgsk_[A-Za-z0-9]{16,}\b/g, "[redacted key]"],
   [/\b(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{10,}\b/g, "[redacted key]"],
   [/\bAKIA[0-9A-Z]{16}\b/g, "[redacted key]"],
   [/\bgh[pousr]_[A-Za-z0-9]{20,}\b/g, "[redacted key]"],

@@ -10,11 +10,10 @@ export class OperationsError extends Error {
   }
 }
 const management = (a: Actor) =>
-  ["MD", "Group Manager", "Branch Manager"].includes(a.role);
+  ["MD", "MD Assistant", "IT Administrator", "Group Manager", "Branch Manager"].includes(a.role);
 const moduleAccess = (a: Actor, m: Module, write = false) =>
   allowedModules(a).includes(m) &&
-  (!write || a.moduleAccess?.[m] !== "read") &&
-  (!write || a.role !== "MD Assistant");
+  (!write || a.moduleAccess?.[m] !== "read");
 export function operationsAccess(a: Actor) {
   const buying =
     management(a) &&

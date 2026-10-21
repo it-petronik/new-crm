@@ -9,6 +9,7 @@ import {
   auditEvents,
 } from "../schema";
 import { type Actor, type RecordItem, canWrite } from "../domain";
+import { initializeLead } from "../lead-desk";
 import {
   CommercialError,
   duplicateReasons,
@@ -439,7 +440,7 @@ export async function importProspect(
     ? await requestIdentity(actor, "import-lead", c.requestId)
     : null;
   const lead: RecordItem | null = leadId
-    ? {
+    ? initializeLead({
         ...customer,
         id: leadId,
         kind: "leads",
@@ -459,7 +460,7 @@ export async function importProspect(
         attributes: { country: p.country },
         createdAt: at,
         updatedAt: at,
-      }
+      }, actor, { imported: true })
     : null;
   if (lead && !canWrite(actor, lead)) throw unavailable();
   const dealId = leadId && c.createDeal !== false ? `DEAL-${leadId}` : null;

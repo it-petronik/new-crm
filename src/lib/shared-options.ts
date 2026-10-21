@@ -1,18 +1,29 @@
 import { canRead, canWrite, type Actor, type Kind, type RecordItem } from "./domain";
+import { cashEntryProfile, recordProfiles } from "./record-profiles";
 
 /** Business vocabulary only. Workflow states, roles, money and legal standards
  * are deliberately not configurable: changing them would change behaviour. */
-const fields: Partial<Record<Kind, string[]>> = {
-  leads: ["source", "unit"], quotations: ["unit"], orders: ["unit"],
+export const catalogFields: Partial<Record<Kind, string[]>> = {
+  leads: ["source", "unit"], quotations: ["unit", "attributes.packaging"], orders: ["unit"],
   customers: ["attributes.segment"], suppliers: ["attributes.segment"],
   products: ["unit", "attributes.packaging"],
   hr: ["attributes.department", "attributes.workArrangement"],
   it: ["attributes.category"],
   marketing: ["product"],
-  accounts: ["attributes.category", "attributes.department", "attributes.paymentMethod"],
+  accounts: ["unit", "attributes.packaging", "attributes.deliveryPeriod", "attributes.originCountry", "attributes.loadingPort", "attributes.partialShipment", "attributes.paymentTerms", "attributes.category", "attributes.department", "attributes.paymentMethod"],
 };
 export function optionCatalog(kind: Kind, field: string) {
-  return fields[kind]?.includes(field) ? `${kind}:${field}` : null;
+  return catalogFields[kind]?.includes(field) ? `${kind}:${field}` : null;
+}
+export const catalogLabels: Record<string, string> = { source: "Lead Sources", unit: "Quantity Units", product: "Campaign Products", "attributes.segment": "Segments", "attributes.packaging": "Packaging", "attributes.department": "Departments", "attributes.workArrangement": "Work Arrangements", "attributes.category": "Categories", "attributes.paymentMethod": "Payment Methods", "attributes.deliveryPeriod": "Delivery Periods", "attributes.originCountry": "Countries Of Origin", "attributes.loadingPort": "Loading Ports", "attributes.partialShipment": "Partial Shipments", "attributes.paymentTerms": "Payment Terms" };
+export function catalogDefaults(catalog: string): string[] {
+  const kind = catalogKind(catalog);
+  if (!kind) return [];
+  const field = catalog.split(":")[1];
+  if (field === "unit") return ["MT", "kg", "litre", "drum", "pail", "piece"];
+  if (field === "attributes.packaging" && ["accounts", "quotations"].includes(kind)) return ["Bulk", "Drum", "Flexi Bags", "Pail", "IBC"];
+  if (field === "attributes.partialShipment") return ["Allowed", "Not Allowed"];
+  return (kind === "accounts" ? cashEntryProfile : recordProfiles[kind]).fields.find(f => f.name === field)?.options || [];
 }
 export function catalogKind(catalog: string): Kind | null {
   const [kind, field] = catalog.split(":");

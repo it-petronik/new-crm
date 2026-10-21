@@ -1,4 +1,4 @@
-import { canApprove, type Actor, type RecordItem } from "./domain";
+import { canApprove, isProforma, type Actor, type RecordItem } from "./domain";
 import { businessToday } from "./gst";
 
 /**
@@ -90,6 +90,10 @@ export function attentionItems(
 
   for (const record of records) {
     if (!isOpen(record)) continue;
+    if (isProforma(record)) {
+      if (record.status === "Draft") add(record, "info", "Proforma", "Accounts review before issue", "open");
+      continue;
+    }
     const due = (record.due || "").slice(0, 10);
     const overdueBy = due ? daysBetween(due, today) : 0;
     const idle = idleDays(record, today);

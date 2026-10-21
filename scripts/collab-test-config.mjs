@@ -58,6 +58,8 @@ const test = {
     NODE_ENV: "production",
     APP_URL: "http://localhost:8788",
     MAIL_MODE: "sandbox",
+    AI_PROVIDER: "groq",
+    GROQ_API_KEY: "fictional-local-transport-only",
     COLLAB_TEST_CONTROL: control,
     // Presence expiry in seconds rather than minutes, so the suite can watch
     // a dead tab expire. Production uses the defaults in collab-hub.ts.
@@ -74,15 +76,12 @@ const test = {
 };
 if (test.vars.APP_MODE !== "production")
   throw new Error("env.live must be production mode");
-// Live binds Workers AI as `AI`. Tests bind the same name to a local fake
-// named entrypoint (scripts/fake-ai-worker.ts) in this same test-only Worker.
-// One runtime owns D1 — no inference, no quota, and every prompt is
-// kept in the test D1 so the suite can check what reached the model.
-if (!live.ai || live.ai.binding !== "AI")
-  throw new Error("env.live must bind Workers AI as AI");
-if (config.ai) throw new Error("preview (top level) must not bind Workers AI");
+// Local test entry intercepts ONLY the Groq URL and delegates to this fake.
+// Production has neither this entrypoint nor this test service binding.
+if (live.ai || config.ai) throw new Error("Workers AI must not be bound");
+if (live.vars.AI_PROVIDER !== "groq") throw new Error("Live AI must use Groq");
 test.services = [
-  { binding: "AI", service: test.name, entrypoint: "FakeAi" },
+  { binding: "AI_TEST", service: test.name, entrypoint: "FakeAi" },
   { binding: "APOLLO_TEST", service: test.name, entrypoint: "FakeApollo" },
   { binding: "MAILBOX_TEST", service: test.name, entrypoint: "FakeMailbox" },
 ];

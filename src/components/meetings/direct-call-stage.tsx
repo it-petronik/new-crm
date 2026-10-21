@@ -1,4 +1,6 @@
 "use client";
+import { Input } from '@/components/ui/controls';
+
 
 import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { useConnectionState, useIsRecording, useMediaDeviceSelect, useParticipants, useRoomContext, useRoomInfo, useTracks } from "@livekit/components-react";
@@ -142,7 +144,7 @@ export default function DirectCallStage({ session, choices, notice, onEnded }: {
         <span className={styles.recordIllustration} aria-hidden="true"><Circle size={24}/></span>
         {recordDialog === "unavailable" ? <><h3>{session.host ? "Recording needs setup" : "Recording is managed by the call organiser"}</h3><p>{session.host ? "Your administrator needs to connect the recording service and private storage before you can record. This call is not being recorded by Enercore." : "Ask the organiser to start or stop recording. Everyone will see a notice while recording is active."}</p></> : <><h3>{recordDialog === "stop" ? "Keep talking after you stop" : "Let the other person know first"}</h3><p>{recordDialog === "stop" ? "Your call will continue. Once processed, the recording will be available from the call details to people with access." : "Audio and any shared camera video are captured. Both people will see who started recording. The file is stored privately with the call details."}</p></>}
       </div>
-      {recordDialog === "start" && <><label className={styles.consent}><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} disabled={recordBusy}/><span>I’ve told the other person and they agree to be recorded.</span></label>{!peer && <p className={styles.notice}>Wait for the other person to join before recording.</p>}</>}
+      {recordDialog === "start" && <><label className={styles.consent}><Input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} disabled={recordBusy}/><span>I’ve told the other person and they agree to be recorded.</span></label>{!peer && <p className={styles.notice}>Wait for the other person to join before recording.</p>}</>}
       {recordError && <p className={styles.notice} role="alert">{recordError}</p>}
       <DialogActions pending={recordBusy} primary={recordDialog === "unavailable" ? undefined : { label: recordDialog === "stop" ? "Stop recording" : "Start recording", pendingLabel: recordDialog === "stop" ? "Stopping…" : "Starting…", pending: recordBusy, disabled: recordDialog === "start" && (!consent || !peer || state !== ConnectionState.Connected), onClick: () => void changeRecording() }}/>
     </Dialog>}

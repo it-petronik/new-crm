@@ -3,6 +3,7 @@ import { sqliteTable, text, integer, real, index, uniqueIndex, primaryKey, check
 export { purchases, movements, invoices, payments } from "./operations/tables";
 export { communicationTemplates, outboundMessages, outboundEvents } from "./outbound/tables";
 export {mailboxConnections,mailboxMessages,mailboxDrafts,mailboxAttempts,mailboxRemoteMessages} from "./mail/tables";
+export { hrEntries, hrFiles, hrHistory, hrRevision } from "./hr/tables";
 
 /**
  * D1 (SQLite) equivalent of the original MySQL schema.
@@ -43,6 +44,26 @@ export const sharedOptions = sqliteTable("SharedOption", {
   version: integer("version").notNull().default(1),
   updatedAt: integer("updatedAt").notNull(),
 }, t => [uniqueIndex("SharedOption_scope_key").on(t.company, t.catalog, t.normalized)]);
+
+export const savedBankAccounts = sqliteTable("SavedBankAccount", {
+  id: text("id").primaryKey(),
+  company: text("company").notNull(),
+  label: text("label").notNull(),
+  currency: text("currency").notNull(),
+  details: text("details", { mode: "json" }).$type<import("./bank-accounts").BankDetails>().notNull(),
+  createdBy: text("createdBy").notNull().references(() => users.id),
+  version: integer("version").notNull().default(1),
+  updatedAt: integer("updatedAt").notNull(),
+}, t => [index("SavedBankAccount_company").on(t.company)]);
+
+export const approvedDocumentSeals = sqliteTable("ApprovedDocumentSeal", {
+  id: text("id").primaryKey(),
+  company: text("company").notNull(),
+  signaturePng: text("signaturePng").notNull(),
+  stampPng: text("stampPng").notNull(),
+  sourceSha256: text("sourceSha256").notNull(),
+  createdAt: integer("createdAt").notNull(),
+});
 
 export const sessions = sqliteTable(
   "Session",
@@ -140,7 +161,7 @@ export const auditEvents = sqliteTable(
      * renamed once. "task" marks Phase 8 task history (recordId is a Task
      * id); it is shown only in that task's history, never in Activity.
      */
-    subject: text("subject").$type<"account" | "collaboration" | "task" | "operations" | null>(),
+    subject: text("subject").$type<"account" | "collaboration" | "task" | "operations" | "bank-account" | null>(),
     /**
      * Branch scope for account events, so a branch-scoped administrator does
      * not see accounts outside their branch. NULL means group-wide, which

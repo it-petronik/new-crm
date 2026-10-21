@@ -69,8 +69,9 @@
 .ui-textarea { padding-block: 9px; min-height: calc(var(--f-h) * 2); resize: vertical; }
 :is(.ui-input, .ui-textarea)::placeholder { color: var(--f-placeholder); opacity: 1; }
 
-:is(.ui-input, .ui-textarea, .ui-select-trigger, .ui-date-trigger):hover:not(:disabled) {
-  border-color: var(--f-border-hover);
+:is(.ui-input, .ui-textarea, .ui-select-trigger, .ui-date-trigger):hover:not(:disabled):not(:focus):not(:focus-visible):not([data-state="open"]):not([aria-invalid="true"]) {
+  border-color: var(--f-border);
+  box-shadow: none;
 }
 :is(.ui-input, .ui-textarea, .ui-select-trigger, .ui-date-trigger):is(:focus, :focus-visible),
 .ui-select-trigger[data-state="open"] {

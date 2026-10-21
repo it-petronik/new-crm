@@ -1,4 +1,5 @@
 "use client";
+import { CrmTable } from "@/components/ui/crm-table";
 import {requestJson,readJsonResponse} from "@/lib/client-request";
 import { companyName } from "@/lib/company-name";
 import { operationsAccess } from "@/lib/operations/model";
@@ -6,24 +7,22 @@ import { recordsToCsv, exportFilename, downloadCsv } from "@/lib/export";
 import { isImportable, type ImportableKind } from "@/lib/import";
 import { attentionItems, isoDate, nextAction, operationalViews } from "@/lib/attention";
 import { businessStampShort, businessDateTimeLong } from "@/lib/gst";
-import LogActivity from "./log-activity";
 import frame from "./studio/frame.module.css";
-import StudioDashboard from "./studio/dashboard";
-import WorkspaceSettings from "./workspace-settings";
 import recordStyles from "./studio/records.module.css";
-import MyDay from "./my-day";
-import QuickAdd from "./quick-add";
-import { SkeletonDashboard, SkeletonMyDay, SkeletonList } from "./ui/skeleton";
+import LeadDesk from "./leads/lead-desk";
+import { PipelineBoard } from "./leads/pipeline-board";
+import { applyLeadFeedback, initializeLead, type LeadFeedbackAction } from "@/lib/lead-desk";
+import { SkeletonDashboard, SkeletonRoleHome, SkeletonList, SkeletonPage } from "./ui/skeleton";
+import { DialogSkeleton, DialogLoadingContext } from "./ui/dialog-skeleton";
+import { AiCompanion } from "./ai/ai-companion";
+import type { AiPageContext } from "@/lib/ai/page-context";
+import WorkspaceBoot from "@/app/loading";
 import { FollowUpMenu } from "./follow-up-control";
-import ImportDialog from "./import-dialog";
 import { salaryAttributes } from "@/lib/salary";
 import { workspaceUrl, workspaceParams } from "@/lib/workspace-url";
-import { Cashbook } from "./cashbook";
 import { isCashEntry, cashEntryError } from "@/lib/cashbook";
 import { mutateRecord, deletionReason } from "@/lib/record-mutations";
 import { BrandLogo } from "./brand";
-import DashboardInsights from "./dashboard-insights";
-import { QuotationSummary, QuotationDocument } from "./quotation-document";
 import { Pagination, ListFilters, ListEmpty, SortHeader, usePagination } from "./pagination";
 import { emptyQuery, type ListQuery } from "@/lib/list-query";
 import {
@@ -33,7 +32,7 @@ import {
   Textarea,
   Field,
 } from "@/components/ui/controls";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   Pencil,
@@ -52,7 +51,7 @@ import {
   FileText,
   Globe2,
   LayoutDashboard,
-  List,
+  Columns3,
   LogOut,
   Menu,
   MoreHorizontal,
@@ -71,7 +70,6 @@ import {
   Monitor,
   CalendarDays,
   CalendarRange,
-  LayoutGrid,
   Filter,
   type LucideIcon,
 } from "lucide-react";
@@ -96,51 +94,45 @@ import {
   type Workspace as WorkspaceData,
 } from "@/lib/domain";
 import { makePreview } from "@/lib/fixtures";
-import { transition, addNote, recordPayment, canAssign } from "@/lib/workflow";
+import { previewPeople } from "@/lib/team-preview";
+import { mayOwn } from "@/lib/notification-rules";
+import { transition, addNote, recordPayment, canAssign, assign, availableStatuses } from "@/lib/workflow";
 import Sidebar from "./sidebar";
 import {PageMotion} from "./page-motion";
-import {AiCompanion} from "./ai/ai-companion";
+import { TableExportProvider } from "./table-export";
+import { BulkDeleteDialog, SelectionActions, SelectionCheckbox, SelectionHeader, SelectionCell, useRowSelection } from "./row-selection";
+import { deletePreviewSelection, recordDeleteProblem, type BulkDeleteResult } from "@/lib/table-selection";
 import { Dialog, DialogPresence, DialogActions } from "./ui/controls";
-import ThemeToggle from "./theme-toggle";
-import MyRequests from "./my-requests";
+import { WorkspaceAccount } from "./workspace-account";
 import { storedPreviewActor, previewActorKey } from "@/lib/fixtures";
 import { RECORDS_CHANGED } from "@/lib/proactive/client";
 import { Avatar } from "./avatar";
 import { useAvatar } from "@/lib/avatar-store";
-import RecordForm from "./record-form";
+import { MetricTrend } from "./metric-trend";
+import { RoleHome } from "./role-home";
+import { roleHome } from "@/lib/role-home";
+import { canCreateProforma, proformaError, proformaReference } from "@/lib/proforma";
+import { isProforma, recordStages } from "@/lib/domain";
 import { canProspect } from "@/lib/execution/model";
-import Prospecting from "./commercial/prospecting";
-import MailHub from "./mail-hub";
-import ContentCalendar, { type ContentValues } from "./content-calendar";
+import { type ContentValues } from "./content-calendar";
 import { contentError } from "@/lib/content-calendar";
-import RecordWorkspace from "./record/record-workspace";
 import { recordProfiles } from "@/lib/record-profiles";
-import UserAdmin from "./user-admin";
 import { PageHeader, Surface } from "./ui/layout";
 import { moduleHelp } from "@/lib/workspace-help";
-import {
-  ProfilePage,
-  AppearancePage,
-  ShortcutsPage,
-  PageTitle,
-  viewLabels,
-  type WorkspaceView,
-} from "./workspace-pages";
-import CommandMenu from "./command-menu";
+import { quickCreateKinds, viewLabels, type WorkspaceView } from "@/lib/workspace-experience";
 import { StatusBadge as Badge } from "./ui/status-badge";
 import { RowActions, rowActionIcons } from "./ui/row-actions";
 import { formatMoney, formatMoneyCompact, totalsByCurrency, describeTotals } from "@/lib/money-format";
 import { recentRecords, rememberRecord, pinnedIds, togglePin, resolveVisible } from "@/lib/workspace-prefs";
 import { NotificationsPage, NotificationToasts } from "./notification-center";
-import AssignDialog from "./assign-dialog";
-import MeetingLayer from "./meetings/meeting-layer";
-import TodayMeetings from "./meetings/today-meetings";
 import { openPrejoin } from "@/lib/meeting-client";
 import { installSessionRecovery } from "@/lib/session-client";
 import { useNotifications, claimAlert, showDesktop } from "@/lib/notifications-client";
 import { badgeCount, moduleForKind, titleWithCount, type NotificationView, type NotificationPreferences } from "@/lib/notification-types";
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import { hrAccess } from "@/lib/hr/model";
+const HrWorkspace = dynamic(() => import("./hr/hr-workspace"), { loading: () => <SkeletonPage /> });
 import { useCollabSummary } from "@/lib/collab-client";
 import { HubSkeleton } from "./collaboration/skeletons";
 import { MyDaySuggestions } from "./ai/sales-copilot";
@@ -152,15 +144,45 @@ type QuoteDraftPrefill = { leadId: string; product: string; quantity: number; un
 
 // Loaded only when someone opens Collaboration, so the rest of the CRM does
 // not carry it. The skeleton keeps the three-pane shape while it arrives.
-const AiWorkspace = dynamic(() => import("./ai/ai-workspace"), { ssr: false });
-const ActionCenter = dynamic(() => import("./ai/action-center"), { ssr: false });
+const panelLoading = () => <SkeletonPage />;
+const StudioDashboard = dynamic(() => import("./studio/dashboard"), { loading: () => <SkeletonDashboard /> });
+const MyDay = dynamic(() => import("./my-day"), { loading: panelLoading });
+const WorkspaceSettings = dynamic(() => import("./workspace-settings"), { loading: panelLoading });
+const OptionCatalogs = dynamic(() => import("./option-catalogs"), { loading: panelLoading });
+const MyRequests = dynamic(() => import("./my-requests"), { loading: panelLoading });
+const Prospecting = dynamic(() => import("./commercial/prospecting"), { loading: panelLoading });
+const MailHub = dynamic(() => import("./mail-hub"), { loading: panelLoading });
+const ContentCalendar = dynamic(() => import("./content-calendar"), { loading: panelLoading });
+const Cashbook = dynamic(() => import("./cashbook").then(m => m.Cashbook), { loading: panelLoading });
+const DashboardInsights = dynamic(() => import("./dashboard-insights"), { loading: panelLoading });
+const ProfilePage = dynamic(() => import("./workspace-pages").then(m => m.ProfilePage), { loading: panelLoading });
+const AppearancePage = dynamic(() => import("./workspace-pages").then(m => m.AppearancePage), { loading: panelLoading });
+const ShortcutsPage = dynamic(() => import("./workspace-pages").then(m => m.ShortcutsPage), { loading: panelLoading });
+const UserAdmin = dynamic(() => import("./user-admin"), { loading: panelLoading });
+const RecordWorkspace = dynamic(() => import("./record/record-workspace"), { loading: panelLoading });
+const RecordForm = dynamic(() => import("./record-form"), { loading: () => <PendingDialog /> });
+const ProformaForm = dynamic(() => import("./proforma-form"), { loading: () => <PendingDialog /> });
+const QuickAdd = dynamic(() => import("./quick-add"), { loading: () => <PendingDialog /> });
+const ImportDialog = dynamic(() => import("./import-dialog"), { loading: () => <PendingDialog /> });
+const LogActivity = dynamic(() => import("./log-activity"), { loading: () => <PendingDialog /> });
+const AssignDialog = dynamic(() => import("./assign-dialog"), { loading: () => <PendingDialog /> });
+const CommandMenu = dynamic(() => import("./command-menu"), { loading: () => <PendingDialog /> });
+const QuotationSummary = dynamic(() => import("./quotation-document").then(m => m.QuotationSummary), { loading: panelLoading });
+const QuotationDocument = dynamic(() => import("./quotation-document").then(m => m.QuotationDocument), { loading: () => <PendingDialog /> });
+const MeetingLayer = dynamic(() => import("./meetings/meeting-layer"), { ssr: false });
+const TodayMeetings = dynamic(() => import("./meetings/today-meetings"), { loading: panelLoading });
+const AiWorkspace = dynamic(() => import("./ai/ai-chat"), { ssr: false, loading: ()=><SkeletonPage variant="chat"/> });
+const ActionCenter = dynamic(() => import("./ai/action-center"), { ssr: false, loading: panelLoading });
 const ActionDigest = dynamic(() => import("./ai/action-center").then((m) => m.ActionDigest), { ssr: false });
-const TasksPage = dynamic(() => import("./tasks/tasks-page"), { ssr: false });
-const OperationsPage = dynamic(() => import("./operations/operations-page"), { ssr: false });
+const TasksPage = dynamic(() => import("./tasks/tasks-page"), { ssr: false, loading: panelLoading });
+const OperationsPage = dynamic(() => import("./operations/operations-page"), { ssr: false, loading: panelLoading });
 const CollaborationHub = dynamic(() => import("./collaboration/collaboration-hub"), {
   ssr: false,
   loading: () => <HubSkeleton />,
 });
+function PendingDialog() {
+  return <DialogSkeleton/>;
+}
 const icons: Record<Module, LucideIcon> = {
   overview: LayoutDashboard,
   leads: Target,
@@ -180,7 +202,7 @@ const icons: Record<Module, LucideIcon> = {
 };
 const subtitles: Record<Module, string> = {
   overview: "What needs attention across your companies.",
-  leads: "People interested in buying. Track what they need and when to follow up.",
+  leads: "Buyer inquiries, prospects and supplier opportunities. One owner and a clear next step.",
   quotations: "Quotations in draft, awaiting approval, sent and accepted.",
   orders: "Confirmed orders handed over to operations.",
   logistics: "Shipments in progress and expected arrivals.",
@@ -200,6 +222,7 @@ const companyColors: Record<string, string> = {
   Afrilube: "#d0a351",
   Petronex: "#668ee2",
   Istanegry: "#ac84ce",
+  Enercore: "#178ca6",
 };
 const moduleGroups: [string, Module[]][] = [
   ["WORKSPACE", ["overview", "leads", "quotations", "orders"]],
@@ -284,7 +307,16 @@ function routeFromUrl(actor: Actor, path: string, search: string) {
   };
 }
 
-export default function Workspace({
+type WorkspaceProps = { actor: Actor; preview: boolean; initialSelfService?: boolean; initialPath?: string; initialSearch?: string };
+/** Never mount a privileged preview shell before its stored role is known.
+ * This gate is presentation-only: live roles still come from the server. */
+export default function Workspace(props: WorkspaceProps) {
+  const [signedIn, setSignedIn] = useState<Actor | null>(null);
+  useEffect(() => { if (props.preview) setSignedIn(storedPreviewActor()); }, [props.preview]);
+  if (props.preview && !signedIn) return <WorkspaceBoot />;
+  return <ReadyWorkspace {...props} actor={props.preview ? signedIn! : props.actor} />;
+}
+function ReadyWorkspace({
   actor,
   preview,
   initialSelfService = false,
@@ -302,13 +334,6 @@ export default function Workspace({
   useState(() => {
     if (!preview) installSessionRecovery();
   });
-  // Preview signs in through demo accounts, so the acting role comes from the
-  // browser. Read after mount to keep the server and first client render equal.
-  const [previewSignedIn, setPreviewSignedIn] = useState<Actor | null>(null);
-  useEffect(() => {
-    if (preview) setPreviewSignedIn(storedPreviewActor());
-  }, [preview]);
-  actor = preview && previewSignedIn ? previewSignedIn : actor;
   // Derived from the server-supplied URL so a reload paints the requested page
   // immediately instead of flashing the overview first.
   const initial = routeFromUrl(actor, initialPath, initialSearch);
@@ -338,6 +363,8 @@ export default function Workspace({
   const [search, setSearch] = useState("");
   const [data, setData] = useState<WorkspaceData>({ records: [], audit: [] });
   const [loaded, setLoaded] = useState(false);
+  const [moduleLoading, setModuleLoading] = useState<Module | null>(null);
+  const loadedKinds = useRef(new Set<Module>());
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
   const [mobile, setMobile] = useState(false);
@@ -425,10 +452,14 @@ export default function Workspace({
     } catch {}
   }
   const [form, setForm] = useState<Kind | null>(null);
+  const [proformaSource, setProformaSource] = useState<RecordItem | null>(null);
+  const [proformaOpen, setProformaOpen] = useState(false);
   const [editing, setEditing] = useState<RecordItem | null>(null);
   const [deleting, setDeleting] = useState<RecordItem | null>(null);
+  const [bulkDeleting, setBulkDeleting] = useState<RecordItem[] | null>(null);
   const [importing, setImporting] = useState(false);
   const [quickAdd, setQuickAdd] = useState<{ open: boolean; kind?: Kind }>({ open: false });
+  const canQuickAdd = quickCreateKinds(actor, company === "All companies" ? actor.companies[0] : company).length > 0;
   const [logging, setLogging] = useState<RecordItem | null>(null);
   const [assigning, setAssigning] = useState<RecordItem | null>(null);
   // After advancing a record, offer the follow-up rather than relying on the
@@ -437,19 +468,17 @@ export default function Workspace({
   /**
    * Who reads the company view rather than their own day.
    *
-   * Deliberately the roles that run the business. An IT Administrator
-   * administers the system, not the sales pipeline, and has no access to leads
-   * or accounts — so a commercial KPI strip would be empty for them. They get
-   * their own day and their ticket figures, which is the useful answer.
+   * IT shares MD capabilities under the approved access policy, while keeping
+   * its own identity and existing company/module restrictions.
    */
-  const executive = ["MD", "Group Manager", "Branch Manager"].includes(actor.role);
+  const executive = ["MD", "MD Assistant", "IT Administrator", "Group Manager", "Branch Manager"].includes(actor.role);
   const [mutationError, setMutationError] = useState("");
   useEffect(() => { if (!form) { setEditing(null); setMutationError(""); setMutationFields({}); } }, [form]);
   // "n" opens quick add, the way a mail client opens a compose window. Ignored
   // while typing, so it never swallows a character mid-field.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "n" || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key !== "n" || e.metaKey || e.ctrlKey || e.altKey || !canQuickAdd || document.querySelector('[role="dialog"]')) return;
       const el = document.activeElement as HTMLElement | null;
       if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable)) return;
       e.preventDefault();
@@ -457,7 +486,7 @@ export default function Workspace({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [canQuickAdd]);
   /**
    * One key per create-form session. Sent with the submission so a
    * double-click, a retry or a dropped response resolves to the same record
@@ -484,6 +513,7 @@ export default function Workspace({
   // so it simply stays underneath — on the same tab and scroll — and is there
   // again when the meeting is left.
   const [board, setBoard] = useState(true);
+  const [leadDeskOpen, setLeadDeskOpen] = useState(true);
   // The pipeline opens as a board; every other list opens as a table.
   useEffect(() => setBoard(module === "leads"), [module]);
   // One set of filters for a module's list, whichever layout shows it, so
@@ -493,6 +523,7 @@ export default function Workspace({
   const sharedQuery = { query: listQuery, setQuery: setListQuery };
   // Dashboard period lives here so its control can sit beside the company filter.
   const [period, setPeriod] = useState("all");
+  const [dashboardCurrency, setDashboardCurrency] = useState("USD");
   const [periodFrom, setPeriodFrom] = useState("");
   const [periodTo, setPeriodTo] = useState("");
   const [filter, setFilter] = useState("All statuses");
@@ -500,9 +531,16 @@ export default function Workspace({
   const [busy, setBusy] = useState(false);
   const [hrTab, setHrTab] = useState<"people" | "leave">("people");
   const permitted = allowedModules(actor);
+  const isRecordModule = (m: Module) => Object.hasOwn(stages, m);
   async function reload() {
-    const result = await requestJson("/api/records",{},"Your workspace couldn’t refresh. Please try again.");
-    setData(result);
+    const [base, page] = await Promise.all([
+      requestJson<WorkspaceData>("/api/records",{},"Your workspace couldn’t refresh. Please try again."),
+      isRecordModule(module) && module !== "leads" ? requestJson<WorkspaceData>(`/api/records?kind=${module}`) : Promise.resolve(null),
+    ]);
+    const combined = new Map(base.records.map(record => [record.id, record]));
+    page?.records.forEach(record => combined.set(record.id, record));
+    loadedKinds.current = new Set(page ? [module] : []);
+    setData({records:[...combined.values()],audit:base.audit});
     // Open Action Center / My Day digests recompute from the new data.
     window.dispatchEvent(new Event(RECORDS_CHANGED));
   }
@@ -526,6 +564,22 @@ export default function Workspace({
       active = false;
     };
   }, [preview]);
+  // A busy lead table must not crowd quotations, customers or people out of
+  // the shared window. Fetch just the page opened, once until the next reload.
+  useEffect(() => {
+    if (preview || !loaded || view || !isRecordModule(module) || module === "leads" || loadedKinds.current.has(module)) return;
+    const controller = new AbortController();
+    setModuleLoading(module);
+    void requestJson<WorkspaceData>(`/api/records?kind=${module}`,{signal:controller.signal})
+      .then(result => {
+        if (controller.signal.aborted) return;
+        loadedKinds.current.add(module);
+        setData(previous => ({ ...previous, records:[...previous.records.filter(record => module === "hr" ? !["hr","leave"].includes(record.kind) : record.kind !== module),...result.records] }));
+      })
+      .catch(error => { if (!controller.signal.aborted) setError(error.message); })
+      .finally(() => { if (!controller.signal.aborted) setModuleLoading(null); });
+    return () => controller.abort();
+  }, [module, view, preview, loaded]);
   // A layout effect, so a reloaded or linked record opens before the loaded
   // list is ever painted: the list must not flash up and vanish again.
   useLayoutEffect(() => {
@@ -587,7 +641,7 @@ export default function Workspace({
           } as RecordItem)
         ) {
           e.preventDefault();
-          setForm(kind as Kind);
+          if (kind === "leads") setQuickAdd({open:true,kind:"leads"}); else setForm(kind as Kind);
         }
       }
       if (e.key === "Escape") {
@@ -603,7 +657,9 @@ export default function Workspace({
     window.addEventListener("keydown", fn);
     return () => window.removeEventListener("keydown", fn);
   }, [module, hrTab, view, selfService, form, selected, company, actor]);
-  const scoped = scopedWorkspace(actor, data);
+  // Stable arrays prevent background refresh effects from restarting whenever
+  // a menu, toast, filter or notification changes unrelated UI state.
+  const scoped = useMemo(() => scopedWorkspace(actor, data), [actor, data]);
   const openView = (next: WorkspaceView, query = "") => {
     if (next === "access" && !canManageUsers(actor)) return;
     setView(next);
@@ -804,9 +860,9 @@ export default function Workspace({
     if (!baseTitle.current) baseTitle.current = document.title.replace(/^\(\d+\+?\) /, "");
     document.title = titleWithCount(baseTitle.current, inbox.unread);
   }, [inbox.unread]);
-  const records = scoped.records.filter(
+  const records = useMemo(() => scoped.records.filter(
     (r) => company === "All companies" || r.company === company,
-  );
+  ), [scoped.records, company]);
   const approvals = records.filter(
     (r) => r.status === "Pending Approval" && canApprove(actor, r),
   );
@@ -856,7 +912,7 @@ export default function Workspace({
     module === "hr" ? (hrTab === "people" ? "hr" : "leave") : module;
   // The kanban board has no shared filter row, so it keeps its own status
   // control; every other view uses the filter row above its list instead.
-  const kanbanView = module === "leads" && board;
+  const kanbanView = module === "leads" && !leadDeskOpen;
   const visible = records.filter(
     (r) =>
       r.kind === activeKind && !isCashEntry(r) &&
@@ -1017,13 +1073,16 @@ export default function Workspace({
     r: RecordItem,
     action:
       | { action: "note"; text: string; due?: string }
-      | { action: "payment"; amountCents: number; reference: string },
+      | { action: "payment"; amountCents: number; reference: string }
+      | LeadFeedbackAction,
   ) {
     setBusy(true);
     try {
       if (preview)
         setData(
-          action.action === "note"
+          action.action === "lead-feedback"
+            ? applyLeadFeedback(data, actor, { ...action, id: r.id, expectedUpdatedAt: r.updatedAt })
+            : action.action === "note"
             ? addNote(data, actor, r.id, action.text, action.due)
             : recordPayment(
                 data,
@@ -1037,14 +1096,15 @@ export default function Workspace({
         const response = await fetch("/api/records", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: r.id, ...action }),
+          body: JSON.stringify({ id: r.id, ...action, ...(action.action === "lead-feedback" ? { expectedUpdatedAt: r.updatedAt } : {}) }),
         });
         const result = await readJsonResponse(response,"We couldn’t confirm the latest information. Refresh to check it before trying again.");
         if (!response.ok) throw new Error(result.error);
         await reload();
+        if (action.action === "lead-feedback" && result.record && selected?.id === r.id) setSelected(result.record);
       }
       setToast(
-        action.action === "note" ? "Activity saved." : "Payment recorded.",
+        action.action === "lead-feedback" ? "Lead outcome saved." : action.action === "note" ? "Activity saved." : "Payment recorded.",
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unable to save.");
@@ -1076,7 +1136,8 @@ export default function Workspace({
     values: Omit<
       RecordItem,
       "id" | "status" | "ownerId" | "owner" | "createdAt" | "updatedAt"
-    >,
+    > & { assigneeId?: string },
+    throwOnError = false,
   ) {
     setBusy(true);
     setMutationFields({});
@@ -1085,20 +1146,31 @@ export default function Workspace({
         const error = cashEntryError(values);
         if (error) throw new Error(error);
       }
+      if (isProforma(values)) {
+        const problem = proformaError(values);
+        if (problem) throw new Error(problem);
+      }
       if(values.kind === "hr") values.attributes = salaryAttributes(values.attributes);
       if (preview) {
         const now = new Date().toISOString();
-        const record: RecordItem = {
-          ...values,
+        const { assigneeId, ...fields } = values;
+        let record: RecordItem = initializeLead({
+          ...fields,
           id: `EC-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
           status: isCashEntry(values) ? "Recorded" : stages[values.kind][0],
           ownerId: actor.id,
           owner: actor.name,
           createdAt: now,
           updatedAt: now,
-        };
+        }, actor);
         if (!canWrite(actor, record))
           throw new Error("You do not have access to create this record.");
+        if (assigneeId && values.kind === "leads") {
+          const person = previewPeople(actor).find(p => p.id === assigneeId && mayOwn(p, record));
+          if (!person) throw new Error("Choose an active salesperson with access to this brand.");
+          record = { ...record, ownerId: person.id, owner: person.name, attributes: { ...record.attributes, leadOwnerRole: person.role } };
+        }
+        if (isProforma(record)) record.attributes = { ...record.attributes, quoteReference: proformaReference(record.id, record.attributes!.issuedDate) };
         setData({
           ...data,
           records: [record, ...data.records],
@@ -1136,9 +1208,12 @@ export default function Workspace({
         }
       }
       setForm(null);
+      setProformaOpen(false);
+      setProformaSource(null);
       setToast("Saved to your workspace.");
     } catch (e) {
       setMutationError(e instanceof Error ? e.message : "Unable to save.");
+      if (throwOnError) throw e;
     } finally {
       setBusy(false);
     }
@@ -1156,6 +1231,7 @@ export default function Workspace({
         await reload();
       }
       setForm(null);
+      setProformaOpen(false);
       if (selected?.id === editing.id) setSelected(editing);
       setEditing(null);
       setToast("Changes saved.");
@@ -1181,21 +1257,38 @@ export default function Workspace({
     } catch (error) { setMutationError(error instanceof Error ? error.message : "Unable to delete record."); }
     finally { setBusy(false); }
   }
+  async function deleteSelectedRecords(rows: RecordItem[]): Promise<BulkDeleteResult> {
+    if (rows.length > 100) throw new Error("Select up to 100 records at a time.");
+    setBusy(true);
+    try {
+      if (preview) {
+        const outcome = deletePreviewSelection(data, actor, rows);
+        setData(outcome.workspace);
+        return outcome.result;
+      }
+      const result: BulkDeleteResult = {deleted: [], failed: []};
+      for (const row of rows) {
+        try {
+          // Reuse the normal authorised soft-delete endpoint. Each row keeps
+          // its original version, linkage checks and individual audit event.
+          const response = await fetch("/api/records", {method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"delete",id:row.id,expectedUpdatedAt:row.updatedAt})});
+          const body = await readJsonResponse(response,"Deletion could not be confirmed. Refresh before trying again.");
+          if (!response.ok) throw new Error(body.error || "Unable to delete this record.");
+          result.deleted.push(row.id);
+        } catch (e) {
+          result.failed.push({id:row.id,title:row.title,reason:e instanceof Error ? e.message : "Deletion could not be confirmed. Refresh before trying again."});
+        }
+      }
+      try { await reload(); } catch { result.refreshFailed = true; }
+      return result;
+    } finally {setBusy(false);}
+  }
   // Board / cards versus list, shown in the list's own toolbar.
-  const viewToggle = (module === "leads" || cardModules.includes(module)) && (
-    <div className="segmented view-toggle" role="group" aria-label="Layout">
-      <Button
-        aria-label={module === "leads" ? "Board view" : "Card view"}
-        aria-pressed={board}
-        className={board ? "selected" : ""}
-        onClick={() => setBoard(true)}
-      >
-        <LayoutGrid size={16} />
-      </Button>
-      <Button aria-label="List view" aria-pressed={!board} className={!board ? "selected" : ""} onClick={() => setBoard(false)}>
-        <List size={16} />
-      </Button>
-    </div>
+  const viewToggle = module !== "leads" && cardModules.includes(module) && (
+    <Select aria-label="Display records as" value={board ? "cards" : "list"} onChange={event => setBoard(event.target.value === "cards")}>
+      <option value="list">List view</option>
+      <option value="cards">Card view</option>
+    </Select>
   );
   // An empty list names what is missing and offers the one action that fills it.
   const addKind = (module === "hr" ? (hrTab === "people" ? "hr" : "leave") : module) as Kind;
@@ -1209,7 +1302,7 @@ export default function Workspace({
     <>
       <p><b>No {({ leads: "leads", orders: "sales orders", hr: hrTab === "people" ? "employees" : "leave requests", it: "tickets", marketing: "campaigns", accounts: "invoices" } as Partial<Record<Module, string>>)[module] || (labels[module] || "records").toLowerCase()} yet.</b></p>
       {canAdd && (
-        <Button className="primary" onClick={() => setForm(addKind)}>
+        <Button className="primary" onClick={() => addKind === "leads" ? setQuickAdd({open:true,kind:"leads"}) : setForm(addKind)}>
           <Plus size={16} aria-hidden="true" />
           {module === "hr" && hrTab === "leave" ? "Request leave" : newLabels[module]}
         </Button>
@@ -1217,7 +1310,7 @@ export default function Workspace({
     </>
   );
   return (
-    <div data-design="studio" className={`app-shell ${frame.frame} ${collapsed ? `is-collapsed ${frame.collapsed}` : ""}`}>
+    <DialogLoadingContext.Provider value={()=>{if(busy)return;setForm(null);setProformaOpen(false);setProformaSource(null);setEditing(null);setQuickAdd({open:false});setImporting(false);setLogging(null);setAssigning(null);setCommandOpen(false);setCommandView(null);}}><TableExportProvider actor={actor}><div data-design="studio" className={`app-shell ${frame.frame} ${collapsed ? `is-collapsed ${frame.collapsed}` : ""}`}>
       <a className="skip-link" href="#main">
         Skip to content
       </a>
@@ -1273,7 +1366,7 @@ export default function Workspace({
             </nav>
           </div>
           <div className={frame.topRight}>
-            <Button className={frame.aiAccess} aria-label="Open Enercore AI" title="Ask Enercore AI about your work" onClick={() => openView("ai")}><Sparkles size={16} /><span>Ask AI</span></Button>
+            <Button className={frame.aiAccess} aria-label="Ask Enercore AI" onClick={()=>openView("ai")} aria-current={view==="ai"?"page":undefined}><Sparkles size={16}/><span>Ask Enercore AI</span></Button>
             {/* One way to find anything: records, pages and commands. */}
             <Button
               className={frame.search}
@@ -1281,14 +1374,14 @@ export default function Workspace({
               onClick={() => setCommandOpen(true)}
             >
               <Search size={15} aria-hidden="true" />
-              <span>Search records or actions…</span>
+              <span>Search anything</span>
               <kbd>⌘ K</kbd>
             </Button>
 
             {/* Always reachable, on every screen, so creating a record is
                 never a navigation task. The shortcut is a convenience on top
                 of this button, never a requirement. */}
-            <Button
+            {canQuickAdd && <Button
               className="primary quick-add-trigger"
               aria-label="Quick add"
               onClick={() => setQuickAdd({ open: true })}
@@ -1296,9 +1389,7 @@ export default function Workspace({
             >
               <Plus size={17} aria-hidden="true" />
               <span className="quick-add-trigger-label">Quick add</span>
-            </Button>
-            <span className="top-divider" />
-            <ThemeToggle />
+            </Button>}
             <Button
               className="icon-button notification-button"
               aria-label={inbox.unread ? `Open notifications, ${badgeCount(inbox.unread)} unread` : "Open notifications"}
@@ -1311,25 +1402,14 @@ export default function Workspace({
                 </span>
               )}
             </Button>
-            <Button
-              className="profile-trigger"
-              aria-label="My profile"
-              onClick={() => openView("profile")}
-            >
-              {/* The same picture (or initials) as the sidebar and profile. */}
-              <Avatar name={actor.name} image={photo} avatarId={actor.id} size={32} />
-            </Button>
+            <WorkspaceAccount actor={actor} photo={photo} onView={openView} />
           </div>
         </header>
         {preview && (
           <div className={frame.preview}>
             <Sparkles size={13} />
             <span>
-              Interactive preview <b>·</b> Fictional data, saved only in this
-              browser.
-            </span>
-            <span className="preview-right">
-              Preview data · not connected to the workspace database
+              Preview <b>·</b> Fictional data, saved only in this browser
             </span>
           </div>
         )}
@@ -1356,7 +1436,7 @@ export default function Workspace({
               onLog={() => setLogging(selectedCurrent)}
               onUpdate={(s) => update(selectedCurrent, s)}
               onAction={(action) => extraAction(selectedCurrent, action)}
-              onAssign={!preview && canAssign(actor, selectedCurrent) ? () => setAssigning(selectedCurrent) : undefined}
+              onAssign={canAssign(actor, selectedCurrent) ? () => setAssigning(selectedCurrent) : undefined}
               live={!preview}
               onAiApply={applyAiSuggestion}
               onAiChanged={reloadQuietly}
@@ -1365,6 +1445,7 @@ export default function Workspace({
                 setQuoteSource(selectedCurrent);
                 setForm("quotations");
               }}
+              onProforma={selectedCurrent.kind === "orders" && selectedCurrent.status !== "Cancelled" && !!selectedCurrent.customerId && canCreateProforma(actor, selectedCurrent.company, selectedCurrent.branch) ? () => { setEditing(null); setMutationError(""); setProformaSource(selectedCurrent); setProformaOpen(true); } : undefined}
               onNewLead={
                 (selectedCurrent.kind === "customers" || selectedCurrent.kind === "products") &&
                 canWrite(actor, { kind: "leads", company: selectedCurrent.company, branch: selectedCurrent.branch || actor.branches[0] || "Main", ownerId: actor.id } as RecordItem)
@@ -1446,7 +1527,7 @@ export default function Workspace({
                 if (!canWrite(actor, source)) { setToast("Your role cannot create this type of record for this company."); return; }
                 setMailSource(source); setEditing(null); setMutationError(""); setForm(kind);
               }}/>}
-              {view === "ai" && <AiWorkspace actor={actor} preview={preview} />}
+              {view === "ai" && <AiWorkspace actor={actor} preview={preview} records={scoped.records} company={company} />}
               {view === "actions" &&
                 (preview ? (
                   <section className="panel ai-unavailable">
@@ -1465,6 +1546,7 @@ export default function Workspace({
                 ))}
               {view === "operations" && (preview ? <p>Operations requires the connected workspace.</p> : <OperationsPage actor={actor} company={company} records={scoped.records}/>)}
               {view === "appearance" && <AppearancePage />}
+              {view === "catalogs" && <OptionCatalogs actor={actor} preview={preview} />}
               {view === "notifications" && (
                 <NotificationsPage
                   items={inbox.items}
@@ -1482,9 +1564,9 @@ export default function Workspace({
               )}
               {view === "access" && canManageUsers(actor) && (
                 <>
-                  <PageTitle
+                  <PageHeader
                     title="Access control"
-                    subtitle="Manage who can use each company and module."
+                    description="Manage who can use each company and module."
                   />
                   <UserAdmin actor={actor} preview={preview} />
                 </>
@@ -1499,6 +1581,7 @@ export default function Workspace({
                 if (module === "marketing") return null;
                 const headingActions = (
                 <div className="heading-actions">
+                  {module === "overview" && executive && !view && <Select className="dashboard-currency" aria-label="Dashboard currency" value={dashboardCurrency} onChange={e=>setDashboardCurrency(e.target.value)}>{[...new Set(["USD","AED","EUR","GBP","INR","SAR","SGD","CNY",...records.map(r=>r.currency)])].filter(Boolean).map(c=><option key={c}>{c}</option>)}</Select>}
                   {module === "overview" && !selfService && !view && (
                     <Field className="company-switch period-switch">
                       <CalendarRange size={16} />
@@ -1549,7 +1632,8 @@ export default function Workspace({
                     </Select>
                   </Field>
                   )}
-                  {newLabels[module] &&
+                  {module === "leads" && <Button className="pipeline-toggle" variant="secondary" size="icon" aria-label={leadDeskOpen ? "Show pipeline" : "Hide pipeline"} aria-expanded={!leadDeskOpen} aria-controls="lead-pipeline" onClick={()=>{setLeadDeskOpen(v=>!v);setBoard(true);}}><Columns3 size={17} aria-hidden="true"/></Button>}
+                  {newLabels[module] && !(module === "hr" && hrAccess(actor).view) &&
                     canWrite(actor, {
                       kind:
                         module === "hr"
@@ -1566,7 +1650,7 @@ export default function Workspace({
                     } as RecordItem) && (
                       <Button
                         className="primary"
-                        onClick={() =>
+                        onClick={() => module === "leads" ? setQuickAdd({open:true,kind:"leads"}) :
                           setForm(
                             module === "hr"
                               ? hrTab === "people"
@@ -1592,7 +1676,6 @@ export default function Workspace({
                   <PageHeader
                     guide={moduleHelp[module]}
                     className="page-heading"
-                    kicker={module === "overview" ? `Welcome back, ${actor.name.split(" ")[0]}` : undefined}
                     title={
                       module === "overview"
                         ? company === "All companies"
@@ -1629,13 +1712,14 @@ export default function Workspace({
                   </Button>
                 </div>
               )}
-              {!loaded ? (
+              {loaded && module === "overview" && !preview && data.records.length >= 1000 && <p className="record-window-note" role="status">Overview uses a limited loaded-record window, not complete totals.{permitted.includes("leads") && <> <Button onClick={() => go("leads")}>Open full lead reports <ArrowRight size={13}/></Button></>}</p>}
+              {!loaded || moduleLoading === module ? (
                 // The page keeps its own shape while data arrives: an
                 // executive sees the attention block and KPI row, an employee
                 // sees their day, a list keeps its toolbar and loses only its
                 // rows. Nothing moves when the data lands.
                 module === "overview" ? (
-                  executive ? <SkeletonDashboard /> : <SkeletonMyDay />
+                  executive ? <SkeletonDashboard /> : <SkeletonRoleHome actor={actor} />
                 ) : (
                   <SkeletonList />
                 )
@@ -1653,6 +1737,8 @@ export default function Workspace({
                   records={records}
                   actor={actor}
                   executive={executive}
+                  currency={dashboardCurrency}
+                  live={!preview}
                   onFollowUp={setFollowUp}
                   onQuickAdd={(kind) => setQuickAdd({ open: true, kind })}
                   busy={busy}
@@ -1735,6 +1821,13 @@ export default function Workspace({
                 </section>
               ) : module === "settings" ? (
                 <WorkspaceSettings actor={actor} preview={preview} onAppearance={() => openView("appearance")} onAccess={() => openView("access")} />
+              ) : module === "hr" && hrAccess(actor).view ? (
+                <HrWorkspace key={`${actor.id}:${actor.role}:${company}`} actor={actor} preview={preview} company={company} records={scoped.records}
+                  onLegacyTab={tab => {setHrTab(tab);setFilter("All statuses");}}
+                  onAddEmployee={()=>{setEditing(null);setMutationError("");setForm("hr");}}
+                  onLeave={()=>{setEditing(null);setMutationError("");setForm("leave");}}
+                  peopleList={<section className="records-panel" aria-label={`${hrTab === "people" ? "People" : "Leave requests"} list`}><RecordTable key={`${company}:${hrTab}`} shared={sharedQuery} empty={emptyList} records={visible} allRecords={data.records} onDeleteSelected={setBulkDeleting} onSelect={setSelected} actor={actor} onEdit={r=>{setMutationError("");setEditing(r);setForm(r.kind);}} onDelete={r=>{setMutationError("");setDeleting(r);}} onLog={setLogging} onStatus={(r,status)=>{void update(r,status);}} /></section>}
+                />
               ) : module === "marketing" ? (
                 <>
                   <ContentCalendar records={records} actor={actor} company={company} onSave={saveContent} onDelete={r=>{setMutationError('');setDeleting(r);}} onCampaign={()=>{setEditing(null);setForm('marketing');}} onCompany={c=>{setCompany(c);window.history.replaceState(null,'',workspaceUrl('marketing',c));}}/>
@@ -1742,8 +1835,15 @@ export default function Workspace({
                 </>
               ) : (
                 <>
-                  {module === "accounts" && <Cashbook records={records} actor={actor} company={company} onAdd={() => { setEditing(null); setForm("accounts"); }} onOpen={setSelected} />}
-                  <section className="records-panel" aria-label={`${module === "hr" ? (hrTab === "people" ? "People" : "Leave requests") : labels[module]} list`}>
+                  {module === "leads" && <>
+                    <div hidden={!leadDeskOpen} style={!leadDeskOpen ? {display:"none"}:undefined}><LeadDesk actor={actor} records={scoped.records} live={!preview} company={company} onOpen={setSelected} onAssign={setAssigning} onDeleteSelected={setBulkDeleting} onImport={canWrite(actor,{kind:"leads",company:company==="All companies"?actor.companies[0]:company,branch:actor.branches[0]||"Main",ownerId:actor.id} as RecordItem)?()=>setImporting(true):undefined} onManageTeam={canManageUsers(actor) ? ()=>openView("access") : undefined} onSave={extraAction} busy={busy}/></div>
+                  </>}
+                  {module === "accounts" && <>
+                    {canCreateProforma(actor, company === "All companies" ? actor.companies[0] : company, actor.branches[0] || "Main") && <div className="proforma-entry"><div><h2>Customer proformas</h2><p>Prepared by Accounts. Separate from receivables and incoming supplier invoices.</p></div><Button className="primary" onClick={() => { setEditing(null); setMutationError(""); setProformaSource(null); setProformaOpen(true); }}><Plus size={16} />New proforma</Button></div>}
+                    <Cashbook records={records} actor={actor} company={company} onAdd={() => { setEditing(null); setForm("accounts"); }} onOpen={setSelected} />
+                    {hrAccess(actor).payrollOnly && <details className="panel"><summary>Approved payroll register</summary><HrWorkspace actor={actor} preview={preview} company={company} records={[]} payrollOnly /></details>}
+                  </>}
+                  <section id={module === "leads" ? "lead-pipeline" : undefined} className="records-panel" hidden={module === "leads" && leadDeskOpen} style={module === "leads" && leadDeskOpen ? { display: "none" } : undefined} aria-label={module === "leads" ? "Lead pipeline" : `${module === "hr" ? (hrTab === "people" ? "People" : "Leave requests") : labels[module]} list`}>
                     {module === "hr" && (
                       <div className="list-tabs">
                         <div className="segmented" role="group" aria-label="HR records">
@@ -1770,7 +1870,7 @@ export default function Workspace({
                         </div>
                       </div>
                     )}
-                    {visible.length === 0 ? (
+                    {visible.length === 0 && module !== "leads" ? (
                       <Empty
                         detail={
                           search
@@ -1779,93 +1879,11 @@ export default function Workspace({
                         }
                       />
                     ) : module === "leads" && board ? (
-                      <>
-                      <div className="list-query-controls kanban-controls" role="group" aria-label="Pipeline view">
-                        <Field className="status-filter">
-                          <Filter size={14} />
-                          <Select aria-label="Filter by status" value={filter} onChange={(e) => setFilter(e.target.value)}>
-                            <option>All statuses</option>
-                            {stages[activeKind as Kind]?.map((s) => (
-                              <option key={s}>{s}</option>
-                            ))}
-                          </Select>
-                        </Field>
-                        <span className="list-count">{visible.length} {visible.length === 1 ? "lead" : "leads"}</span>
-                        <div className="list-query-trailing">{viewToggle}</div>
-                      </div>
-                      <div className="kanban">
-                        {[
-                          "New",
-                          "Contacted",
-                          "Qualified",
-                          "Quote Sent",
-                          "Negotiation",
-                          "Won",
-                          "Lost",
-                          "On Hold",
-                        ]
-                          .filter(
-                            (s) => filter === "All statuses" || s === filter,
-                          )
-                          .map((s) => (
-                            <section key={s} className="kanban-column">
-                              <div className="kanban-title">
-                                <span>
-                                  <i />
-                                  {s}
-                                </span>
-                                <b>
-                                  {visible.filter((r) => r.status === s).length}
-                                </b>
-                              </div>
-                              {visible
-                                .filter((r) => r.status === s)
-                                .map((r) => (
-                                  <div className="record-card-shell pipeline-card-shell" key={r.id}>
-                                  <Button
-                                    className="lead-card"
-                                    onClick={() => setSelected(r)}
-                                  >
-                                    <Company name={r.company} />
-                                    <h3>{r.title}</h3>
-                                    <p>{r.product}</p>
-                                    <strong>
-                                      {money(r.amount, r.currency)}
-                                    </strong>
-                                  </Button>
-                                  <div className="lead-card-footer">
-                                    <span><Clock size={12}/>{r.due || "No follow-up"}</span>
-                                    <Avatar name={r.owner} size={25}/>
-                                    <RecordIcons record={r} actor={actor} onEdit={r => { setMutationError(""); setEditing(r); setForm(r.kind); }} onDelete={r => { setMutationError(""); setDeleting(r); }} />
-                                  </div>
-                                  </div>
-                                ))}
-                              <Button
-                                className="add-column"
-                                disabled={
-                                  !canWrite(actor, {
-                                    kind: "leads",
-                                    company:
-                                      company === "All companies"
-                                        ? actor.companies[0]
-                                        : company,
-                                    branch: actor.branches[0] || "Main",
-                                    ownerId: actor.id,
-                                  } as RecordItem)
-                                }
-                                onClick={() => setForm("leads")}
-                              >
-                                <Plus size={13} />
-                                Add lead
-                              </Button>
-                            </section>
-                          ))}
-                      </div>
-                      </>
+                      <PipelineBoard records={visible} filter={filter} onFilter={setFilter} onOpen={setSelected} actions={r=><RecordIcons compact record={r} actor={actor} onEdit={record=>{setMutationError("");setEditing(record);setForm(record.kind);}} onDelete={record=>{setMutationError("");setDeleting(record);}}/>}/>
                     ) : cardModules.includes(module) && board ? (
-                      <RecordCards toolbar={viewToggle} shared={sharedQuery} empty={emptyList} records={visible} onSelect={setSelected} actor={actor} onEdit={r => { setMutationError(""); setEditing(r); setForm(r.kind); }} onDelete={r => { setMutationError(""); setDeleting(r); }} onLog={setLogging} onStatus={(r, status) => { void update(r, status).then((saved) => { if (saved && r.kind === "leads" && !["Won", "Lost"].includes(status)) setPrompt({ record: r, status }); }); }} onImport={isImportable(module) ? () => setImporting(true) : undefined} />
+                      <RecordCards toolbar={viewToggle} shared={sharedQuery} empty={emptyList} records={visible} onSelect={setSelected} actor={actor} onEdit={r => { setMutationError(""); setEditing(r); setForm(r.kind); }} onDelete={r => { setMutationError(""); setDeleting(r); }} onLog={setLogging} onStatus={(r, status) => { void update(r, status).then((saved) => { if (saved && r.kind === "leads" && !["Won", "Lost"].includes(status)) setPrompt({ record: r, status }); }); }} onImport={canAdd && isImportable(module) ? () => setImporting(true) : undefined} />
                     ) : (
-                      <RecordTable toolbar={viewToggle} shared={sharedQuery} empty={emptyList} records={visible} onSelect={setSelected} actor={actor} onEdit={r => { setMutationError(""); setEditing(r); setForm(r.kind); }} onDelete={r => { setMutationError(""); setDeleting(r); }} onLog={setLogging} onStatus={(r, status) => { void update(r, status).then((saved) => { if (saved && r.kind === "leads" && !["Won", "Lost"].includes(status)) setPrompt({ record: r, status }); }); }} onImport={isImportable(module) ? () => setImporting(true) : undefined} />
+                      <RecordTable key={company} toolbar={viewToggle} shared={sharedQuery} empty={emptyList} records={visible} allRecords={data.records} onDeleteSelected={setBulkDeleting} onSelect={setSelected} actor={actor} onEdit={r => { setMutationError(""); setEditing(r); setForm(r.kind); }} onDelete={r => { setMutationError(""); setDeleting(r); }} onLog={setLogging} onStatus={(r, status) => { void update(r, status).then((saved) => { if (saved && r.kind === "leads" && !["Won", "Lost"].includes(status)) setPrompt({ record: r, status }); }); }} onImport={canAdd && isImportable(module) ? () => setImporting(true) : undefined} />
                     )}
                   </section>
                   {["orders", "accounts", "logistics"].includes(module) && (
@@ -1887,9 +1905,9 @@ export default function Workspace({
           </div>
         </main>
       </div>
-      {!preview&&view!=="ai"&&!selectedCurrent&&!form&&!quickAdd.open&&<AiCompanion onOpen={()=>openView("ai")}/>}
+      {!view || view !== "ai" ? <AiCompanion key={`${actor.id}:${actor.role}:${company}:${module}:${view||""}:${selectedCurrent?.id||""}`} actor={actor} module={module} company={company} records={scoped.records} record={selectedCurrent||undefined} preview={preview} view={view && ["prospecting","mail","collaboration","tasks","actions","operations","catalogs","profile","appearance","notifications","shortcuts","access"].includes(view)?view as AiPageContext["view"]:undefined} onOpen={()=>openView("ai")}/> : null}
       <DialogPresence>
-        {form && (
+        {(proformaOpen || (form && editing && isProforma(editing))) ? <ProformaForm key={editing?.id || proformaSource?.id || "new-proforma"} actor={actor} company={company} records={scoped.records} initial={editing} source={proformaSource} live={!preview} busy={busy} error={mutationError} onCustomerCreated={record => setData(prev => ({ ...prev, records: [record, ...prev.records.filter(r => r.id !== record.id)] }))} onSave={editing ? saveEdit : create} onClose={() => { setProformaOpen(false); setProformaSource(null); setEditing(null); setForm(null); }} /> : form && (
           <RecordForm
             live={!preview}
             records={scoped.records}
@@ -2046,6 +2064,8 @@ export default function Workspace({
         {logging && (
           <LogActivity
             record={logging}
+            actor={actor}
+            onLeadSave={action=>extraAction(logging,action)}
             busy={busy}
             onLog={(text, due) => logActivity(logging, text, due)}
             onClose={() => setLogging(null)}
@@ -2059,7 +2079,9 @@ export default function Workspace({
             company={company === "All companies" ? actor.companies[0] : company}
             branch={actor.branches[0] || "Main"}
             initialKind={quickAdd.kind}
-            onCreate={create}
+            preview={preview}
+            onManageTeam={canManageUsers(actor) ? ()=>{setQuickAdd({open:false});openView("access");} : undefined}
+            onCreate={values=>create(values,true)}
             onClose={() => setQuickAdd({ open: false })}
             onOpenFullForm={(kind) => { setMutationError(""); setEditing(null); setForm(kind); }}
           />
@@ -2080,6 +2102,7 @@ export default function Workspace({
           />
         )}
       </DialogPresence>
+      <DialogPresence>{bulkDeleting && <BulkDeleteDialog records={bulkDeleting} problem={r => recordDeleteProblem(actor,r,data.records)} onConfirm={deleteSelectedRecords} onClose={() => {if(!busy)setBulkDeleting(null);}} />}</DialogPresence>
       <DialogPresence>{deleting && <Dialog title="Delete record?" className="delete-record-dialog" onClose={() => { if (!busy) setDeleting(null); }}>
         <p className="delete-record-name">{deleting.title}</p>
         <p className="muted">{companyName(deleting.company)} · {deleting.id}</p>
@@ -2120,10 +2143,13 @@ export default function Workspace({
         {assigning && (
           <AssignDialog
             record={assigning}
+            previewActor={preview ? actor : undefined}
+            onPreviewAssign={preview ? async person=>{setData(assign(data,actor,assigning.id,person));} : undefined}
+            onManageTeam={canManageUsers(actor) ? ()=>{setAssigning(null);openView("access");} : undefined}
             onClose={() => setAssigning(null)}
             onAssigned={async (name) => {
               setAssigning(null);
-              await reload().catch(() => {});
+              if (!preview) await reload().catch(() => {});
               setToast(`Assigned to ${name}.`);
             }}
           />
@@ -2142,7 +2168,7 @@ export default function Workspace({
           {toast}
         </div>
       )}
-    </div>
+    </div></TableExportProvider></DialogLoadingContext.Provider>
   );
 }
 type RecordActionsProps = {
@@ -2150,6 +2176,8 @@ type RecordActionsProps = {
   onEdit: (r: RecordItem) => void;
   onDelete: (r: RecordItem) => void;
   onImport?: () => void;
+  onDeleteSelected?: (rows: RecordItem[]) => void;
+  allRecords?: RecordItem[];
   /** Inline status change; omitted where a row must not be changed in place. */
   onStatus?: (r: RecordItem, status: string) => void;
   /** Opens the quick activity log; omitted for kinds nobody contacts. */
@@ -2160,6 +2188,7 @@ type RecordActionsProps = {
 const LOGGABLE = ["leads", "customers", "suppliers", "quotations", "orders"];
 /** The next action, with its date kept as secondary detail. */
 function NextActionCell({ record }: { record: RecordItem }) {
+  if (isProforma(record)) return <span className="next-action-cell"><span>{record.status === "Draft" ? "Review & issue proforma" : record.status === "Issued" ? "Proforma issued" : "Cancelled proforma"}</span><small className="muted">Valid until {record.due} · no receivable</small></span>;
   if (["products", "customers", "suppliers", "hr"].includes(record.kind)) {
     return <span className="muted">{record.updatedAt ? `Updated ${record.updatedAt.slice(0, 10)}` : "No update recorded"}</span>;
   }
@@ -2185,13 +2214,14 @@ function NextActionCell({ record }: { record: RecordItem }) {
  * the same cluster in the same order and the same width.
  */
 function RecordIcons({
-  record, actor, onEdit, onDelete, onStatus, onLog, onOpen,
-}: RecordActionsProps & { record: RecordItem; onOpen?: (r: RecordItem) => void }) {
+  record, actor, onEdit, onDelete, onStatus, onLog, onOpen, compact,
+}: RecordActionsProps & { record: RecordItem; onOpen?: (r: RecordItem) => void; compact?: boolean }) {
   if (!canWrite(actor, record)) return null;
-  const options = stages[record.kind] || [];
+  const options = availableStatuses(actor, record);
   return (
     <RowActions
       label={record.title}
+      compact={compact}
       status={record.status}
       statusOptions={options}
       onStatus={onStatus ? (next) => onStatus(record, next) : undefined}
@@ -2202,14 +2232,14 @@ function RecordIcons({
         ...(onLog && LOGGABLE.includes(record.kind)
           ? [{ id: "log", label: "Log activity", icon: rowActionIcons.log, run: () => onLog(record) }]
           : []),
-        { id: "edit", label: "Edit details", icon: rowActionIcons.edit, run: () => onEdit(record) },
-        {
+        ...(!isProforma(record) || record.status === "Draft" ? [{ id: "edit", label: "Edit details", icon: rowActionIcons.edit, run: () => onEdit(record) }] : []),
+        ...(!isProforma(record) ? [{
           id: "delete",
           label: "Delete record",
           icon: rowActionIcons.delete,
           destructive: true,
           run: () => onDelete(record),
-        },
+        }] : []),
       ]}
     />
   );
@@ -2279,6 +2309,7 @@ function RecordCards({
                 <div>
                   <h3>{r.title}</h3>
                   <p>
+                    {isProforma(r) && <span>Customer proforma · </span>}
                     {description ||
                       (r.kind === "leave" && `${r.quantity} working days`) ||
                       "Details available in record"}
@@ -2333,15 +2364,13 @@ function RecordTable({
   empty?: React.ReactNode;
 } & RecordActionsProps) {
   const pagination = usePagination(records, "", shared);
+  const selection = useRowSelection(pagination.matched, JSON.stringify([actions.actor.id, actions.actor.role, actions.actor.companies, actions.actor.branches, records[0]?.kind, pagination.query.search, pagination.query.status]));
+  const deletable = selection.selected.filter(r => !recordDeleteProblem(actions.actor,r,actions.allRecords || records));
   // Money is a column only where the records carry money.
   const valued = records.some((r) => ["leads", "quotations", "orders", "accounts", "products", "marketing"].includes(r.kind));
   const referenceList = ["products", "customers", "suppliers", "hr"].includes(records[0]?.kind);
   return (
     <Surface padding="none" className={`record-list-surface ${recordStyles.surface}`}>
-      {records.length > 0 && <div className={recordStyles.views} aria-label="Record views">
-        <button aria-pressed={pagination.query.status === "all"} onClick={() => pagination.setQuery({...pagination.query, status:"all"})}>All records <span>{records.length}</span></button>
-        {pagination.statuses.map(status => <button key={status} aria-pressed={pagination.query.status === status} onClick={() => pagination.setQuery({...pagination.query, status})}>{status}<span>{records.filter(record => record.status === status).length}</span></button>)}
-      </div>}
       <ListFilters
         {...pagination}
         label="records"
@@ -2351,10 +2380,12 @@ function RecordTable({
         onImport={onImport}
         trailing={toolbar}
       />
+      <SelectionActions selected={selection.selected} title="records" onClear={selection.clear} onDelete={actions.onDeleteSelected ? () => actions.onDeleteSelected!(selection.selected) : undefined} deletableCount={deletable.length} />
       {pagination.total > 0 && <div className="table-scroll">
-        <table className={recordStyles.table}>
+        <CrmTable className={recordStyles.table} data-reference-list={referenceList || undefined}>
           <thead>
             <tr>
+              <th className="table-select-cell"><SelectionCheckbox label="Select all records on this page" checked={!!pagination.items.length && pagination.items.every(r => selection.has(r.id))} mixed={pagination.items.some(r => selection.has(r.id)) && !pagination.items.every(r => selection.has(r.id))} onChange={checked => selection.togglePage(pagination.items,checked)} /></th>
               {/* Six columns, not eight. Company and product are secondary
                   detail and now sit under the name, which removes the
                   horizontal scroll without losing anything. */}
@@ -2363,14 +2394,15 @@ function RecordTable({
               <SortHeader className="e-col-record" sortKey="name" query={pagination.query} setQuery={pagination.setQuery}>{records[0]?.kind === "products" ? "Product" : records[0]?.kind === "hr" ? "Employee" : "Name / Company"}</SortHeader>
               <SortHeader className="e-col-status" sortKey="status" query={pagination.query} setQuery={pagination.setQuery}>Status</SortHeader>
               <SortHeader className="e-col-owner" sortKey="owner" query={pagination.query} setQuery={pagination.setQuery}>Owner</SortHeader>
-              {referenceList ? <th className="e-col-next">Last updated</th> : <SortHeader className="e-col-next" sortKey="due" query={pagination.query} setQuery={pagination.setQuery}>{records[0]?.kind === "accounts" ? "Payment" : "Next action"}</SortHeader>}
+              <SortHeader className="e-col-next" sortKey={referenceList?"updatedAt":"due"} query={pagination.query} setQuery={pagination.setQuery}>{referenceList?"Last updated":records[0]?.kind === "accounts" ? "Payment" : "Next action"}</SortHeader>
               {valued && <SortHeader className="e-col-value" sortKey="amount" query={pagination.query} setQuery={pagination.setQuery}>{records[0]?.kind === "products" ? "Unit price" : "Value"}</SortHeader>}
               <th className="e-col-actions">Actions</th>
             </tr>
           </thead>
           <tbody>
             {pagination.items.map((r) => (
-              <tr key={r.id}>
+              <tr key={r.id} data-selected={selection.has(r.id) || undefined}>
+                <td className="table-select-cell"><SelectionCheckbox label={`Select ${r.title}`} checked={selection.has(r.id)} onChange={checked => selection.toggle(r.id,checked)} /></td>
                 <td className="e-cell-identity">
                   <Button className="record-link avatar-name" onClick={() => onSelect(r)}>
                     <Avatar name={r.title} size={30} />
@@ -2380,7 +2412,7 @@ function RecordTable({
                         className="e-row-meta"
                         title={[companyName(r.company), r.product || r.contact, r.owner && `by ${r.owner}`].filter(Boolean).join(" · ")}
                       >
-                        {[companyName(r.company), r.product || r.contact]
+                        {[isProforma(r) ? `Proforma ${r.attributes?.quoteReference || r.id}` : "", companyName(r.company), r.product || r.contact]
                           .filter(Boolean)
                           .join(" · ")}
                         {/* Where the Created by column is dropped for space
@@ -2392,9 +2424,9 @@ function RecordTable({
                   </Button>
                 </td>
                 <td className="e-cell-status">
-                  {canWrite(actions.actor, r) && actions.onStatus && (stages[r.kind] || []).length > 1 ? (
+                  {actions.onStatus && availableStatuses(actions.actor, r).length > 1 ? (
                     <Select className="record-status-select" aria-label={`Status for ${r.title}`} value={r.status} onChange={(e) => actions.onStatus?.(r, e.target.value)}>
-                      {(stages[r.kind] || []).map((status) => <option key={status}>{status}</option>)}
+                      {availableStatuses(actions.actor, r).map((status) => <option key={status}>{status}</option>)}
                     </Select>
                   ) : <Badge status={r.status} />}
                 </td>
@@ -2417,7 +2449,7 @@ function RecordTable({
               </tr>
             ))}
           </tbody>
-        </table>
+        </CrmTable>
       </div>}
       <ListEmpty {...pagination} label="records" empty={empty} />
       <Pagination {...pagination} label="records" />
@@ -2437,13 +2469,16 @@ function Overview({
   from,
   to,
   executive,
+  live,
   onFollowUp,
   onQuickAdd,
   busy,
   meetingsToday,
+  currency = "USD",
 }: {
   /** Today's meetings for My Day (live workspace only). */
   meetingsToday?: React.ReactNode;
+  currency?: string;
   records: RecordItem[];
   actor: Actor;
   approvals: RecordItem[];
@@ -2457,14 +2492,16 @@ function Overview({
   to: string;
   /** Executives get the company view; everyone else gets their own day. */
   executive: boolean;
+  live?: boolean;
   onFollowUp: (r: RecordItem, date: string) => Promise<void> | void;
   onQuickAdd: (kind?: Kind) => void;
   busy?: boolean;
 }) {
   const [analysisOpen, setAnalysisOpen] = useState(false);
+  const [reportsOpen, setReportsOpen] = useState(false);
   useEffect(() => {
     try {
-      setAnalysisOpen(localStorage.getItem("enercore-dashboard-analysis") === "open");
+      setAnalysisOpen(false);
     } catch {}
   }, []);
   const custom = period === "custom";
@@ -2490,7 +2527,7 @@ function Overview({
     (r) =>
       r.kind === "logistics" && !["Delivered", "Cancelled"].includes(r.status),
   );
-  const invoices = records.filter((r) => r.kind === "accounts" && !isCashEntry(r));
+  const invoices = records.filter((r) => r.kind === "accounts" && !isCashEntry(r) && !isProforma(r));
   const usd = (rs: RecordItem[]) =>
     rs.filter((r) => r.currency === "USD").reduce((a, r) => a + r.amount, 0);
   const pipeline = usd(
@@ -2534,6 +2571,12 @@ function Overview({
       icon: Truck, to: "logistics", accent: "purple",
     }],
     accounts: [
+      {
+        label: "Proformas to review",
+        value: pad(records.filter(r => isProforma(r) && r.status === "Draft").length),
+        sub: "Draft customer offers · not receivables",
+        icon: FileText, to: "accounts", accent: "purple",
+      },
       {
         label: "Invoices awaiting payment",
         value: shortMoney(
@@ -2587,9 +2630,9 @@ function Overview({
         icon: Globe2, to: "marketing", accent: "gold",
       },
       {
-        label: "Leads recorded",
+        label: "Campaign lead targets",
         value: pad(campaigns.reduce((sum, r) => sum + (r.quantity || 0), 0)),
-        sub: "Captured against campaigns, not attributed revenue",
+        sub: "Planned targets, not actual inquiries or revenue",
         icon: Target, to: "marketing", accent: "blue",
       },
     ],
@@ -2620,7 +2663,8 @@ function Overview({
   };
   // Business importance order. A role only ever sees cards for the modules it
   // has, so a narrow role still fills the row from its own modules.
-  const cardOrder: Module[] = ["leads", "orders", "logistics", "accounts", "hr", "it", "marketing", "quotations", "customers", "suppliers", "products"];
+  const defaultOrder: Module[] = ["leads", "orders", "logistics", "accounts", "hr", "it", "marketing", "quotations", "customers", "suppliers", "products"];
+  const cardOrder = [...new Set([...roleHome(actor).modules, ...defaultOrder])];
   const metrics = cardOrder
     .filter((m) => allowed.includes(m))
     .flatMap((m) => cards[m] || [])
@@ -2637,7 +2681,7 @@ function Overview({
             <span>{m.label}</span>
             <div className={`stat-icon ${m.accent}`}><m.icon size={18} /></div>
           </div>
-          <strong>{m.value}</strong>
+          <span className="stat-value-row"><strong>{m.value}</strong><MetricTrend actor={actor} records={allRecords.filter(r => r.kind === m.to)} /></span>
           <div className="stat-bottom"><span>{m.sub}</span><ArrowUpRight size={15} /></div>
         </Button>
       ))}
@@ -2649,8 +2693,9 @@ function Overview({
   // attached, and their module summary underneath.
   if (!executive)
     return (
-      <>
-        <MyDay
+      <RoleHome actor={actor} records={allRecords} go={go} onSelect={onSelect}>
+        {roleCards}
+        {actor.role.startsWith("Sales") && <MyDay
           meetings={meetingsToday}
           actor={actor}
           records={allRecords}
@@ -2660,9 +2705,10 @@ function Overview({
           onQuickAdd={onQuickAdd}
           onGo={(m) => go(m as Module)}
           busy={busy}
-        />
-        {roleCards}
-      </>
+        />}
+        {!actor.role.startsWith("Sales") && meetingsToday}
+        {allowed.includes("leads") && <details className="workspace-reports" open={reportsOpen} onToggle={e => setReportsOpen(e.currentTarget.open)}><summary>Lead reports & weekly review<span>Brand, owner, follow-ups and conversions</span></summary>{reportsOpen && <LeadDesk actor={actor} records={allRecords} live={live} company={company} compact onOpen={onSelect} onDesk={()=>go("leads")} from={lower} to={upper}/>}</details>}
+      </RoleHome>
     );
 
   return (
@@ -2675,7 +2721,8 @@ function Overview({
           {scopeNote}
         </p>
       )}
-      <StudioDashboard actor={actor} records={records} currentRecords={allRecords} onSelect={onSelect} go={go} onQuickAdd={onQuickAdd} events={audit.filter(a=>company==="All companies" || a.company===company)} />
+      <StudioDashboard actor={actor} records={records} currentRecords={allRecords} onSelect={onSelect} go={go} onQuickAdd={onQuickAdd} events={audit.filter(a=>company==="All companies" || a.company===company)} live={live} company={company} from={lower} to={upper} currency={currency} />
+      {allowed.includes("leads") && <details className="workspace-reports" open={reportsOpen} onToggle={e => setReportsOpen(e.currentTarget.open)}><summary>Lead reports & weekly review<span>Brand, owner, follow-ups and conversions</span></summary>{reportsOpen && <LeadDesk actor={actor} records={allRecords} live={live} company={company} compact onOpen={onSelect} onDesk={()=>go("leads")} from={lower} to={upper}/>}</details>}
       <details
         className="dash-analysis"
         open={analysisOpen}
@@ -2715,6 +2762,7 @@ function ActivityList({
   paginated?: boolean;
 }) {
   const pagination = usePagination(events);
+  const selection = useRowSelection(pagination.matched, JSON.stringify([pagination.query.search,pagination.query.status]));
   const [detail, setDetail] = useState<Audit | null>(null);
   if (!events.length)
     return (
@@ -2744,11 +2792,13 @@ function ActivityList({
   return (
     <>
       <ListFilters {...pagination} label="events" sortable={false} />
+      <SelectionActions selected={selection.selected} title="Activity log" onClear={selection.clear}/>
       {pagination.total > 0 && (
         <div className="table-scroll">
-          <table>
+          <CrmTable>
             <thead>
               <tr>
+                <SelectionHeader selection={selection} rows={pagination.items} label="events"/>
                 <SortHeader sortKey="actor" query={pagination.query} setQuery={pagination.setQuery}>Person</SortHeader>
                 <SortHeader sortKey="action" query={pagination.query} setQuery={pagination.setQuery}>What changed</SortHeader>
                 <SortHeader sortKey="company" query={pagination.query} setQuery={pagination.setQuery}>Company</SortHeader>
@@ -2760,7 +2810,8 @@ function ActivityList({
               {pagination.items.map((a) => {
                 const { area, change } = activityParts(a.action);
                 return (
-                  <tr key={a.id}>
+                  <tr key={a.id} data-selected={selection.has(a.id)||undefined}>
+                    <SelectionCell selection={selection} row={a} label={`${a.actor} ${a.action}`}/>
                     <td>
                       <Button className="record-link avatar-name" onClick={() => setDetail(a)}>
                         <Avatar name={a.actor} size={32} />
@@ -2795,7 +2846,7 @@ function ActivityList({
                 );
               })}
             </tbody>
-          </table>
+          </CrmTable>
         </div>
       )}
       <ListEmpty {...pagination} label="events" />

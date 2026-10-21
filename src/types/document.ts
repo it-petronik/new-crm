@@ -19,6 +19,7 @@ export interface DocumentParty {
   address?: string | null;
   email?: string | null;
   phone?: string | null;
+  attention?: string | null;
   logoUrl?: string | null;
 }
 
@@ -56,6 +57,7 @@ export interface DocumentTotals {
 
 export interface DocumentSignatory {
   companyName: string;
+  approvedSealUrl?: string;
   signedBy?: string | null;
   designation?: string | null;
   stampUrl?: string | null;
@@ -73,6 +75,7 @@ export interface DocumentDates {
 }
 
 export interface DocumentData {
+  extraInfo?: { label: string; value: string }[];
   refNo: string;
   from: DocumentParty;
   to: DocumentParty;
@@ -88,4 +91,6 @@ export interface DocumentData {
   notes?: string | null;
   signatory: DocumentSignatory;
   footerWebsite?: string | null;
+  footerMessage?: string | null;
+  footerContacts?: { phone?: string; email?: string; website?: string };
 }

@@ -1,4 +1,6 @@
 "use client";
+import { Input } from '@/components/ui/controls';
+
 import { useEffect, useState } from "react";
 import { Button } from "./ui/controls";
 import type { RecordItem } from "@/lib/domain";
@@ -100,7 +102,7 @@ export function CustomerMatches({
       </ul>
       {strong && (
         <label className="form-guidance-confirm">
-          <input type="checkbox" checked={acknowledged} onChange={(e) => onAcknowledge(e.target.checked)} />
+          <Input type="checkbox" checked={acknowledged} onChange={(e) => onAcknowledge(e.target.checked)} />
           It is a different company — create a separate customer
         </label>
       )}

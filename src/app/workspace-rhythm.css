@@ -1,0 +1,326 @@
+/* Screen chrome only: one spacing rhythm, without touching the approved
+   print documents, received email HTML, meeting canvas or calendar cells. */
+@media screen {
+  :is(.app-shell[data-design="studio"], .ui-dialog.ui-dialog) {
+    --crm-space-xs: 4px;
+    --crm-space-sm: 8px;
+    --crm-space-md: 12px;
+    --crm-space-lg: 16px;
+    --crm-space-xl: 20px;
+    --f-field-gap: 16px;
+    --f-section-gap: 16px;
+    --l-section-gap: 16px;
+  }
+  .app-shell[data-design="studio"]
+    .page-under-record:not([hidden]):not(
+      :has(.mail-shell, .collab-refined, .meeting-room)
+    ) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--crm-space-xl);
+    min-width: 0;
+  }
+  .app-shell[data-design="studio"] .page-under-record > .ui-page-header {
+    padding-block: 0;
+    min-height: 32px;
+    margin: 0;
+  }
+  .app-shell[data-design="studio"] .page-under-record {
+    gap: 16px !important;
+  }
+  /* Older sibling margins were being added on top of the new flex gap. */
+  .app-shell[data-design="studio"] .main-content > .page-under-record > * + * {
+    margin-block-start: 0;
+  }
+  .app-shell[data-design="studio"]
+    .page-under-record
+    > .ui-page-header
+    .ui-field-heading:empty {
+    display: none;
+  }
+  .app-shell[data-design="studio"] .ui-page-header > div {
+    margin: 0;
+  }
+  .ui-form-feedback {
+    margin: 12px 0 0;
+    padding: 10px 12px;
+    border-left: 2px solid var(--e-danger);
+    color: var(--e-danger);
+    font-size: 12px;
+  }
+  .ui-checkbox,
+  .ui-radio {
+    width: 16px;
+    height: 16px;
+    min-width: 16px;
+    min-height: 16px;
+    padding: 0;
+    margin: 0;
+    accent-color: var(--e-accent);
+    vertical-align: middle;
+  }
+  .ui-range {
+    accent-color: var(--e-accent);
+  }
+  .ui-month-field {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+  }
+  .ui-month-trigger {
+    width: 100%;
+  }
+  .ui-month-trigger > span {
+    flex: 1;
+    text-align: left;
+  }
+  .ui-month-popover {
+    z-index: 1700;
+    width: 256px;
+    padding: 12px;
+    border: 1px solid var(--e-border);
+    border-radius: 6px;
+    background: var(--e-surface);
+    color: var(--e-text);
+    box-shadow: var(--e-shadow-overlay);
+  }
+  .ui-month-heading,
+  .ui-month-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .ui-month-heading button,
+  .ui-month-grid button,
+  .ui-month-footer button {
+    min-height: 32px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .ui-month-heading button {
+    display: grid;
+    place-items: center;
+    width: 32px;
+  }
+  .ui-month-heading strong {
+    font-size: 13px;
+  }
+  .ui-month-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    margin: 12px 0;
+  }
+  .ui-month-grid button:hover,
+  .ui-month-heading button:hover {
+    background: var(--e-surface-sunken);
+  }
+  .ui-month-grid button[aria-pressed="true"] {
+    background: var(--e-accent-soft);
+    color: var(--e-accent);
+    font-weight: 600;
+  }
+  .ui-month-popover button:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+  .ui-month-popover button:focus-visible {
+    outline: 2px solid var(--e-accent);
+    outline-offset: 1px;
+  }
+  .ui-month-footer {
+    border-top: 1px solid var(--e-border);
+    padding-top: 8px;
+    color: var(--e-accent);
+  }
+  .ui-select-menu .ui-select-option {
+    margin: 2px 0;
+    border-radius: 4px;
+    padding: 8px 30px 8px 10px;
+  }
+  .ui-select-menu .ui-select-option[data-highlighted] {
+    outline: none;
+    box-shadow: none;
+    background: var(--e-surface-sunken);
+  }
+  .ui-select-menu .ui-select-option[data-state="checked"] {
+    color: var(--e-accent);
+    background: var(--e-accent-soft);
+  }
+  .app-shell[data-design="studio"]
+    .page-under-record
+    > :is(
+      .ui-page-header,
+      .stats-grid,
+      .module-metrics,
+      .workspace-reports,
+      .dash-analysis,
+      .records-panel
+    ) {
+    margin-block: 0;
+    min-width: 0;
+  }
+  .app-shell[data-design="studio"]
+    :is(.ui-section, .settings-panel, .requests-panel)
+    + :is(.ui-section, .settings-panel, .requests-panel) {
+    margin-block-start: var(--crm-space-xl);
+  }
+  .app-shell[data-design="studio"]
+    :is(.stats-grid, .module-metrics, .profile-grid, .settings-grid) {
+    gap: var(--crm-space-lg);
+  }
+  .app-shell[data-design="studio"]
+    :is(.panel, .settings-panel, .requests-panel, .role-queue, .my-day-panel) {
+    border-radius: 6px;
+    box-shadow: none;
+  }
+  .app-shell[data-design="studio"] :is(.panel-heading, .ui-section-head) {
+    gap: var(--crm-space-lg);
+    align-items: center;
+  }
+  :is(.app-shell[data-design="studio"], .ui-dialog.ui-dialog)
+    .ui-field:not(.company-switch, .ui-inline-field) {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--crm-space-xs);
+    min-width: 0;
+    margin: 0;
+  }
+  :is(.app-shell[data-design="studio"], .ui-dialog.ui-dialog)
+    .ui-field-heading {
+    min-height: 24px;
+    margin: 0;
+    align-items: center;
+    gap: 6px;
+  }
+  :is(.app-shell[data-design="studio"], .ui-dialog.ui-dialog) .ui-field-label {
+    margin: 0;
+    padding: 0;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.5;
+    color: var(--e-text-secondary);
+  }
+  .ui-dialog.ui-dialog :is(.form-grid, .proforma-grid, [data-ui="form-grid"]) {
+    gap: 16px 20px;
+    align-items: start;
+  }
+  .ui-dialog.ui-dialog
+    :is(.ui-form-stack, .form-sections, .proforma-form, .proforma-step) {
+    display: grid;
+    gap: 20px;
+    margin-block: 0;
+  }
+  .ui-dialog.ui-dialog .form-section {
+    margin: 0;
+    border: 0;
+    border-top: 1px solid var(--e-border);
+    border-radius: 0;
+    padding: 16px 0 0;
+    background: transparent;
+  }
+  .ui-dialog.ui-dialog .form-section > :is(summary, h3) {
+    margin: 0 0 12px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .ui-dialog.ui-dialog .form-section:not([open]) > summary {
+    margin-bottom: 0;
+  }
+  .ui-dialog.ui-dialog .dialog-body {
+    padding: 20px;
+    scroll-padding-block: 20px;
+  }
+  .ui-dialog.ui-dialog .studio-dialog-heading {
+    padding: 16px 20px;
+  }
+  .ui-dialog.ui-dialog .ui-dialog-footer {
+    padding: 14px 20px;
+    gap: 12px;
+  }
+  .ui-dialog.ui-dialog .ui-dialog-actions-end {
+    gap: 8px;
+  }
+  .ui-dialog.ui-dialog
+    :is(
+      .ui-input,
+      .ui-select-trigger,
+      .ui-date-trigger,
+      .ui-time-trigger,
+      .ui-textarea
+    ) {
+    margin: 0;
+    box-shadow: none;
+    color: var(--e-text);
+    background: var(--e-surface);
+  }
+  .ui-dialog.ui-dialog .line-editor-item {
+    gap: 12px;
+  }
+  .ui-dialog.ui-dialog .quick-add-form {
+    gap: 16px;
+    margin-top: 16px;
+  }
+  .ui-dialog.ui-dialog .quick-add-form > :is(p, details) {
+    margin-block: 0;
+  }
+  .ui-dialog.ui-dialog .quick-add-row {
+    gap: 16px 20px;
+  }
+  .app-shell[data-design="studio"] .role-home {
+    gap: 20px;
+  }
+  .app-shell[data-design="studio"] .role-queue-item {
+    padding: 14px 16px;
+  }
+  .app-shell[data-design="studio"] .notify-list {
+    gap: 12px;
+  }
+  .app-shell[data-design="studio"] .ai-history {
+    gap: 20px;
+  }
+  .app-shell[data-design="studio"] :is(.profile-actions, .execution-actions) {
+    gap: 8px;
+  }
+}
+.brand-logo {
+  position: relative;
+  width: 34px !important;
+  height: 34px !important;
+}
+.heading-actions .company-switch .brand-logo {width:20px!important;height:20px!important;flex:0 0 20px;border:0;background:transparent;margin:0;padding:0}
+.heading-actions .dashboard-currency{width:86px!important;min-width:86px}
+.ai-companion-trigger.ai-companion-trigger{display:flex;align-items:center;justify-content:center;gap:7px;min-height:34px;height:34px;width:auto;padding:0 12px;border-radius:5px;background:var(--brand-action,var(--e-accent));color:#fff;border:1px solid var(--brand-action,var(--e-accent));box-shadow:0 3px 12px rgb(10 30 50 / 14%);font-size:12px}
+.ai-companion-trigger.ai-companion-trigger:hover{background:var(--brand-hover,var(--e-accent))}
+.ai-companion-panel .ai-companion-examples{display:flex;flex-wrap:wrap;gap:6px;margin-block:12px}
+.ai-companion-panel .ai-companion-examples button{font-size:11px;min-height:30px;padding:5px 8px}
+.heading-actions .company-switch {max-width:230px;gap:8px}
+/* One icon scale for routine controls; brand marks and chart artwork are independent. */
+:is(.app-shell,.ui-dialog) .ui-button > svg,
+.row-overflow-menu .row-overflow-item > svg {width:16px;height:16px;flex:0 0 16px}
+.row-overflow-menu .row-overflow-item:not(:disabled):is(:hover,:focus-visible),
+.ui-select-menu .ui-select-option[data-highlighted]:not([data-disabled]) {background:var(--e-accent-soft)!important;color:var(--e-accent)!important;outline:none}
+.row-overflow-menu .row-overflow-item.is-destructive:not(:disabled):is(:hover,:focus-visible) {background:color-mix(in srgb,var(--e-danger) 12%,var(--e-surface))!important;color:var(--e-danger)!important}
+.ui-select-menu .ui-select-option[data-state="checked"]{background:color-mix(in srgb,var(--e-accent) 12%,var(--e-surface));color:var(--e-accent)}
+.login-brand .brand-logo {
+  width: 56px !important;
+  height: 56px !important;
+}
+.reference-document .pdf-header .pdf-company-logo {
+  position: relative;
+  width: 144px;
+  height: 48px;
+  object-fit: contain;
+  object-position: right center;
+}
+.reference-document .pdf-brand-watermark {
+  height: 110mm;
+  width: 110mm;
+}

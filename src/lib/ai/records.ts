@@ -11,7 +11,7 @@ import { AiError } from "./gateway";
  */
 
 export async function readableRecords(db: Database, actor: Actor, kinds?: Kind[]): Promise<RecordItem[]> {
-  const rows = await listRecordsForActor(db, actor.companies, actor.branches, RECORD_PAGE_LIMIT);
+  const rows = await listRecordsForActor(db, actor.companies, actor.branches, RECORD_PAGE_LIMIT, 0, actor);
   return rows
     .map((r) => r.payload as RecordItem)
     .filter((r) => !r.deletedAt && canRead(actor, r) && (!kinds || kinds.includes(r.kind)));

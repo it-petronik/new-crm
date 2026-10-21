@@ -1,18 +1,21 @@
-import { canWrite, totalCents, type Actor, type RecordItem, type Workspace } from "./domain";
+import { canWrite, isProforma, totalCents, type Actor, type RecordItem, type Workspace } from "./domain";
+import { proformaError } from "./proforma";
 import { quotationError } from "./quotation";
 import { salaryAttributes } from "./salary";
 import { isCashEntry, cashEntryError } from "./cashbook";
 import { contentError } from "./content-calendar";
+import { leadSystemKeys, leadTypes } from "./lead-desk";
 
 export function commercialLocked(r: RecordItem) {
   if (isCashEntry(r)) return false;
+  if (isProforma(r)) return r.status !== "Draft";
   return ["orders", "logistics", "accounts"].includes(r.kind) ||
     (r.kind === "quotations" && ["Approved", "Accepted"].includes(r.status));
 }
 export const correctionFields = ["contact", "email", "phone", "destination", "due", "attributes.country"];
 export function deletionReason(r: RecordItem, records: RecordItem[]): string {
   if (isCashEntry(r)) return "Cashbook entries are retained for audit. Use Cancelled status to reverse their effect on totals.";
-  if (commercialLocked(r) || r.payments?.length) return "Financial and approved commercial records must be cancelled through their workflow, not deleted.";
+  if (isProforma(r) || commercialLocked(r) || r.payments?.length) return "Financial and approved commercial records must be cancelled through their workflow, not deleted.";
   if (r.parentId || records.some(child => child.parentId === r.id || child.customerId === r.id || child.productId === r.id)) return "This record is linked to other records and cannot be deleted.";
   return "";
 }
@@ -27,6 +30,13 @@ export function mutateRecord(workspace: Workspace, actor: Actor, id: string, exp
     if (reason) throw new Error(reason);
     next = { ...r, deletedAt: now, updatedAt: now };
   } else {
+    if (r.kind === "leads" && values.attributes) {
+      for (const key of leadSystemKeys) if (values.attributes[key] !== undefined && values.attributes[key] !== r.attributes?.[key]) throw new Error("Lead tracking information is recorded by the system. Use the lead outcome actions instead.");
+      if (values.attributes.leadType && ![...leadTypes, "Unclassified"].includes(values.attributes.leadType)) throw new Error("Choose an available lead type.");
+    }
+    if (isProforma(r) && r.status !== "Draft") throw new Error("Issued or cancelled proformas cannot be edited. Create a new document for a revision.");
+    if (values.attributes?.documentType !== undefined && values.attributes.documentType !== r.attributes?.documentType) throw new Error("The document type cannot be changed.");
+    if (values.attributes && ["issuedBy", "issuedById", "issuedAt"].some(key => values.attributes?.[key] !== undefined && values.attributes[key] !== r.attributes?.[key])) throw new Error("Issue information is recorded by the system.");
     for (const key of ["kind", "company", "branch", "parentId"] as const) {
       if (values[key] !== undefined && values[key] !== r[key]) throw new Error("Record type, company and links cannot be changed while editing.");
     }
@@ -40,6 +50,13 @@ export function mutateRecord(workspace: Workspace, actor: Actor, id: string, exp
       ? (values.attributes?.country !== undefined ? { country: values.attributes.country } : {})
       : values.attributes;
     next = { ...r, ...edits, attributes: { ...r.attributes, ...attrs }, updatedAt: now };
+    if (isProforma(r)) {
+      // Stable customer identity and reference cannot be replaced by an edit.
+      next.attributes = { ...next.attributes, quoteReference: r.attributes?.quoteReference || r.id };
+      const problem = proformaError(next);
+      if (problem) throw new Error(problem);
+      next.amount = totalCents(next.lines || []) / 100;
+    }
     const contentProblem = contentError(next);
     if (contentProblem) throw new Error(contentProblem);
     if(next.kind === "hr") next.attributes = salaryAttributes(next.attributes);

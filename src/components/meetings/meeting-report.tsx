@@ -1,4 +1,5 @@
 "use client";
+import { CrmTable } from "@/components/ui/crm-table";
 
 import { useEffect, useState } from "react";
 import { ArrowLeft, Download, Printer } from "lucide-react";
@@ -9,6 +10,7 @@ import { businessStamp, businessStampShort } from "@/lib/gst";
 import { downloadCsv, toCsv } from "@/lib/export";
 import MeetingIntelligence from "../ai/meeting-intelligence";
 import MeetingNotes from "./meeting-notes";
+import { ListFilters, SortHeader, usePagination } from "../pagination";
 
 /**
  * The meeting report: built only from what Enercore recorded — attendance
@@ -111,6 +113,7 @@ export default function MeetingReportView({ meetingId, onBack }: { meetingId: st
 
 function ReportBody({ report }: { report: MeetingReport }) {
   const m = report.meeting;
+  const participants=usePagination(report.participants.map(p=>({...p,id:p.identity,status:p.kind==="guest"?"Guest":"Internal"})),m.id);
   const actual = m.startedAt && m.endedAt ? durationLabel(new Date(m.endedAt).getTime() - new Date(m.startedAt).getTime()) : null;
   return (
     <>
@@ -142,20 +145,17 @@ function ReportBody({ report }: { report: MeetingReport }) {
 
       <section className="meet-card" aria-labelledby="report-participants">
         <h3 id="report-participants">Participants ({report.participants.length})</h3>
+        <div className="meet-no-print"><ListFilters {...participants} label="participants" sortable={false}/></div>
         {report.participants.length ? (
           <>
-            <table className="meet-report-table">
+            <CrmTable className="meet-report-table">
               <thead>
                 <tr>
-                  <th scope="col">Name</th>
-                  <th scope="col">Participant</th>
-                  <th scope="col">Joined</th>
-                  <th scope="col">Left</th>
-                  <th scope="col">Attended</th>
+                  {([["name","Name"],["status","Participant"],["firstJoined","Joined"],["lastLeft","Left"],["totalSeconds","Attended"]] as const).map(([key,label])=><SortHeader key={key} sortKey={key} query={participants.query} setQuery={participants.setQuery}>{label}</SortHeader>)}
                 </tr>
               </thead>
               <tbody>
-                {report.participants.map((p) => (
+                {participants.matched.map((p) => (
                   <tr key={p.identity}>
                     <td>{p.name}</td>
                     <td>{p.kind === "guest" ? "Guest" : "Internal"}</td>
@@ -168,10 +168,10 @@ function ReportBody({ report }: { report: MeetingReport }) {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </CrmTable>
             {/* Phones: the same data as cards. */}
             <ul className="meet-report-cards">
-              {report.participants.map((p) => (
+              {participants.matched.map((p) => (
                 <li key={p.identity}>
                   <b>{p.name}</b>
                   <small>{p.kind === "guest" ? "Guest" : "Internal"}</small>

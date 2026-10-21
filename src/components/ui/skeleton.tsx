@@ -1,4 +1,6 @@
 "use client";
+import { roleHome } from "@/lib/role-home";
+import type { Actor } from "@/lib/domain";
 
 /**
  * Loading placeholders.
@@ -10,7 +12,17 @@
  * itself carries aria-busy and a single polite message.
  */
 
-export function Skeleton({ w, h = 14, r, className }: { w?: number | string; h?: number | string; r?: number; className?: string }) {
+export function Skeleton({
+  w,
+  h = 14,
+  r,
+  className,
+}: {
+  w?: number | string;
+  h?: number | string;
+  r?: number;
+  className?: string;
+}) {
   return (
     <span
       className={`skeleton${className ? ` ${className}` : ""}`}
@@ -20,7 +32,13 @@ export function Skeleton({ w, h = 14, r, className }: { w?: number | string; h?:
   );
 }
 
-export function SkeletonText({ lines = 3, width = ["92%", "78%", "56%"] }: { lines?: number; width?: (string | number)[] }) {
+export function SkeletonText({
+  lines = 3,
+  width = ["92%", "78%", "56%"],
+}: {
+  lines?: number;
+  width?: (string | number)[];
+}) {
   return (
     <span className="skeleton-text" aria-hidden="true">
       {Array.from({ length: lines }, (_, i) => (
@@ -31,9 +49,21 @@ export function SkeletonText({ lines = 3, width = ["92%", "78%", "56%"] }: { lin
 }
 
 /** Wraps a loading region: one announcement, no placeholder noise. */
-export function SkeletonRegion({ label, children }: { label: string; children: React.ReactNode }) {
+export function SkeletonRegion({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="skeleton-region" role="status" aria-label={label} aria-busy="true" aria-live="polite">
+    <div
+      className="skeleton-region"
+      role="status"
+      aria-label={label}
+      aria-busy="true"
+      aria-live="polite"
+    >
       <span className="visually-hidden">{label}</span>
       {children}
     </div>
@@ -70,12 +100,20 @@ export function SkeletonListRow() {
 export function SkeletonTable({ rows = 6 }: { rows?: number }) {
   return (
     <div className="panel skeleton-table" aria-hidden="true">
-      {Array.from({ length: rows }, (_, i) => <SkeletonListRow key={i} />)}
+      {Array.from({ length: rows }, (_, i) => (
+        <SkeletonListRow key={i} />
+      ))}
     </div>
   );
 }
 
-export function SkeletonPanel({ lines = 3, title = true }: { lines?: number; title?: boolean }) {
+export function SkeletonPanel({
+  lines = 3,
+  title = true,
+}: {
+  lines?: number;
+  title?: boolean;
+}) {
   return (
     <section className="panel skeleton-card" aria-hidden="true">
       {title && <Skeleton w="34%" h={14} />}
@@ -98,7 +136,9 @@ export function SkeletonDashboard() {
           <section className="panel skeleton-attention" aria-hidden="true">
             <Skeleton w="30%" h={13} />
             <div className="skeleton-stack">
-              {[0, 1, 2].map((i) => <SkeletonAttnRow key={i} />)}
+              {[0, 1, 2].map((i) => (
+                <SkeletonAttnRow key={i} />
+              ))}
             </div>
           </section>
           <SkeletonPanel lines={4} />
@@ -137,13 +177,17 @@ export function SkeletonMyDay() {
             <Skeleton w="40%" h={11} />
           </div>
           <div className="skeleton-day-actions">
-            {[0, 1].map((i) => <Skeleton key={i} w={120} h={34} r={8} />)}
+            {[0, 1].map((i) => (
+              <Skeleton key={i} w={120} h={34} r={8} />
+            ))}
           </div>
         </header>
         <section className="panel skeleton-attention tone-warning">
           <Skeleton w="30%" h={13} />
           <div className="skeleton-stack">
-            {[0, 1, 2].map((i) => <SkeletonAttnRow key={i} />)}
+            {[0, 1, 2].map((i) => (
+              <SkeletonAttnRow key={i} />
+            ))}
           </div>
         </section>
         <div className="skeleton-two-col">
@@ -160,6 +204,84 @@ export function SkeletonList({ rows = 6 }: { rows?: number }) {
   return (
     <SkeletonRegion label="Loading records">
       <SkeletonTable rows={rows} />
+    </SkeletonRegion>
+  );
+}
+
+/** Page-shaped fallback for lazy routes, not an unrelated block of list rows. */
+export function SkeletonPage({
+  variant = "table",
+}: {
+  variant?: "table" | "chat" | "form" | "dashboard";
+}) {
+  return (
+    <SkeletonRegion label="Loading page">
+      <div
+        className={`skeleton-page skeleton-page-${variant}`}
+        data-skeleton-page={variant}
+      >
+        <div className="skeleton-page-heading">
+          <Skeleton w={190} h={25} />
+          <Skeleton w={180} h={32} />
+        </div>
+        {variant === "chat" ? (
+          <div className="skeleton-chat">
+            <Skeleton w={52} h={52} />
+            <Skeleton w="50%" h={28} />
+            <Skeleton w="65%" h={12} />
+            <div className="skeleton-chat-composer">
+              <Skeleton w="60%" h={12} />
+              <Skeleton w={30} h={30} />
+            </div>
+          </div>
+        ) : (
+          <>
+            {variant === "dashboard" && <SkeletonKpiRow />}
+            <div className="skeleton-page-toolbar">
+              <Skeleton w="38%" h={32} />
+              <Skeleton w={130} h={32} />
+              <Skeleton w={90} h={32} />
+            </div>
+            {variant === "form" ? (
+              <div className="skeleton-form">
+                {Array.from({ length: 6 }, (_, i) => (
+                  <div key={i}>
+                    <Skeleton w="35%" h={10} />
+                    <Skeleton h={32} />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <SkeletonTable rows={6} />
+            )}
+          </>
+        )}
+      </div>
+    </SkeletonRegion>
+  );
+}
+
+/** Role-correct first paint while records load; no executive dashboard flash. */
+export function SkeletonRoleHome({ actor }: { actor: Actor }) {
+  const home = roleHome(actor);
+  return (
+    <SkeletonRegion label={`Loading ${home.title.toLowerCase()}`}>
+      <div className="role-home" data-loading-role={actor.role}>
+        <header className="role-home-heading">
+          <div>
+            <span className="eyebrow">{actor.role} · YOUR WORKSPACE</span>
+            <h1>{home.title}</h1>
+            <p>{home.description}</p>
+          </div>
+        </header>
+        <div className="role-shortcuts" aria-hidden="true">
+          {home.modules.map((m) => (
+            <Skeleton key={m} w={140} h={38} />
+          ))}
+        </div>
+        <SkeletonKpiRow count={Math.min(4, Math.max(2, home.modules.length))} />
+        <SkeletonTable rows={4} />
+      </div>
     </SkeletonRegion>
   );
 }

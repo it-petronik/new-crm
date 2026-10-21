@@ -4,13 +4,14 @@ import type { Actor } from "../domain";
 import { recordLoginAttempt } from "../data";
 import { aiUsage } from "../schema";
 import { messageId } from "../collab";
-import { AI_LIMITS, TIER_MODELS, aiBinding, type AiFeature, type AiTier } from "./config";
+import { AI_LIMITS, modelsFor, aiBinding, type AiFeature, type AiTier } from "./config";
+import { estimatedTokens, reserveGroqAttempt } from "./budget";
 import { AiError, CAPACITY_MESSAGE, RULES, structuredCall, type Attempt } from "./model";
 import type { AiContext, Reference } from "./context";
 import { ANSWER_FORMAT, answerJsonSchema, answerSchema, prepareAnswer, type AiAnswer } from "./schema";
 
 /**
- * The one way Enercore talks to Workers AI.
+ * The one way Enercore talks to its server-configured AI provider.
  *
  * - The model only ever sees what a tool assembled for THIS person after
  *   checking their access (an AiContext) — never the database.
@@ -119,7 +120,8 @@ export async function generateStructured<T>(options: {
   const tier = options.tier ?? "primary";
   const system = `${RULES}\n\nTask:\n${options.instructions}`;
   const promptChars = system.length + options.prompt.length;
-  const fingerprint = await fingerprintOf(options.actor.id, tier, system, options.prompt, options.jsonSchema);
+  const models = modelsFor(ai, tier);
+  const fingerprint = await fingerprintOf(options.actor.id, tier, system, options.prompt, [ai.provider ?? "groq", models, options.jsonSchema]);
   const cache = options.singleAttempt ? null : edgeCache();
   if (cache) {
     try {
@@ -143,7 +145,8 @@ export async function generateStructured<T>(options: {
     schema: options.schema,
     jsonSchema: options.jsonSchema,
     prepare: options.prepare,
-    models: options.singleAttempt ? [TIER_MODELS[tier][0]] : TIER_MODELS[tier],
+    models: options.singleAttempt ? [models[0]] : models,
+    beforeAttempt: ai.provider === "groq" ? () => reserveGroqAttempt(options.db, estimatedTokens(system, options.prompt, options.jsonSchema, AI_LIMITS.maxOutputTokens)) : undefined,
     onAttempt: (a) => logUsage(options.db, options.actor, { ...a, feature: options.feature, promptChars, flagged: options.flagged ?? 0 }),
   });
   const generatedAt = new Date().toISOString();

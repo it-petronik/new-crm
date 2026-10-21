@@ -1,4 +1,6 @@
 "use client";
+import { Form, Textarea } from '@/components/ui/controls';
+
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Send, Smile } from "lucide-react";
@@ -153,7 +155,7 @@ export default function MeetingMessages({
           {error}
         </p>
       )}
-      <form
+      <Form
           className="meet-chat-form"
           onSubmit={(e) => {
             e.preventDefault();
@@ -172,7 +174,7 @@ export default function MeetingMessages({
           <Button type="button" className="icon-button" aria-label="Insert emoji" aria-expanded={emoji} onMouseDown={(e) => e.preventDefault()} onClick={() => setEmoji(!emoji)}>
             <Smile size={18} />
           </Button>
-          <textarea
+          <Textarea
             ref={input}
             aria-label="Message everyone"
             rows={1}
@@ -191,7 +193,7 @@ export default function MeetingMessages({
           <Button type="submit" className="icon-button primary" aria-label="Send message" disabled={!draft.trim() || sending}>
             <Send size={16} />
           </Button>
-        </form>
+        </Form>
 
     </div>
   );

@@ -3,6 +3,7 @@ export const companies = [
   "Afrilube",
   "Petronex",
   "Istanegry",
+  "Enercore",
 ] as const;
 export const modules = [
   "overview",
@@ -54,6 +55,7 @@ export type Actor = {
 };
 export type LineItem = {
   description: string;
+  itemName?: string;
   packaging?: string;
   quantity: number;
   unitPriceCents: number;
@@ -112,7 +114,7 @@ export type Audit = {
    * "account" for user administration, "collaboration" for chat room
    * administration; absent for business records.
    */
-  subject?: "account" | "collaboration" | "task" | "operations" | null;
+  subject?: "account" | "collaboration" | "task" | "operations" | "bank-account" | null;
   /** Branch of the account concerned; null or absent means group-wide. */
   branch?: string | null;
 };
@@ -158,7 +160,7 @@ export const stages: Record<Kind, string[]> = {
 };
 export const labels: Record<Module, string> = {
   overview: "Overview",
-  leads: "Sales pipeline",
+  leads: "Lead Desk",
   quotations: "Quotations",
   orders: "Sales orders",
   logistics: "Logistics",
@@ -207,7 +209,7 @@ const grants: Partial<Record<Role, Module[]>> = {
   "HR Executive": ["overview", "hr"],
   "Marketing Manager": ["overview", "marketing", "leads"],
   "Marketing Executive": ["overview", "marketing", "leads"],
-  "IT Administrator": ["overview", "it", "settings", "activity"],
+  "IT Administrator": [...modules],
   Employee: ["overview", "hr", "it"],
 };
 export function allowedModules(actor: Actor): Module[] {
@@ -220,19 +222,26 @@ export function roleModules(role: Role): Module[] {
 }
 export function canManageUsers(actor: Actor) {
   return (
-    ["MD", "IT Administrator"].includes(actor.role) &&
+    ["MD", "MD Assistant", "IT Administrator"].includes(actor.role) &&
     allowedModules(actor).includes("settings") &&
     actor.moduleAccess?.settings !== "read"
   );
 }
+/** IT has MD-equivalent capabilities, but retains its identity and scope. */
+export const isFullAdmin = (actor: Actor) => ["MD", "MD Assistant", "IT Administrator"].includes(actor.role);
+export const canSeeAllLeads = (actor: Actor) => isFullAdmin(actor) || actor.role === "MD Assistant";
+/** Creation provenance is server-owned; absent legacy provenance never grants access. */
+export const isLeadParticipant = (actor: Actor, r: RecordItem) =>
+  r.ownerId === actor.id || r.attributes?.leadCapturedById === actor.id;
 export function canRead(actor: Actor, r: RecordItem): boolean {
   if (!actor.companies.includes(r.company)) return false;
   if (actor.branches.length && !actor.branches.includes(r.branch)) return false;
   const module = r.kind === "leave" ? "hr" : r.kind;
   if (!allowedModules(actor).includes(module)) return false;
+  if (r.kind === "leads") return canSeeAllLeads(actor) || isLeadParticipant(actor, r);
   if (r.kind === "leave" || r.kind === "hr")
     return (
-      ["MD", "HR Manager", "HR Executive"].includes(actor.role) ||
+      ["MD", "MD Assistant", "IT Administrator", "HR Manager", "HR Executive"].includes(actor.role) ||
       r.ownerId === actor.id
     );
   if (
@@ -248,12 +257,15 @@ export function canWrite(actor: Actor, r: RecordItem): boolean {
   if (r.deletedAt) return false;
   if (actor.moduleAccess?.[r.kind === "leave" ? "hr" : r.kind] === "read")
     return false;
-  if (!canRead(actor, r) || actor.role === "MD Assistant") return false;
-  if (["MD", "Group Manager", "Branch Manager"].includes(actor.role))
+  if (!canRead(actor, r)) return false;
+  // Customer proformas are prepared and issued by Accounts, not Sales or
+  // management. Existing supplier/receivable permissions stay unchanged.
+  if (isProforma(r)) return ["Accounts Manager", "Accountant"].includes(actor.role);
+  if (["MD", "MD Assistant", "IT Administrator", "Group Manager", "Branch Manager"].includes(actor.role))
     return (
       !["hr", "leave"].includes(r.kind) ||
       r.ownerId === actor.id ||
-      actor.role === "MD"
+      isFullAdmin(actor)
     );
   if (r.kind === "leave")
     return (
@@ -278,7 +290,7 @@ export function canApprove(actor: Actor, r: RecordItem) {
     actor.moduleAccess?.[r.kind === "leave" ? "hr" : r.kind] !== "read" &&
     canRead(actor, r) &&
     r.ownerId !== actor.id &&
-    (actor.role === "MD" ||
+    (isFullAdmin(actor) ||
       (r.kind === "leave"
         ? actor.role === "HR Manager"
         : ["Group Manager", "Branch Manager", "Sales Manager"].includes(
@@ -315,6 +327,7 @@ export function totalCents(
   );
 }
 export function outstanding(r: RecordItem) {
+  if (isProforma(r)) return 0;
   if (r.status === "Paid") return 0;
   return (
     Math.max(
@@ -323,6 +336,14 @@ export function outstanding(r: RecordItem) {
         (r.payments || []).reduce((s, p) => s + p.amountCents, 0),
     ) / 100
   );
+}
+export function isProforma(r: Pick<RecordItem, "kind" | "attributes">) {
+  return r.kind === "accounts" && r.attributes?.documentType === "proforma";
+}
+export function recordStages(r: RecordItem): string[] {
+  return isProforma(r)
+    ? r.status === "Cancelled" ? ["Cancelled"] : r.status === "Issued" ? ["Issued", "Cancelled"] : ["Draft", "Issued", "Cancelled"]
+    : stages[r.kind];
 }
 /**
  * Whether an actor may see one user-administration event.
@@ -366,7 +387,7 @@ export function scopedWorkspace(actor: Actor, workspace: Workspace): Workspace {
     audit: workspace.audit.filter((a) =>
       // Room administration is audited for the record, but a private room's
       // name must never surface in anyone's Activity feed.
-      a.subject === "collaboration" || a.subject === "task"
+      a.subject === "collaboration" || a.subject === "task" || a.subject === "bank-account"
         ? false
         : // Rows written before `subject` existed are business-record events
           // and keep exactly their previous visibility.

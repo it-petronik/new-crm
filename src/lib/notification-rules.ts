@@ -1,6 +1,7 @@
 import { isCashEntry } from "./cashbook";
 import { canApprove, canRead, canWrite, type Actor, type Kind, type RecordItem } from "./domain";
 import type { NotificationCategory, NotificationPriority } from "./notification-types";
+import { leadOutcomes } from "./lead-desk";
 
 /**
  * Which business events notify whom. Pure functions: given what changed and
@@ -84,7 +85,8 @@ const itTeam = (people: Person[], r: RecordItem) => team(people, r, (p) => p.rol
  * once it is theirs (company, branch and module access all apply).
  */
 export function mayOwn(person: Person, r: RecordItem) {
-  return person.active && canRead(person, { ...r, ownerId: person.id });
+  const assigned = { ...r, ownerId: person.id };
+  return person.active && canRead(person, assigned) && (r.kind !== "leads" || (["Sales Manager", "Sales Executive"].includes(person.role) && canWrite(person, assigned)));
 }
 
 /**
@@ -112,6 +114,8 @@ export function recordChangeDrafts(input: {
 
   /* ------------------------------------------------------------ created */
   if (!before) {
+    if (r.kind === "leads" && r.ownerId !== actor.id)
+      add([r.ownerId], { ...base(r, actor), type: "record.assigned", category: "assignment", priority: recordPriority(r), title: "New lead assigned to you", body: `${what} · Assigned by ${actor.name}` }, (id) => `assigned:${r.id}:${id}:${version}`);
     if (r.kind === "leave" && r.status === "Pending Approval")
       add(approvers(people, r), {
         ...base(r, actor), type: "approval.requested", category: "approval", priority: "important",
@@ -138,6 +142,22 @@ export function recordChangeDrafts(input: {
       ...base(r, actor), type: "record.reassigned", category: "assignment", priority: "normal",
       title: `${capital(noun(r))} reassigned`, body: `${what} · Now with ${r.owner}`,
     }, (id) => `unassigned:${r.id}:${id}:${version}`);
+  }
+
+  /* Close the Marketing-to-Sales loop, without broadcasting private notes.
+   * These fields are server-managed by the audited feedback action. A plain
+   * edit, acknowledgement or reassignment must not replay old feedback. */
+  const feedback = r.attributes;
+  if (r.kind === "leads" && !r.deletedAt && before.ownerId === r.ownerId &&
+    feedback?.leadFeedbackAt && feedback.leadFeedbackAt !== before.attributes?.leadFeedbackAt &&
+    feedback.leadFeedbackAt === r.updatedAt && feedback.leadFeedbackOwnerId === r.ownerId &&
+    feedback.leadCapturedById === before.attributes?.leadCapturedById &&
+    feedback.leadOutcome !== "Acknowledged" &&
+    leadOutcomes.some(outcome => outcome === feedback.leadOutcome)) {
+    add([feedback.leadCapturedById], {
+      ...base(r, actor), type: "lead.feedback", category: "update", priority: "normal",
+      title: "Sales updated your lead", body: `${what} · ${feedback.leadOutcome} · by ${actor.name}`,
+    }, id => `lead-feedback:${r.id}:${feedback.leadFeedbackAt}:${id}`);
   }
 
   /* -------------------------------------------------------- status change */

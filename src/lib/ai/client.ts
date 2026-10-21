@@ -4,6 +4,7 @@ import type { AiFeature } from "./config";
 import type { Reference } from "./context";
 import type { AiAnswer } from "./schema";
 import type { Suggestion } from "./suggestions";
+import type { AiPageContext } from "./page-context";
 
 /** Client side of Enercore AI: types and the calls the UI makes. No server code. */
 
@@ -52,8 +53,8 @@ export function aiStatus(): Promise<AiStatus | null> {
 export const askAi = (feature: Exclude<AiFeature, "ask">, id: string) =>
   call<AiResult>(`/api/ai/${feature}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
 
-export const askQuestion = (question: string) =>
-  call<AiResult>("/api/ai/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question }) });
+export const askQuestion = (question: string, signal?: AbortSignal, context?: {page?:AiPageContext;history?:string[]}) =>
+  call<AiResult>("/api/ai/ask", { method: "POST", signal, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question, ...context }) });
 
 /**
  * Applies ONE suggestion the person has reviewed and confirmed — through the

@@ -4,6 +4,7 @@ import {
   type Module,
   roleModules,
   canManageUsers,
+  isFullAdmin,
 } from "./domain";
 export const leadership = [
   "MD",
@@ -35,13 +36,12 @@ export function inAdminScope(
  * link for, the MD that created it. Mirroring the actor's own scope keeps two
  * MDs peers.
  *
- * Every other role keeps the previous default. Note that an IT Administrator
- * also administers users and is subject to the same asymmetry; it is left
- * branch-scoped deliberately, because widening it would grant reach rather
- * than preserve it.
+ * IT now has the same administrative capabilities by explicit product policy;
+ * new IT accounts inherit the administrator's branch scope like new MDs.
+ * Company scopes and explicit read-only/disabled modules remain authoritative.
  */
 export function branchesForRole(actor: Actor, role: string) {
-  if (role === "MD") return actor.branches;
+  if (["MD", "MD Assistant", "IT Administrator"].includes(role)) return actor.branches;
   return actor.branches.length ? actor.branches : ["Main"];
 }
 
@@ -64,12 +64,12 @@ export function mayAssign(
   if (
     target &&
     (!inAdminScope(actor, target.companies, target.branches) ||
-      (actor.role !== "MD" && leadership.includes(target.role)))
+      (!isFullAdmin(actor) && leadership.includes(target.role)))
   )
     return false;
   if (
     !inAdminScope(actor, requested.companies, requested.branches) ||
-    (actor.role !== "MD" && leadership.includes(requested.role))
+    (!isFullAdmin(actor) && leadership.includes(requested.role))
   )
     return false;
   return Object.entries(requested.moduleAccess || {}).every(

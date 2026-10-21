@@ -12,9 +12,11 @@ import { checkOrigin, currentActor } from "@/lib/auth";
 import {
   canRead,
   canWrite,
+  allowedModules,
   scopedWorkspace,
   stages,
   totalCents,
+  isProforma,
   type RecordItem,
 } from "@/lib/domain";
 import { transition, addNote, recordPayment, assign } from "@/lib/workflow";
@@ -27,6 +29,9 @@ import { quotationError } from "@/lib/quotation";
 import { mutateRecord } from "@/lib/record-mutations";
 import { isCashEntry, cashEntryError } from "@/lib/cashbook";
 import { salaryAttributes } from "@/lib/salary";
+import { employeeHasHrHistory } from "@/lib/hr/store";
+import { proformaAttributeKeys, proformaError, proformaReference } from "@/lib/proforma";
+import { applyLeadFeedback, initializeLead, leadFeedbackSchema, leadTypes } from "@/lib/lead-desk";
 /**
  * Optional per-submission key. The browser generates one when a create form
  * opens, so a double-click, a retry or a flaky connection replays the same key
@@ -108,6 +113,7 @@ const input = z.object({
     .array(
       z.object({
         description: z.string().min(1).max(200),
+        itemName: z.string().max(160).optional(),
         packaging: z.string().max(100).optional(),
         quantity: z.number().positive().max(1000000),
         unitPriceCents: z.number().int().min(0).max(100000000),
@@ -120,12 +126,14 @@ const input = z.object({
   productId: z.string().max(100).nullable().optional(),
   dealId: z.string().max(100).nullable().optional(),
   parentId: z.string().max(100).optional(),
+  assigneeId: z.string().min(1).max(100).optional(),
   email: z.union([z.email(), z.literal("")]).optional(),
   phone: z.string().max(50).optional(),
   destination: z.string().max(160).optional(),
   attributes: z
     .partialRecord(
       z.enum([
+        "leadType", "grade",
         "contentType", "contentStage", "contentFormat", "contentTime", "contentTimezone", "contentAsset",
         "incoterm",
         "entryType",
@@ -159,11 +167,15 @@ const input = z.object({
         "senderTaxNumber",
         "senderPhone",
         "senderWebsite",
+        "senderEmail",
+        "footerMessage",
+        "signaturePlan",
         "customerAddress",
         "customerTaxNumber",
         "signatoryName",
         "signatoryTitle",
         "amountWords",
+        ...proformaAttributeKeys,
       ]),
       z.string().max(300),
     )
@@ -197,12 +209,19 @@ export async function GET(request: Request) {
   // Workers CPU budget however large the table grows.
   const limit = Number(url.searchParams.get("limit")) || RECORD_PAGE_LIMIT;
   const offset = Number(url.searchParams.get("offset")) || 0;
+  const kindParam = url.searchParams.get("kind");
+  const parsedKind = kindParam ? input.shape.kind.safeParse(kindParam) : null;
+  if (parsedKind && !parsedKind.success) return NextResponse.json({ error:"Choose an available workspace page." }, { status:400 });
+  const kind = parsedKind?.success ? parsedKind.data : undefined;
+  if (kind && !allowedModules(actor).includes(kind === "leave" ? "hr" : kind)) return NextResponse.json({ error:"This page is not included in your access." }, { status:403 });
   const rows = await listRecordsForActor(
     db,
     actor.companies,
     actor.branches,
     Number.isFinite(limit) && limit > 0 ? limit : RECORD_PAGE_LIMIT,
     Number.isFinite(offset) && offset > 0 ? offset : 0,
+    actor,
+    kind,
   );
   const events = await listAuditEvents(db, 200);
   return NextResponse.json(
@@ -236,6 +255,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: Object.values(fields)[0] || "Check the highlighted fields.", fields }, { status: 400 });
     }
     const body = parsed.data;
+    // A quote must not smuggle a proforma marker into the invoice created
+    // by quotation acceptance. Only Accounts may create this document type.
+    if (body.attributes?.documentType && !isProforma(body))
+      return NextResponse.json({ error: "Customer proformas must be created from Accounts." }, { status: 400 });
     const contentProblem = contentError(body);
     if (contentProblem) return NextResponse.json({error:contentProblem},{status:400});
     if(body.kind === "hr") body.attributes = salaryAttributes(body.attributes);
@@ -259,14 +282,14 @@ export async function POST(request: Request) {
       : crypto.randomUUID();
     if (body.requestId) {
       const existing = await findRecord(db, id);
-      if (existing)
+      if (existing && canWrite(actor, existing.payload as RecordItem))
         return NextResponse.json(
           { record: existing.payload as RecordItem, duplicate: true },
           { status: 200 },
         );
     }
     // Both keys are transport metadata, not part of the record.
-    const { requestId: _requestId, importBatch, ...fields } = body;
+    const { requestId: _requestId, importBatch, assigneeId, ...fields } = body;
     let record: RecordItem = {
       ...fields,
       id,
@@ -278,6 +301,22 @@ export async function POST(request: Request) {
     };
     if (!canWrite(actor, record))
       return NextResponse.json({ error: "Access denied." }, { status: 403 });
+    if (record.kind === "leads") {
+      if (record.attributes?.leadType && ![...leadTypes, "Unclassified"].includes(record.attributes.leadType)) return NextResponse.json({ error: "Choose an available lead type." }, { status: 400 });
+      record = initializeLead(record, actor, { imported: Boolean(importBatch) });
+      if (assigneeId && assigneeId !== actor.id) {
+        const user = await findUserById(db, assigneeId);
+        if (!user || !mayOwn(toPerson(user), record))
+          return NextResponse.json({ error: "Choose an active salesperson with access to this brand." }, { status: 400 });
+        record = { ...record, ownerId: user.id, owner: user.name, attributes: { ...record.attributes, leadOwnerRole: user.role } };
+      }
+    }
+    if (assigneeId && record.kind !== "leads") return NextResponse.json({ error: "Sales assignment is available for leads only." }, { status: 400 });
+    if (isProforma(record)) {
+      const problem = proformaError(record);
+      if (problem) return NextResponse.json({ error: problem }, { status: 400 });
+      record.attributes = { ...record.attributes, quoteReference: proformaReference(id, record.attributes!.issuedDate) };
+    }
     record = await inheritLeadLinks(db, actor, record);
     record = await resolveLinks(db, actor, record);
     if (record.lines?.length) record.amount = totalCents(record.lines) / 100;
@@ -287,19 +326,23 @@ export async function POST(request: Request) {
         !parent ||
         parent.company !== record.company ||
         parent.branch !== record.branch ||
-        !canWrite(actor, parent.payload as RecordItem)
+        !(isProforma(record)
+          ? (parent.kind === "orders" && canRead(actor, parent.payload as RecordItem) && !["Cancelled"].includes(parent.status))
+          : canWrite(actor, parent.payload as RecordItem))
       )
         return NextResponse.json(
           { error: "Invalid linked record." },
           { status: 400 },
         );
+      if (isProforma(record) && record.customerId !== (parent.payload as RecordItem).customerId)
+        return NextResponse.json({ error: "Choose the customer linked to this order." }, { status: 400 });
     }
     // Finance and operational records must originate from an approved quote.
     if (isCashEntry(record)) {
       const error = cashEntryError(record);
       if (error) return NextResponse.json({ error }, { status: 400 });
     }
-    if (["accounts", "orders", "logistics"].includes(body.kind) && !isCashEntry(record))
+    if (["accounts", "orders", "logistics"].includes(body.kind) && !isCashEntry(record) && !isProforma(record))
       return NextResponse.json(
         { error: "Create this record through quotation acceptance." },
         { status: 400 },
@@ -315,7 +358,7 @@ export async function POST(request: Request) {
         db,
         {
           id: record.id, kind: record.kind, company: record.company,
-          branch: record.branch, ownerId: actor.id, status: record.status, payload: record,
+          branch: record.branch, ownerId: record.ownerId, status: record.status, payload: record,
         },
         {
           id: crypto.randomUUID(), actor: actor.name, actorId: actor.id,
@@ -330,7 +373,7 @@ export async function POST(request: Request) {
       // the primary key is the last line of defence, as it is for intake.
       if (body.requestId && /UNIQUE|constraint/i.test(String(error))) {
         const existing = await findRecord(db, record.id);
-        if (existing)
+        if (existing && canWrite(actor, existing.payload as RecordItem))
           return NextResponse.json(
             { record: existing.payload as RecordItem, duplicate: true },
             { status: 200 },
@@ -366,6 +409,7 @@ export async function PATCH(request: Request) {
     if (!actor)
       return NextResponse.json({ error: "Sign in required." }, { status: 401 });
     const command = z.discriminatedUnion("action", [
+      leadFeedbackSchema,
       z.object({ action: z.literal("edit"), id: z.string().max(100), expectedUpdatedAt: z.string(), values: input }),
       z.object({ action: z.literal("delete"), id: z.string().max(100), expectedUpdatedAt: z.string() }),
       // Quick Complete: fill in missing details only. Same checks as an edit
@@ -424,6 +468,8 @@ export async function PATCH(request: Request) {
     const row = await findRecord(db, id);
     if (!row) throw new Error("Record not found.");
     const record = row.payload as RecordItem;
+    if (record.kind === "hr" && (c.action === "delete" || (c.action === "edit" && ((c.values.company !== undefined && c.values.company !== record.company) || (c.values.branch !== undefined && c.values.branch !== record.branch)))) && await employeeHasHrHistory(db, record.id))
+      throw new Error("This employee has retained HR history. Keep the employee record and its company; set the profile inactive instead of deleting it.");
     // Quick Complete never touches a quotation, order, shipment or invoice.
     if (c.action === "complete" && !["leads", "customers", "suppliers"].includes(record.kind))
       throw new Error("Only missing lead, customer or supplier details can be completed here.");
@@ -439,16 +485,18 @@ export async function PATCH(request: Request) {
       const peers = await listRecordsForCompany(db, record.company);
       before.records = peers.map((peer) => peer.payload as RecordItem);
     }
-    let assignee: { id: string; name: string } | undefined;
+    let assignee: { id: string; name: string; role: string } | undefined;
     if (c.action === "assign") {
       const target = await findUserById(db, c.assigneeId);
       // One message whether the person is absent, inactive or out of scope.
       if (!target || !mayOwn(toPerson(target), record))
         throw new Error("That person can't be given this record.");
-      assignee = { id: target.id, name: target.name };
+      assignee = { id: target.id, name: target.name, role: target.role };
     }
     const result =
-      c.action === "assign"
+      c.action === "lead-feedback"
+        ? applyLeadFeedback(before, actor, c)
+        : c.action === "assign"
         ? assign(before, actor, id, assignee!)
         : c.action === "edit" || c.action === "delete" || c.action === "complete"
         ? mutateRecord(before, actor, id, c.expectedUpdatedAt, c.action === "delete" ? undefined : (c.values as Partial<RecordItem>))
@@ -495,13 +543,13 @@ export async function PATCH(request: Request) {
       });
       await runAutomation(db, outbox.ids);
     }
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, record: result.records.find(r => r.id === id) });
   } catch (error) {
     return NextResponse.json(
       {
         // Business-rule messages are shown; driver errors are not surfaced.
         error:
-          error instanceof Error && !/D1_|SQLITE|no such table/i.test(error.message)
+          error instanceof z.ZodError ? "Check your update, select an available outcome and choose a valid follow-up date." : error instanceof Error && !/D1_|SQLITE|no such table/i.test(error.message)
             ? error.message
             : "Unable to update record. Contact IT if this continues.",
       },

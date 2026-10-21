@@ -155,6 +155,7 @@ export function canProspect(a: Actor) {
   return (
     [
       "MD",
+      "IT Administrator",
       "Group Manager",
       "Branch Manager",
       "Sales Manager",
@@ -168,7 +169,7 @@ export function canProspect(a: Actor) {
 }
 export function canBuyCosts(a: Actor, lead: RecordItem) {
   return (
-    ["MD", "Group Manager", "Branch Manager"].includes(a.role) &&
+    ["MD", "MD Assistant", "IT Administrator", "Group Manager", "Branch Manager"].includes(a.role) &&
     canRead(a, lead) &&
     allowedModules(a).includes("suppliers")
   );

@@ -12,9 +12,9 @@ test("simple entry never hides required fields or drops optional fields", () => 
     assert.ok(profile.fields.filter((f) => f.required).every((f) => basic.includes(f)));
   }
 });
-test("leads show just the requirement and next follow-up before optional detail", () => {
+test("lead capture shows type, source, requirement and follow-up before qualification details", () => {
   const result = entryFields("leads", recordProfiles.leads.fields, false);
-  assert.deepEqual(result.basic.map((f) => f.name), ["product", "due"]);
+  assert.deepEqual(result.basic.map((f) => f.name), ["attributes.leadType", "product", "due", "source"]);
 });
 test("editing retains every field and cashbook retains required accounting inputs", () => {
   for (const [kind, profile] of Object.entries(recordProfiles)) {

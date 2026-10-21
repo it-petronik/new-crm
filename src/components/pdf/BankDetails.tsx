@@ -1,6 +1,6 @@
 import type { DocumentData } from "@/types/document";
 
-export function BankDetails({ doc }: { doc: DocumentData }) {
+export function BankDetails({ doc, referenceFieldsOnly = false }: { doc: DocumentData; referenceFieldsOnly?: boolean }) {
   const bankAccount = doc.bankAccount;
   if (!bankAccount) return null;
 
@@ -10,7 +10,7 @@ export function BankDetails({ doc }: { doc: DocumentData }) {
         className="mb-4 text-base font-bold uppercase"
         style={{ color: "var(--pdf-heading)" }}
       >
-        Bank Account Details
+        {referenceFieldsOnly ? "Bank Details" : "Bank Account Details"}
       </h2>
 
       <div className="grid grid-cols-2 gap-x-12 gap-y-4">
@@ -18,14 +18,15 @@ export function BankDetails({ doc }: { doc: DocumentData }) {
           <p className="text-slate-500">Bank Name</p>
           <p className="font-semibold">
             {bankAccount.bankName}
-            {bankAccount.branch ? ` – ${bankAccount.branch}` : ""}
+            {!referenceFieldsOnly && bankAccount.branch ? ` – ${bankAccount.branch}` : ""}
           </p>
         </div>
 
-        <div>
+        {!referenceFieldsOnly && <div>
           <p className="text-slate-500">Account Currency</p>
           <p className="font-semibold">{bankAccount.currency}</p>
-        </div>
+        </div>}
+        {referenceFieldsOnly && bankAccount.branch && <div><p className="text-slate-500">Branch</p><p className="font-semibold">{bankAccount.branch}</p></div>}
 
         <div>
           <p className="text-slate-500">Account Name</p>
@@ -34,7 +35,7 @@ export function BankDetails({ doc }: { doc: DocumentData }) {
 
         <div>
           <p className="text-slate-500">Account Number</p>
-          <p className="font-semibold">{bankAccount.accountNumber}</p>
+          <p className="font-semibold">{bankAccount.accountNumber}{referenceFieldsOnly ? ` (${bankAccount.currency})` : ""}</p>
         </div>
 
         <div>

@@ -1,0 +1,336 @@
+/* Shared interactive tables only. Document/print layouts keep their own rules. */
+@media screen {
+  .app-shell[data-design="studio"] table[data-crm-table] {
+    width: 100%;
+    border-collapse: collapse;
+    border-spacing: 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--e-text);
+    background: var(--e-surface);
+  }
+  .app-shell[data-design="studio"] table[data-crm-table] :is(td, th) {
+    border: 0;
+    border-bottom: 1px solid var(--e-border);
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: middle;
+    box-sizing: border-box;
+  }
+  .app-shell[data-design="studio"] table[data-crm-table] thead th {
+    background: var(--e-surface-sunken);
+    color: var(--e-text-secondary);
+    font-size: 11px;
+    font-weight: 550;
+    line-height: 1.5;
+    white-space: nowrap;
+    height: 39px;
+  }
+  .app-shell[data-design="studio"] table[data-crm-table] thead th[aria-sort] {
+    padding: 0;
+  }
+  .app-shell[data-design="studio"] table[data-crm-table] .column-sort {
+    padding: 10px 12px;
+    min-height: 39px;
+    font-size: 11px;
+    font-weight: 550;
+  }
+  .app-shell[data-design="studio"]
+    table[data-crm-table]
+    tbody
+    tr:last-child
+    > :is(td, th) {
+    border-bottom: 0;
+  }
+  .app-shell[data-design="studio"]
+    table[data-crm-table]
+    tbody
+    tr:hover
+    > :is(td, th) {
+    background: color-mix(in srgb, var(--e-accent) 3%, var(--e-surface));
+  }
+  .app-shell[data-design="studio"]
+    table[data-crm-table]
+    tr[data-selected="true"]
+    > :is(td, th) {
+    background: color-mix(in srgb, var(--e-accent) 8%, var(--e-surface));
+  }
+  .app-shell[data-design="studio"] table[data-crm-table] .table-select-cell {
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+    text-align: center;
+    padding-inline: 12px !important;
+  }
+  .app-shell[data-design="studio"]
+    table[data-crm-table]
+    :is(.amount, .is-num, .e-numeric, .e-col-value) {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .app-shell[data-design="studio"] table[data-crm-table] .e-col-actions {
+    text-align: right;
+  }
+  .app-shell[data-design="studio"] table[data-crm-table] small {
+    font-size: 10px;
+    line-height: 1.5;
+    color: var(--e-text-secondary);
+  }
+  .app-shell[data-design="studio"] table[data-crm-table] .record-link {
+    font-size: 12px;
+    font-weight: 550;
+  }
+  .heading-actions .pipeline-toggle {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    padding: 6px;
+    flex: none;
+  }
+  .heading-actions .pipeline-toggle[aria-expanded="true"] {
+    color: var(--e-accent);
+    background: var(--e-accent-soft);
+    border-color: color-mix(in srgb, var(--e-accent) 40%, var(--e-border));
+  }
+  .chat-answer {
+    font-size: 13px;
+    line-height: 1.85;
+    color: var(--e-text);
+    overflow-wrap: anywhere;
+  }
+  .chat-answer > p {
+    margin: 0 0 14px;
+    white-space: pre-wrap;
+  }
+  .chat-answer strong {
+    font-weight: 600;
+  }
+  .chat-answer code {
+    font-size: 12px;
+    padding: 2px 4px;
+    border-radius: 3px;
+    background: var(--e-surface-sunken);
+  }
+  .chat-answer-status {
+    display: block;
+    font-size: 10px;
+    color: var(--e-text-secondary);
+    margin: 0 0 8px;
+  }
+  .chat-answer-section {
+    margin: 14px 0;
+  }
+  .chat-answer h3 {
+    font-size: 13px;
+    margin: 16px 0 8px;
+    font-weight: 600;
+  }
+  .chat-answer ul {
+    padding-left: 20px;
+    margin: 0;
+  }
+  .chat-answer li {
+    margin: 5px 0;
+  }
+  .chat-answer-draft {
+    border-left: 2px solid var(--e-border);
+    padding-left: 14px;
+    margin: 14px 0;
+  }
+  .chat-answer-draft p {
+    white-space: pre-wrap;
+    margin: 8px 0;
+  }
+  .chat-answer-draft small,
+  .chat-answer-missing {
+    font-size: 11px;
+    color: var(--e-text-secondary);
+  }
+  .chat-answer-sources {
+    font-size: 11px;
+    color: var(--e-text-secondary);
+    margin-top: 16px;
+  }
+  .chat-answer-sources summary {
+    cursor: pointer;
+    min-height: 24px;
+    width: fit-content;
+  }
+  .chat-answer-sources > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin: 6px 0;
+  }
+  .chat-answer-sources > p {
+    margin: 8px 0;
+    font-size: 11px;
+  }
+  .chat-answer-sources dl {
+    margin: 8px 0;
+  }
+  .chat-answer-sources dl > div {
+    display: flex;
+    gap: 16px;
+    justify-content: space-between;
+    max-width: 450px;
+  }
+  .chat-answer-sources dd {
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .chat-answer-tools {
+    display: flex;
+    gap: 3px;
+    margin-top: 10px;
+  }
+  .chat-answer-tools > button {
+    padding: 5px !important;
+    min-height: 26px !important;
+    width: 27px !important;
+    color: var(--e-text-secondary);
+  }
+  .chat-answer-suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 12px 0;
+  }
+  .ai-companion-trigger {
+    position: fixed;
+    right: 24px;
+    bottom: 22px;
+    z-index: 35;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 15px !important;
+    min-height: 38px !important;
+    border: 1px solid color-mix(in srgb, var(--e-accent) 40%, var(--e-border));
+    border-radius: 22px !important;
+    background: var(--e-surface) !important;
+    color: var(--e-accent) !important;
+    box-shadow: 0 4px 20px color-mix(in srgb, var(--e-text) 10%, transparent);
+    font-size: 12px !important;
+  }
+  .ai-page-assistant.ui-dialog {
+    z-index: 80 !important;
+    --ai-panel-gutter: 20px;
+    width: min(560px, calc(100vw - 32px)) !important;
+    max-width: 560px !important;
+    height: calc(100dvh - 32px) !important;
+    max-height: calc(100dvh - 32px) !important;
+    right: 16px !important;
+    top: 16px !important;
+    bottom: 16px !important;
+    border: 1px solid var(--e-border) !important;
+    border-radius: 10px !important;
+    scale: 1;
+    translate: 0;
+  }
+  .modal.ui-dialog.ui-drawer.ai-page-assistant[data-state="open"] {
+    animation: ai-panel-enter 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .modal.ui-dialog.ui-drawer.ai-page-assistant[data-state="closed"] {
+    animation: ai-panel-exit 180ms cubic-bezier(0.4, 0, 1, 1) both;
+    pointer-events: none;
+  }
+  .ai-page-assistant.ui-dialog.ui-dialog
+    :is(.studio-dialog-heading, .ui-dialog-footer) {
+    padding-inline: var(--ai-panel-gutter);
+  }
+  .ai-page-assistant .dialog-body {
+    padding: 0 !important;
+    overflow: hidden !important;
+    display: flex;
+    min-height: 0;
+    flex: 1;
+  }
+  .ai-page-assistant .dialog-body > section {
+    width: 100%;
+    min-height: 0;
+  }
+  .ai-assistant-open-full {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 12px;
+  }
+  .dialog-skeleton .dialog-heading h2 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .dialog-skeleton .studio-dialog-mark {
+    background: var(--e-surface-sunken);
+  }
+  .dialog-skeleton .studio-dialog-mark > svg {
+    visibility: hidden;
+  }
+  .calendar-skeleton {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 7px;
+    padding: 14px;
+    width: 280px;
+  }
+  .calendar-skeleton .skeleton {
+    height: 24px;
+    width: 100%;
+    border-radius: 4px;
+  }
+  .dialog-skeleton .dialog-body {
+    display: grid;
+    gap: 22px;
+  }
+  .dialog-skeleton-heading {
+    display: flex;
+    justify-content: space-between;
+    gap: 18px;
+  }
+  .dialog-skeleton-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+  }
+  .dialog-skeleton-fields > div {
+    display: grid;
+    gap: 8px;
+  }
+  .page-action-group {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+@keyframes ai-panel-enter {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes ai-panel-exit {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .modal.ui-dialog.ui-drawer.ai-page-assistant[data-state] {
+    animation: none;
+  }
+}

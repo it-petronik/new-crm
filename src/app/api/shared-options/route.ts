@@ -4,9 +4,7 @@ import { z } from "zod";
 import { checkOrigin, currentActor } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { sharedOptions } from "@/lib/schema";
-import { canManageOption, canUseCatalog, capitalizeOption, optionKey } from "@/lib/shared-options";
-import { cashEntryProfile, recordProfiles } from "@/lib/record-profiles";
-import type { Kind } from "@/lib/domain";
+import { canManageOption, canUseCatalog, capitalizeOption, catalogDefaults, optionKey } from "@/lib/shared-options";
 
 const scope = z.object({ company: z.string().min(1).max(80), catalog: z.string().min(1).max(100) });
 const mutation = scope.extend({ id: z.string().max(100).optional(), version: z.number().int().positive().optional(), label: z.string().trim().min(1).max(60).optional() }).strict();
@@ -37,8 +35,8 @@ async function change(request: Request) {
     const normalized = optionKey(label || "");
     if (request.method !== "DELETE" && (!normalized || /[\u0000-\u001f\u007f]/.test(label!))) return reply({ error: "Enter a valid option, up to 60 characters." }, 400);
     if (request.method !== "DELETE") {
-      const [kind, field] = catalog.split(":");
-      const defaults = (kind === "accounts" ? cashEntryProfile : recordProfiles[kind as Kind]).fields.find(f => f.name === field)?.options || [];
+      const field = catalog.split(":")[1];
+      const defaults = catalogDefaults(catalog);
       if (defaults.some(v => optionKey(v) === normalized)) return reply({ error: "That is already a built-in choice." }, 409);
       if (field === "unit" && label!.length > 20) return reply({ error: "Units must be 20 characters or fewer." }, 400);
     }

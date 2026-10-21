@@ -11,23 +11,26 @@ export function DocumentInfo({
   config: DocumentTypeConfig;
 }) {
   const dateFields = config.dateFields.filter((f) => doc.dates[f.key]);
+  const deliveryTerms = config.referenceFieldsOnly ? [doc.deliveryTerms, doc.deliveryTo].filter(Boolean).join("\n") : doc.deliveryTerms;
   const entries = [
+    ...(doc.extraInfo || []),
     ...dateFields.map((f) => ({
       label: f.label,
       value: formatPdfDate(doc.dates[f.key]),
     })),
-    ...(doc.deliveryTerms
-      ? [{ label: "Delivery Terms", value: doc.deliveryTerms }]
+    ...(deliveryTerms
+      ? [{ label: "Delivery Terms", value: deliveryTerms }]
       : []),
-    ...(doc.deliveryTo
+    ...(doc.deliveryTo && !config.referenceFieldsOnly
       ? [{ label: "Delivery To", value: doc.deliveryTo }]
       : []),
+    ...(doc.paymentTerms ? [{ label: "Payment terms", value: doc.paymentTerms }] : []),
   ];
 
   if (entries.length === 0) return null;
 
   return (
-    <div className="mt-4 grid grid-cols-2 gap-x-8 gap-y-2 text-[11px]">
+    <div className="pdf-info-grid mt-4 grid grid-cols-2 gap-x-8 gap-y-2 text-[11px]">
       {entries.map((e) => (
         <div key={e.label}>
           <p className="text-slate-500">{e.label}</p>

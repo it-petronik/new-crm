@@ -1,4 +1,6 @@
 "use client";
+import { Form } from '@/components/ui/controls';
+
 import { useEffect, useState } from "react";
 import { ArrowRight, ShieldCheck } from "lucide-react";
 import { Button, Input, Field } from "@/components/ui/controls";
@@ -51,7 +53,7 @@ export default function ResetPasswordForm({ preview }: { preview: boolean }) {
               <span className="eyebrow">ACCOUNT RECOVERY</span>
               <h2>Choose a new password.</h2>
               <p>At least {MIN_PASSWORD_LENGTH} characters. Use something unique to this workspace.</p>
-              <form
+              <Form
             noValidate
                 onSubmit={async (e) => {
                   e.preventDefault();
@@ -111,11 +113,11 @@ export default function ResetPasswordForm({ preview }: { preview: boolean }) {
                     <span>{error}</span>
                   </div>
                 )}
-                <Button className="primary" disabled={busy}>
+                <Button type="submit" className="primary" disabled={busy}>
                   {busy ? "Updating…" : "Update password"}
                   <ArrowRight size={17} />
                 </Button>
-              </form>
+              </Form>
               <div className="secure-note">
                 <ShieldCheck size={16} /> Updating your password signs you out on
                 every device.

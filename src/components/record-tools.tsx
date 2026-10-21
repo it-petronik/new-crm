@@ -1,14 +1,18 @@
 "use client";
+import { Form } from '@/components/ui/controls';
+
 import { Button, Input, Textarea, Field } from "@/components/ui/controls";
 import { businessStampShort } from "@/lib/gst";
 import { check, required, number } from "@/lib/validation";
 import { useState } from "react";
 import { Plus, X } from "lucide-react";
 import { ProductInput } from "./product-input";
+import { SharedSelect } from "./ui/shared-select";
 import { activityProfile } from "@/lib/activity-profile";
 import {
   money,
   outstanding,
+  isProforma,
   type RecordItem,
   type LineItem,
 } from "@/lib/domain";
@@ -18,21 +22,29 @@ export function LineEditor({
   products = [],
   currency = "USD",
   unit = "MT",
+  label = "Quotation items",
+  catalogScope,
 }: {
   lines: LineItem[];
   onChange: (lines: LineItem[]) => void;
   products?: RecordItem[];
   currency?: string;
   unit?: string;
+  label?: string;
+  catalogScope?: { company: string; live: boolean; kind: "accounts" | "quotations" };
 }) {
   return (
     <section className="line-editor">
-      <h3>Quotation items</h3>
+      <h3>{label}</h3>
       {lines.map((line, i) => (
-        <div className="line-editor-row" key={i}>
+        <div className="line-editor-item" key={i}>
+        <Field className="line-item-name">Item / product category (optional)<Input aria-label={`Item ${i + 1} category`} value={line.itemName || ""} maxLength={160} placeholder="For example, Base Oil Virgin (Group I)" onChange={e => onChange(lines.map((l, n) => n === i ? { ...l, itemName: e.target.value } : l))} /></Field>
+        <div className="line-editor-row">
           <Field>
             Product / Grade
             <ProductInput
+              data-field-control
+              aria-label={`Item ${i + 1} product`}
               label={`Item ${i + 1} product`}
               value={line.description}
               products={products}
@@ -81,7 +93,7 @@ export function LineEditor({
           </Field>
           <Field>
             Packaging / Unit
-            <Input
+            {catalogScope ? <SharedSelect data-field-control aria-label={`Item ${i + 1} packaging`} label="Packaging" company={catalogScope.company} live={catalogScope.live} catalog={`${catalogScope.kind}:attributes.packaging`} options={["Bulk", "Drum", "Flexi Bags", "Pail", "IBC"]} value={line.packaging || ""} onOptions={() => {}} onChange={e => onChange(lines.map((l, n) => n === i ? { ...l, packaging: e.target.value } : l))} /> : <Input
               aria-label={`Item ${i + 1} packaging`}
               placeholder={unit}
               maxLength={100}
@@ -93,7 +105,7 @@ export function LineEditor({
                   ),
                 )
               }
-            />
+            />}
           </Field>
           <Field>
             Unit price
@@ -130,7 +142,7 @@ export function LineEditor({
               <X size={14} />
             </Button>
           )}
-        </div>
+        </div></div>
       ))}
       <Button
         type="button"
@@ -169,6 +181,7 @@ export function RecordActivity({
   const [adding, setAdding] = useState(false);
   const profile = activityProfile(record.kind);
   if (record.kind === "accounts" && record.attributes?.entryType) return null;
+  if (isProforma(record) && !record.notes?.length) return null;
   if (!profile && record.kind !== "accounts" && !record.notes?.length)
     return null;
   return (
@@ -176,7 +189,7 @@ export function RecordActivity({
       <div className="activity-heading">
         <h3>
           {profile?.title ||
-            (record.kind === "accounts"
+            (record.kind === "accounts" && !isProforma(record)
               ? "Receipts & balance"
               : "Previous notes")}
         </h3>
@@ -210,7 +223,7 @@ export function RecordActivity({
       )}
       {!record.notes?.length && profile && !adding && <p className="muted small">No updates recorded yet. Add a call, message or progress update when something changes.</p>}
       {writable && profile && adding && (
-        <form
+        <Form
           noValidate
           onInput={(e) => {
             const name = (e.target as HTMLElement & { name?: string }).name;
@@ -257,13 +270,13 @@ export function RecordActivity({
                 <Input name="followup" type="date" />
               </Field>
             )}
-            <Button className="secondary" disabled={busy}>
+            <Button type="submit" className="secondary" disabled={busy}>
               {profile.action}
             </Button>
           </div>
-        </form>
+        </Form>
       )}
-      {record.kind === "accounts" && (
+      {record.kind === "accounts" && !isProforma(record) && (
         <>
           <div className="balance">
             <span>Outstanding balance</span>
@@ -281,7 +294,7 @@ export function RecordActivity({
           ))}
           {writable &&
             !["Draft", "Paid", "Cancelled"].includes(record.status) && (
-              <form
+              <Form
                 noValidate
                 onInput={(e) => {
                   const name = (e.target as HTMLElement & { name?: string }).name;
@@ -342,10 +355,10 @@ export function RecordActivity({
                 <p className="small muted">
                   Records an existing receipt; does not transfer money.
                 </p>
-                <Button className="primary" disabled={busy}>
+                <Button type="submit" className="primary" disabled={busy}>
                   Record payment
                 </Button>
-              </form>
+              </Form>
             )}
         </>
       )}

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getDb, isPreview } from "@/lib/db";
 import { currentActor } from "@/lib/auth";
 import { findRecord } from "@/lib/data";
-import type { RecordItem } from "@/lib/domain";
+import { canWrite, type RecordItem } from "@/lib/domain";
 import { canAssign } from "@/lib/workflow";
 import { mayOwn } from "@/lib/notification-rules";
 import { activePeople } from "@/lib/notification-store";
@@ -19,10 +19,12 @@ export async function GET(request: Request) {
   if (isPreview()) return NextResponse.json({ people: [] });
   const db = await getDb();
   if (!db) return NextResponse.json({ error: "Database unavailable." }, { status: 503 });
-  const id = new URL(request.url).searchParams.get("id") ?? "";
+  const query = new URL(request.url).searchParams;
+  const id = query.get("id") ?? "";
   const row = id && id.length <= 100 ? await findRecord(db, id) : undefined;
-  const record = row?.payload as RecordItem | undefined;
-  if (!record || record.deletedAt || !canAssign(actor, record))
+  const draft = !id ? { id: "draft", kind: "leads", company: query.get("company") || "", branch: actor.branches[0] || "Main", ownerId: actor.id } as RecordItem : undefined;
+  const record = row?.payload as RecordItem | undefined || draft;
+  if (!record || record.deletedAt || !(draft ? canWrite(actor, draft) : canAssign(actor, record)))
     return NextResponse.json({ error: "Access denied." }, { status: 403 });
   const people = (await activePeople(db))
     .filter((p) => mayOwn(p, record))

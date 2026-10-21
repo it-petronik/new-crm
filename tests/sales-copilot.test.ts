@@ -237,7 +237,7 @@ test("manager questions route to the new tools only when the person may use them
   assert.deepEqual(keywordRoute("Which leads are going to Mombasa?", md).terms, ["Mombasa"]);
   assert.equal(keywordRoute("Which customers asked for asphalt?", md).tool, "search");
   assert.equal(keywordRoute("Find leads for SN500", hr).tool, "none");
-  assert.deepEqual(toolsFor(hr), []);
+  assert.deepEqual(toolsFor(hr), ["status_breakdown"]);
   assert.deepEqual(searchTerms("Show me every lead"), ["every"]);
 });
 

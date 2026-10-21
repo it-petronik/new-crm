@@ -3,7 +3,7 @@ import { AI_LIMITS, AI_MODELS, type AiBinding } from "./config";
 
 /**
  * The model call itself — no database, no request, no Next.js — so the very
- * same code runs in the app and in the Workers AI capability check.
+ * same code runs in the app and in the isolated capability checks.
  *
  * Primary, then the fallback ONCE; never a loop. An account-wide quota or
  * capacity error stops immediately (the fallback runs on the same account).
@@ -34,14 +34,14 @@ Rules — always:
 
 export const CAPACITY_MESSAGE = "AI capacity has been reached for today. Your normal CRM workflows are still available.";
 
-/** Workers AI errors that mean the ACCOUNT is out of quota/capacity (not one model). */
+/** Legacy quota shapes remain recognised; Groq uses typed, redacted errors. */
 const QUOTA = /\b(?:4006|3036)\b|neurons|daily free allocation|account (?:is )?limited|quota/i;
 export const isQuotaError = (e: unknown) => QUOTA.test(e instanceof Error ? `${e.name} ${e.message}` : String(e));
 
 export type AttemptStatus = "ok" | "invalid" | "error" | "timeout" | "limited" | "cached";
 export type Attempt = { model: string; status: AttemptStatus; durationMs: number; outputChars: number; promptTokens?: number; completionTokens?: number };
 
-/** The model's JSON, whether Workers AI returned an object or a string. */
+/** Normalised JSON from the provider adapter or a fictional test model. */
 export function parseModelJson(raw: unknown): unknown {
   const response = (raw as { response?: unknown })?.response ?? raw;
   if (response && typeof response === "object") return response;
@@ -63,8 +63,9 @@ export function parseModelJson(raw: unknown): unknown {
 
 async function runOnce(ai: AiBinding, model: string, system: string, prompt: string, jsonSchema: unknown, timeoutMs: number) {
   let timer: ReturnType<typeof setTimeout> | undefined;
+  const controller = new AbortController();
   const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new AiError(504, "Enercore AI took too long to answer. Try again.")), timeoutMs);
+    timer = setTimeout(() => { controller.abort(); reject(new AiError(504, "Enercore AI took too long to answer. Try again.")); }, timeoutMs);
   });
   try {
     return await Promise.race([
@@ -76,7 +77,7 @@ async function runOnce(ai: AiBinding, model: string, system: string, prompt: str
         response_format: { type: "json_schema", json_schema: jsonSchema },
         max_tokens: AI_LIMITS.maxOutputTokens,
         temperature: AI_LIMITS.temperature,
-      }),
+      }, { signal: controller.signal }),
       timeout,
     ]);
   } finally {
@@ -99,22 +100,26 @@ export async function structuredCall<T>(options: {
   models?: readonly string[];
   timeoutMs?: number;
   onAttempt?: (a: Attempt) => Promise<void> | void;
+  beforeAttempt?: () => Promise<((a: Attempt) => Promise<void>) | void>;
 }): Promise<{ data: T; model: string }> {
   const models = options.models ?? [AI_MODELS.primary, AI_MODELS.fallback];
   let lastError: AiError | null = null;
   for (const model of models) {
+    const settle = await options.beforeAttempt?.();
     const started = Date.now();
-    const report = (status: AttemptStatus, raw?: unknown) => {
+    const report = async (status: AttemptStatus, raw?: unknown) => {
       const usage = (raw as { usage?: { prompt_tokens?: number; completion_tokens?: number } } | undefined)?.usage;
       const response = (raw as { response?: unknown } | undefined)?.response;
-      return options.onAttempt?.({
+      const attempt: Attempt = {
         model,
         status,
         durationMs: Date.now() - started,
         outputChars: response === undefined ? 0 : typeof response === "string" ? response.length : JSON.stringify(response).length,
         promptTokens: usage?.prompt_tokens,
         completionTokens: usage?.completion_tokens,
-      });
+      };
+      if (settle) { try { await settle(attempt); } catch { /* Keep the conservative reservation if reconciliation fails. */ } }
+      await options.onAttempt?.(attempt);
     };
     let raw: unknown;
     try {
@@ -126,6 +131,7 @@ export async function structuredCall<T>(options: {
         throw new AiError(503, CAPACITY_MESSAGE);
       }
       await report(e instanceof AiError && e.status === 504 ? "timeout" : "error");
+      if (e instanceof AiError && [400, 401, 403, 429, 503].includes(e.status)) throw e;
       // Operational trace only: the model and the provider's error text — never prompt or answer.
       console.error(JSON.stringify({ event: "ai_model_failed", model, detail: (e instanceof Error ? e.message : String(e)).slice(0, 160) }));
       lastError = e instanceof AiError ? e : new AiError(502, "Enercore AI couldn't answer right now. Try again.");

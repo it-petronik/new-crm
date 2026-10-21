@@ -1,4 +1,6 @@
 "use client";
+import { Form } from '@/components/ui/controls';
+
 import {
   Button,
   Input,
@@ -50,7 +52,7 @@ export default function LoginForm({ preview, next = "/", resume = false }: { pre
               Signing you back in…
             </p>
           ) : (
-          <form
+          <Form
             noValidate
             onSubmit={async (e) => {
               e.preventDefault();
@@ -116,7 +118,7 @@ export default function LoginForm({ preview, next = "/", resume = false }: { pre
             </Field>
             {!preview && (
               <label className="login-remember">
-                <input type="checkbox" name="remember" defaultChecked />
+                <Input type="checkbox" name="remember" defaultChecked />
                 <span>
                   Keep me signed in on this device
                   <small>Untick on a shared computer.</small>
@@ -129,11 +131,11 @@ export default function LoginForm({ preview, next = "/", resume = false }: { pre
                 <span>{error}</span>
               </div>
             )}
-            <Button className="primary" disabled={busy}>
+            <Button type="submit" className="primary" disabled={busy}>
               {busy ? "Signing in…" : "Sign in to workspace"}
               <ArrowRight size={17} />
             </Button>
-          </form>
+          </Form>
           )}
           <div className="secure-note">
             <ShieldCheck size={16} /> Individual access. Protected company data.

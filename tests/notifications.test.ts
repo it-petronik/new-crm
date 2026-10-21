@@ -4,6 +4,7 @@ import type { RecordItem } from "../src/lib/domain";
 import { authorised, recordChangeDrafts, reminderDrafts, mayOwn, type Person } from "../src/lib/notification-rules";
 import { targetFor, titleWithCount } from "../src/lib/notification-types";
 import { assign, canAssign } from "../src/lib/workflow";
+import { applyLeadFeedback, initializeLead } from "../src/lib/lead-desk";
 
 const person = (id: string, role: Person["role"], extra: Partial<Person> = {}): Person => ({
   id,
@@ -24,8 +25,52 @@ const lead: RecordItem = {
   id: "LEAD-A", kind: "leads", company: "Petronik", branch: "Main", title: "ABC Trading",
   contact: "", product: "Base Oil SN500", quantity: 1, unit: "MT", amount: 1000, currency: "USD",
   status: "New", ownerId: "edwin", owner: "edwin", due: "2026-09-25", detail: "", source: "",
-  createdAt: "2026-09-01T00:00:00.000Z", updatedAt: "2026-09-01T00:00:00.000Z",
+  createdAt: "2026-09-01T00:00:00.000Z", updatedAt: "2026-09-01T00:00:00.000Z", attributes: { leadCapturedById: "manager" },
 };
+
+test("sales feedback closes the loop for the creator without including private notes", () => {
+  const marketing = person("marketing", "Marketing Manager");
+  const everyone = [...people, marketing];
+  const before = initializeLead(lead, marketing);
+  const after = applyLeadFeedback({ records: [before], audit: [] }, edwin, {
+    action: "lead-feedback", id: before.id, expectedUpdatedAt: before.updatedAt,
+    outcome: "Interested", note: "PRIVATE-NOTE-1000000", due: "2026-10-22",
+  }, "2026-10-21T08:00:00.000Z").records[0];
+  const drafts = recordChangeDrafts({ before, after, actor: edwin, version: 2, people: everyone });
+  const kept = authorised(drafts, everyone, new Map([[after.id, after]]));
+  const feedback = kept.filter(n => n.type === "lead.feedback");
+  assert.equal(feedback.length, 1);
+  assert.equal(feedback[0].recipientId, marketing.id);
+  assert.equal(feedback[0].title, "Sales updated your lead");
+  assert.match(feedback[0].body, /Interested/);
+  assert.ok(!feedback[0].body.includes("PRIVATE-NOTE"));
+  assert.equal(feedback[0].dedupeKey, `lead-feedback:${lead.id}:${after.updatedAt}:${marketing.id}`);
+  assert.equal(authorised(drafts, everyone.map(p => p.id === marketing.id ? { ...p, active: false } : p), new Map([[after.id, after]])).filter(n => n.type === "lead.feedback").length, 0);
+  assert.equal(authorised(drafts, everyone.map(p => p.id === marketing.id ? { ...p, companies: ["Afrilube"] } : p), new Map([[after.id, after]])).filter(n => n.type === "lead.feedback").length, 0);
+  assert.equal(authorised(drafts, everyone.map(p => p.id === marketing.id ? { ...p, moduleAccess: { leads: "none" as const } } : p), new Map([[after.id, after]])).filter(n => n.type === "lead.feedback").length, 0);
+});
+
+test("acknowledgements, ordinary edits, reassignments and own feedback do not replay creator alerts", () => {
+  const marketing = person("marketing", "Marketing Manager");
+  const before = initializeLead(lead, marketing);
+  const everyone = [...people, marketing];
+  const update = (outcome: "Acknowledged" | "No Answer" | "Not Relevant", record = before) => applyLeadFeedback({ records: [record], audit: [] }, edwin, {
+    action: "lead-feedback", id: record.id, expectedUpdatedAt: record.updatedAt,
+    outcome, note: outcome === "Not Relevant" ? "Wrong grade" : "", due: "2026-10-22",
+  }, "2026-10-21T08:00:00.000Z").records[0];
+  const alerts = (a: RecordItem, b: RecordItem) => authorised(recordChangeDrafts({ before: a, after: b, actor: edwin, version: 2, people: everyone }), everyone, new Map([[b.id, b]])).filter(n => n.type === "lead.feedback");
+  assert.equal(alerts(before, update("Acknowledged")).length, 0);
+  const saved = update("No Answer");
+  assert.equal(alerts(before, saved).length, 1);
+  assert.equal(alerts(saved, { ...saved, detail: "Ordinary edit" }).length, 0);
+  assert.equal(alerts(saved, { ...saved, ownerId: eric.id }).length, 0);
+  assert.equal(alerts(before, { ...saved, ownerId: eric.id }).length, 0);
+  assert.equal(alerts(before, { ...saved, deletedAt: saved.updatedAt }).length, 0);
+  assert.equal(alerts(before, { ...saved, attributes: { ...saved.attributes, leadCapturedById: eric.id } }).length, 0);
+  const own = initializeLead(before, edwin);
+  assert.equal(alerts(own, update("No Answer", own)).length, 0);
+  assert.equal(alerts(before, update("Not Relevant")).length, 1);
+});
 
 test("assigning a lead notifies the new owner; a previous owner who lost sight of it is not told", () => {
   const workspace = assign({ records: [lead], audit: [] }, manager, lead.id, { id: "eric", name: "eric" });
@@ -108,7 +153,7 @@ test("a previous owner who can still see the record is told it moved; self-assig
   const md = person("md", "MD");
   const gm = person("gm", "Group Manager");
   const everyone = [md, gm, ...people];
-  const mine = { ...lead, ownerId: "gm", owner: "gm" };
+  const mine = { ...lead, ownerId: "gm", owner: "gm", attributes: { leadCapturedById: "gm" } };
   const moved = assign({ records: [mine], audit: [] }, md, mine.id, { id: "eric", name: "eric" }).records[0];
   assert.deepEqual(rules(mine, moved, md, everyone).sort(), [
     ["eric", "record.assigned", "New lead assigned to you"],

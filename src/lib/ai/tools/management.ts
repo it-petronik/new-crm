@@ -23,7 +23,7 @@ export type ManagementTool = Exclude<Route["tool"], "none">;
 export const TOOL_CATALOGUE: Record<ManagementTool, { needs: Kind[]; description: string }> = {
   pipeline_summary: { needs: ["leads"], description: "Open sales pipeline: value and count by stage, plus recent wins and losses." },
   overdue_followups: { needs: ["leads"], description: "Leads and quotations whose follow-up date has passed and that are still open." },
-  status_breakdown: { needs: [], description: "How many records of one kind (leads, quotations, orders, logistics, accounts, customers) are in each status." },
+  status_breakdown: { needs: [], description: "Counts by status for permitted leads, quotations, orders, logistics, accounts, customers, suppliers, products, HR, marketing or IT records." },
   top_open_deals: { needs: ["leads"], description: "The largest open leads and quotations by value." },
   receivables: { needs: ["accounts"], description: "Money owed by customers: outstanding and overdue invoices." },
   leads_attention: { needs: ["leads"], description: "Leads and quotations that need attention now (overdue follow-ups, quiet leads, quotations waiting, meetings without an outcome), with owners." },
@@ -38,7 +38,7 @@ const SEARCH_KINDS = ["leads", "quotations", "customers", "orders"] as const;
 const SYNONYMS: string[][] = [["asphalt", "bitumen"], ["base oil", "baseoil"], ["grease", "greases"], ["lubricant", "lube", "lubricants"]];
 
 /** Record kinds a status breakdown can cover. */
-export const BREAKDOWN_KINDS = ["leads", "quotations", "orders", "logistics", "accounts", "customers"] as const;
+export const BREAKDOWN_KINDS = ["leads", "quotations", "orders", "logistics", "accounts", "customers", "suppliers", "products", "hr", "marketing", "it"] as const;
 
 /** Tools this person may use at all (module access). */
 export const toolsFor = (actor: Actor) =>
@@ -109,7 +109,7 @@ export async function managementContext(db: Database, actor: Actor, route: Route
     const items = await pick([kind]);
     ctx.fact("Record type", kind);
     ctx.fact("Total", items.length);
-    for (const status of stages[kind]) {
+    for (const status of new Set([...stages[kind], ...items.map(r => r.status)])) {
       const n = items.filter((r) => r.status === status);
       ctx.fact(status, `${n.length}${n.some((r) => r.amount) ? ` (${formatTotals(sumByCurrency(n))})` : ""}`);
     }
@@ -213,11 +213,12 @@ export function keywordRoute(question: string, actor: Actor): Route {
     const terms = searchTerms(question.replace(new RegExp(actor.companies.join("|") || "$^", "gi"), ""));
     if (terms.length) return choose("search", terms);
   }
-  if (/overdue|late|follow[- ]?up|chase/.test(q)) return /invoice|payment|receivable|owe/.test(q) ? choose("receivables") : choose("overdue_followups");
+  if (/overdue|late|follow[- ]?up|chase/.test(q)) return /invoice|payment|receivable|owe|how much.*customers/.test(q) ? choose("receivables") : choose("overdue_followups");
   if (/receivable|owe|outstanding|unpaid|invoice|collection/.test(q)) return choose("receivables");
   if (/biggest|largest|top|best deal|highest/.test(q)) return choose("top_open_deals");
   if (/pipeline|forecast|won|lost|win rate|funnel/.test(q)) return choose("pipeline_summary");
-  const kind = BREAKDOWN_KINDS.find((k) => q.includes(k.slice(0, -1)));
+  const aliases: Record<(typeof BREAKDOWN_KINDS)[number], RegExp> = { leads: /\bleads?\b/, quotations: /\bquotations?\b/, orders: /\borders?\b/, logistics: /\blogistics\b|\bshipments?\b/, accounts: /\baccounts?\b/, customers: /\bcustomers?\b/, suppliers:/\bsuppliers?\b/,products:/\bproducts?\b/, hr: /\bhr\b|\bemployees?\b/, marketing: /\bmarketing\b|\bcampaigns?\b/, it: /\bit\b|\bsupport\b|\btickets?\b/ };
+  const kind = BREAKDOWN_KINDS.find(k => aliases[k].test(q));
   if (kind && /status|how many|breakdown|count/.test(q)) return allowedModules(actor).includes(kind) ? { tool: "status_breakdown", company, kind, terms: [], because: "keywords" } : none("no access");
   return none("no match");
 }

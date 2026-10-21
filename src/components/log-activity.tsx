@@ -1,10 +1,12 @@
 "use client";
 import { useState } from "react";
-import { Phone, MessageCircle, Mail, Users, FileText, Check } from "lucide-react";
-import { Button, Dialog, DialogActions, Field, Input } from "@/components/ui/controls";
+import { Check } from "lucide-react";
+import { Dialog, DialogActions, Field, Input, Select } from "@/components/ui/controls";
 import FollowUpControl from "./follow-up-control";
 import { followUpPresets } from "@/lib/attention";
-import type { RecordItem } from "@/lib/domain";
+import type { Actor, RecordItem } from "@/lib/domain";
+import { LeadFeedbackPanel } from "./leads/lead-feedback";
+import type { LeadFeedbackAction } from "@/lib/lead-desk";
 
 /**
  * Logging a contact in a few seconds.
@@ -16,25 +18,21 @@ import type { RecordItem } from "@/lib/domain";
  * the existing audited note action.
  */
 
-const KINDS = [
-  { id: "Called", icon: Phone },
-  { id: "WhatsApp", icon: MessageCircle },
-  { id: "Email", icon: Mail },
-  { id: "Meeting", icon: Users },
-  { id: "Note", icon: FileText },
-] as const;
+const KINDS = ["Called", "WhatsApp", "Email", "Meeting", "Note"] as const;
 
 /** Common results, so the usual case needs no typing at all. */
 const OUTCOMES = ["Interested", "No answer", "Asked for quote", "Not now", "Not interested"];
 
 export default function LogActivity({
-  record, onLog, onClose, busy,
+  record, onLog, onClose, busy, actor, onLeadSave,
 }: {
   record: RecordItem;
   /** Writes through the existing dated-note action. */
   onLog: (text: string, due?: string) => Promise<void> | void;
   onClose: () => void;
   busy?: boolean;
+  actor?: Actor;
+  onLeadSave?: (action: LeadFeedbackAction) => Promise<void>;
 }) {
   const [kind, setKind] = useState<string>("Called");
   const [outcome, setOutcome] = useState("");
@@ -60,35 +58,14 @@ export default function LogActivity({
     }
   }
 
+  if (record.kind === "leads" && actor && onLeadSave) return <Dialog title="Update lead" onClose={onClose}><LeadFeedbackPanel record={record} actor={actor} busy={busy} onSave={async action=>{await onLeadSave(action);onClose();}}/></Dialog>;
   return (
     <Dialog onClose={onClose} title="Log activity" className="log-activity-dialog">
       <p className="muted small log-activity-record">{record.title}</p>
 
-      <div className="log-activity-kinds" role="group" aria-label="What happened">
-        {KINDS.map(({ id, icon: Icon }) => (
-          <Button
-            key={id}
-            className={`log-activity-kind${id === kind ? " is-active" : ""}`}
-            aria-pressed={id === kind}
-            onClick={() => setKind(id)}
-          >
-            <Icon size={15} aria-hidden="true" />
-            {id}
-          </Button>
-        ))}
-      </div>
-
-      <div className="log-activity-outcomes" role="group" aria-label="Outcome">
-        {OUTCOMES.map((value) => (
-          <Button
-            key={value}
-            className={`log-activity-chip${value === outcome ? " is-active" : ""}`}
-            aria-pressed={value === outcome}
-            onClick={() => setOutcome(value === outcome ? "" : value)}
-          >
-            {value}
-          </Button>
-        ))}
+      <div className="activity-choice-grid">
+        <Field>Activity type<Select aria-label="Activity type" value={kind} onChange={event => setKind(event.target.value)}>{KINDS.map(value => <option key={value}>{value}</option>)}</Select></Field>
+        <Field>Result (optional)<Select aria-label="Activity result" value={outcome} onChange={event => setOutcome(event.target.value)}><option value="">No result yet</option>{OUTCOMES.map(value => <option key={value}>{value}</option>)}</Select></Field>
       </div>
 
       <Field hint="Optional">

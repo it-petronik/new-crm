@@ -1,5 +1,6 @@
 "use client";
-import { PageHeader } from "./ui/layout";
+import { PageTitle } from "./ui/layout";
+export { PageTitle } from "./ui/layout";
 import { BrandLogo, brands } from "./brand";
 import { useEffect, useState } from "react";
 import {
@@ -23,33 +24,7 @@ import {
   type Actor,
   type RecordItem,
 } from "@/lib/domain";
-export type WorkspaceView =
-  "mail" | "prospecting" | "collaboration" | "ai" | "actions" | "tasks" | "operations" | "notifications" | "profile" | "appearance" | "access" | "shortcuts";
-export const viewLabels: Record<WorkspaceView, string> = {
-  mail: "Email",
-  prospecting: "Prospecting",
-  collaboration: "Collaboration",
-  ai: "Enercore AI",
-  actions: "Action Center",
-  tasks: "Tasks",
-  operations: "Operations",
-  notifications: "Notifications",
-  profile: "My profile",
-  appearance: "Appearance",
-  access: "Access control",
-  shortcuts: "Shortcuts",
-};
-export function PageTitle({
-  title,
-  subtitle,
-  actions,
-}: {
-  title: string;
-  subtitle: string;
-  actions?: React.ReactNode;
-}) {
-  return <PageHeader className="page-heading" title={title} description={subtitle} actions={actions} />;
-}
+export { viewLabels, type WorkspaceView } from "@/lib/workspace-experience";
 export function ProfilePage({
   actor,
   preview,

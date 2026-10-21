@@ -1,5 +1,6 @@
 import { type Kind, type RecordItem, money } from "./domain";
 import { salaryTotal } from "./salary";
+import { leadTypes } from "./lead-desk";
 export type FieldSpec = {
   name: string;
   label: string;
@@ -72,8 +73,10 @@ export const recordProfiles: Record<Kind, Profile> = {
     notes: "Notes",
     unit: "MT",
     fields: [
+      { name: "attributes.leadType", label: "Lead type", options: [...leadTypes, "Unclassified"] },
       contact,
       { ...product, label: "Product needed" },
+      { name: "attributes.grade", label: "Grade / Specification", placeholder: "For example, SN500 or 60/70" },
       quantity,
       units,
       destination,
@@ -89,6 +92,7 @@ export const recordProfiles: Record<Kind, Profile> = {
           "Email",
           "WhatsApp",
           "LinkedIn",
+          "Facebook", "Instagram", "Advertising",
           "Referral",
           "Distributor",
           "Trade event",
@@ -132,6 +136,8 @@ export const recordProfiles: Record<Kind, Profile> = {
       { name: "attributes.senderTaxNumber", label: "Sender tax / TRN number" },
       { name: "attributes.senderPhone", label: "Sender telephone" },
       { name: "attributes.senderWebsite", label: "Sender website" },
+      { name: "attributes.senderEmail", label: "Sender email", type: "email" },
+      { name: "attributes.footerMessage", label: "Footer message", placeholder: "Thank you for your business." },
       {
         name: "attributes.customerAddress",
         label: "Customer address",

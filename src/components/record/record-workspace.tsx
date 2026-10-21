@@ -1,14 +1,34 @@
 "use client";
+import { CrmTable } from "@/components/ui/crm-table";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, ArrowRight, Download, FileText, Phone, Pin, Plus, Trash2, UserPlus, Pencil } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Download,
+  FileText,
+  Phone,
+  Pin,
+  Plus,
+  Trash2,
+  UserPlus,
+  Pencil,
+} from "lucide-react";
 import type { Actor, RecordItem } from "@/lib/domain";
-import { canRead, canWrite, money, stages } from "@/lib/domain";
+import {
+  canRead,
+  canWrite,
+  isProforma,
+  money,
+  recordStages,
+} from "@/lib/domain";
+import { availableStatuses } from "@/lib/workflow";
 import { companyName } from "@/lib/company-name";
 import { isCashEntry } from "@/lib/cashbook";
 import { recordProfiles, detailFields } from "@/lib/record-profiles";
 import { statusTone } from "@/lib/status";
 import { Button, Select, Dialog, DialogActions } from "../ui/controls";
 import { MoreActions, type RowAction } from "../ui/row-actions";
+import { PageActions } from "../ui/page-actions";
 import { Section, useMediaQuery } from "../ui/layout";
 import { StatusBadge } from "../ui/status-badge";
 import { RecordActivity } from "../record-tools";
@@ -16,12 +36,28 @@ import RecordMeetings from "../meetings/record-meetings";
 import RecordTasks from "../tasks/record-tasks";
 import { LINKABLE_KINDS } from "@/lib/tasks/model";
 import { QuotationDocument, QuotationSummary } from "../quotation-document";
+import { DocumentPreview } from "../document-preview";
+import { printSalesDocument } from "@/lib/pdf/print-document";
 import { CustomerCopilot, LeadCopilot } from "../ai/sales-copilot";
 import CommercialWorkspace from "./commercial-workspace";
 import type { Suggestion } from "@/lib/ai/client";
 import { Avatar } from "../avatar";
+import { LeadFeedbackPanel } from "../leads/lead-feedback";
+import type { LeadFeedbackAction } from "@/lib/lead-desk";
 import recordStyles from "../studio/records.module.css";
 import detailStyles from "../studio/detail.module.css";
+import {
+  ListFilters,
+  Pagination,
+  SortHeader,
+  usePagination,
+} from "../pagination";
+import {
+  SelectionActions,
+  SelectionHeader,
+  SelectionCell,
+  useRowSelection,
+} from "../row-selection";
 
 /* ---------------------------------------------------------------------------
    A record is a page, not a dialog.
@@ -35,12 +71,23 @@ import detailStyles from "../studio/detail.module.css";
 
 export type AutoAi = "brief" | "draft" | "customer-brief";
 /** The contact a lead starts from, as the customer's page lists it. */
-export type LeadContact = { id: string; name: string; email?: string; phone?: string };
+export type LeadContact = {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+};
 
 /** Kinds where "I contacted them" is a real event. */
 const LOGGABLE = ["leads", "customers", "suppliers", "quotations", "orders"];
 /** Records a meeting can be about (see meeting-related.ts). */
-const MEETING_KINDS = ["leads", "customers", "suppliers", "quotations", "orders"];
+const MEETING_KINDS = [
+  "leads",
+  "customers",
+  "suppliers",
+  "quotations",
+  "orders",
+];
 const COMMERCIAL = ["leads", "customers", "suppliers", "products"];
 
 const companyColors: Record<string, string> = {
@@ -48,6 +95,7 @@ const companyColors: Record<string, string> = {
   Afrilube: "#d0a351",
   Petronex: "#668ee2",
   Istanegry: "#ac84ce",
+  Enercore: "#178ca6",
 };
 
 export default function RecordWorkspace({
@@ -58,6 +106,7 @@ export default function RecordWorkspace({
   onClose,
   onUpdate,
   onQuote,
+  onProforma,
   onNewLead,
   onAction,
   onEdit,
@@ -79,6 +128,7 @@ export default function RecordWorkspace({
   onClose: () => void;
   onUpdate: (s: string) => void;
   onQuote: () => void;
+  onProforma?: () => void;
   /**
    * A lead started from here, already filled in: from a customer (and one of
    * its contacts) or from a product.
@@ -96,7 +146,8 @@ export default function RecordWorkspace({
   onAction: (
     action:
       | { action: "note"; text: string; due?: string }
-      | { action: "payment"; amountCents: number; reference: string },
+      | { action: "payment"; amountCents: number; reference: string }
+      | LeadFeedbackAction,
   ) => Promise<void>;
   /** Live workspace: commercial relationships, meetings and Enercore AI. */
   live?: boolean;
@@ -106,52 +157,176 @@ export default function RecordWorkspace({
   const heading = useRef<HTMLHeadingElement>(null);
   const narrow = useMediaQuery("(max-width: 640px)");
   const [showDocument, setShowDocument] = useState(false);
+  const [printProblem, setPrintProblem] = useState("");
+  const [printing, setPrinting] = useState(false);
+  async function printDocument() {
+    if (printing) return;
+    setPrinting(true);
+    setPrintProblem("");
+    try {
+      await printSalesDocument();
+    } catch (error) {
+      setPrintProblem(
+        error instanceof Error
+          ? error.message
+          : "Reload the document before printing.",
+      );
+    } finally {
+      setPrinting(false);
+    }
+  }
   // Arriving on a record moves focus to its title, so a screen reader
   // announces where you are and Tab continues from the top of the page.
   useEffect(() => {
     heading.current?.focus({ preventScroll: true });
   }, [r.id]);
 
-  const noun = isCashEntry(r) ? `${r.attributes?.entryType} entry` : recordProfiles[r.kind].noun;
+  const noun = isProforma(r)
+    ? "Customer proforma"
+    : isCashEntry(r)
+      ? `${r.attributes?.entryType} entry`
+      : recordProfiles[r.kind].noun;
   const approvedQuote = r.kind === "quotations" && r.status === "Approved";
-  const printable = r.kind === "quotations" || (r.kind === "accounts" && !isCashEntry(r));
-  const primary = !writable
-    ? null
-    : r.kind === "leads"
-      ? { label: "Create quotation", icon: <ArrowRight size={15} aria-hidden="true" />, run: onQuote }
-      : approvedQuote
-        ? { label: "Accept & create order", run: () => onUpdate("Accepted") }
-        : (r.kind === "customers" || r.kind === "products") && onNewLead
-          ? { label: "New lead", icon: <Plus size={15} aria-hidden="true" />, run: () => onNewLead() }
-          : { label: "Edit record", run: onEdit };
-  const showEdit = writable && (r.kind === "leads" || approvedQuote || ((r.kind === "customers" || r.kind === "products") && !!onNewLead));
+  const printable =
+    r.kind === "quotations" || (r.kind === "accounts" && !isCashEntry(r));
+  const primary =
+    !writable || (isProforma(r) && r.status !== "Draft")
+      ? null
+      : r.kind === "leads" &&
+          canWrite(actor, { ...r, kind: "quotations", ownerId: actor.id })
+        ? {
+            label: "Create quotation",
+            icon: <ArrowRight size={15} aria-hidden="true" />,
+            run: onQuote,
+          }
+        : approvedQuote
+          ? { label: "Accept & create order", run: () => onUpdate("Accepted") }
+          : (r.kind === "customers" || r.kind === "products") && onNewLead
+            ? {
+                label: "New lead",
+                icon: <Plus size={15} aria-hidden="true" />,
+                run: () => onNewLead(),
+              }
+            : { label: "Edit record", run: onEdit };
+  const showEdit =
+    writable &&
+    (r.kind === "leads" ||
+      approvedQuote ||
+      ((r.kind === "customers" || r.kind === "products") && !!onNewLead));
   const loggable = LOGGABLE.includes(r.kind) && writable;
 
   const more: RowAction[] = [
-    ...(narrow && loggable ? [{ id: "log", label: "Log activity", icon: <Phone size={15} aria-hidden="true" />, run: onLog }] : []),
-    ...(narrow && showEdit ? [{ id: "edit", label: "Edit record", icon: <Pencil size={15} aria-hidden="true" />, run: onEdit }] : []),
-    ...(onAssign ? [{ id: "assign", label: "Assign", icon: <UserPlus size={15} aria-hidden="true" />, run: onAssign }] : []),
-    { id: "pin", label: pinned ? "Unpin" : "Pin for quick access", icon: <Pin size={15} aria-hidden="true" />, run: onPin },
-    ...(printable && narrow ? [{ id: "print", label: "Print / Save PDF", icon: <Download size={15} aria-hidden="true" />, run: () => window.print() }] : []),
-    ...(writable ? [{ id: "delete", label: "Delete record", icon: <Trash2 size={15} aria-hidden="true" />, destructive: true, run: onDelete }] : []),
+    ...(narrow && loggable
+      ? [
+          {
+            id: "log",
+            label: "Log activity",
+            icon: <Phone size={15} aria-hidden="true" />,
+            run: onLog,
+          },
+        ]
+      : []),
+    ...(narrow && showEdit
+      ? [
+          {
+            id: "edit",
+            label: "Edit record",
+            icon: <Pencil size={15} aria-hidden="true" />,
+            run: onEdit,
+          },
+        ]
+      : []),
+    ...(onAssign
+      ? [
+          {
+            id: "assign",
+            label: "Assign",
+            icon: <UserPlus size={15} aria-hidden="true" />,
+            run: onAssign,
+          },
+        ]
+      : []),
+    {
+      id: "pin",
+      label: pinned ? "Unpin" : "Pin for quick access",
+      icon: <Pin size={15} aria-hidden="true" />,
+      run: onPin,
+    },
+    ...(printable && narrow
+      ? [
+          {
+            id: "print",
+            label: "Print / Save PDF",
+            icon: <Download size={15} aria-hidden="true" />,
+            run: () => void printDocument(),
+          },
+        ]
+      : []),
+    ...(writable && !isProforma(r)
+      ? [
+          {
+            id: "delete",
+            label: "Delete record",
+            icon: <Trash2 size={15} aria-hidden="true" />,
+            destructive: true,
+            run: onDelete,
+          },
+        ]
+      : []),
   ];
 
   const details = <RecordDetails record={r} />;
   const activity = (
     <>
-      {live && LINKABLE_KINDS.includes(r.kind) && <RecordTasks key={`tasks-${r.id}`} record={r} actor={actor} />}
-      {live && MEETING_KINDS.includes(r.kind) && !isCashEntry(r) && (
-        <RecordMeetings record={{ id: r.id, title: r.title, ownerId: r.ownerId, owner: r.owner }} meId={actor.id} canCreate={canRead(actor, r)} />
+      {r.kind === "leads" && (
+        <LeadFeedbackPanel
+          key={`${r.id}-${r.updatedAt}`}
+          record={r}
+          actor={actor}
+          busy={busy}
+          onSave={onAction}
+        />
       )}
-      <RecordActivity record={r} writable={writable} busy={busy} onAction={onAction} />
+      {live && LINKABLE_KINDS.includes(r.kind) && (
+        <RecordTasks key={`tasks-${r.id}`} record={r} actor={actor} />
+      )}
+      {live && MEETING_KINDS.includes(r.kind) && !isCashEntry(r) && (
+        <RecordMeetings
+          record={{
+            id: r.id,
+            title: r.title,
+            ownerId: r.ownerId,
+            owner: r.owner,
+          }}
+          meId={actor.id}
+          canCreate={canRead(actor, r)}
+        />
+      )}
+      <RecordActivity
+        record={r}
+        writable={writable}
+        busy={busy}
+        onAction={onAction}
+      />
     </>
   );
 
   return (
-    <article className={`record-workspace ${detailStyles.record}`} aria-labelledby={titleId} data-kind={r.kind}>
+    <article
+      className={`record-workspace ${detailStyles.record}`}
+      aria-labelledby={titleId}
+      data-kind={r.kind}
+      data-document={
+        r.kind === "quotations" || isProforma(r) ? "sales" : undefined
+      }
+    >
       <header className={`rw-header ${detailStyles.header}`}>
         <div className="rw-topline">
-          <Button className="ghost compact rw-back" onClick={onClose} aria-label={`Back to ${backLabel}`}>
+          <Button
+            className="ghost compact rw-back"
+            onClick={onClose}
+            aria-label={`Back to ${backLabel}`}
+          >
             <ArrowLeft size={15} aria-hidden="true" />
             <span>{backLabel}</span>
           </Button>
@@ -161,62 +336,125 @@ export default function RecordWorkspace({
           <div className={`rw-identity ${recordStyles.identity}`}>
             <Avatar name={r.title} size={44} />
             <div>
-            <h1 id={titleId} ref={heading} tabIndex={-1}>
-              {r.title}
-            </h1>
-            <div className="rw-meta">
-              {writable ? (
-                <span className={`rw-status tone-${statusTone(r.status)}`}>
-                  <Select aria-label="Update status" value={r.status} disabled={busy} onChange={(e) => onUpdate(e.target.value)}>
-                    {(isCashEntry(r) ? ["Recorded", "Cancelled"] : stages[r.kind]).map((s) => (
-                      <option key={s}>{s}</option>
-                    ))}
-                  </Select>
+              <h1 id={titleId} ref={heading} tabIndex={-1}>
+                {r.title}
+              </h1>
+              <div className="rw-meta">
+                {availableStatuses(actor, r).length > 1 ? (
+                  <span className={`rw-status tone-${statusTone(r.status)}`}>
+                    <Select
+                      aria-label="Update status"
+                      value={r.status}
+                      disabled={busy}
+                      onChange={(e) => onUpdate(e.target.value)}
+                    >
+                      {availableStatuses(actor, r).map((s) => (
+                        <option key={s}>{s}</option>
+                      ))}
+                    </Select>
+                  </span>
+                ) : (
+                  <StatusBadge status={r.status} />
+                )}
+                <span className="company-label">
+                  <i style={{ background: companyColors[r.company] }} />
+                  {companyName(r.company)}
                 </span>
-              ) : (
-                <StatusBadge status={r.status} />
-              )}
-              <span className="company-label">
-                <i style={{ background: companyColors[r.company] }} />
-                {companyName(r.company)}
-              </span>
-              {r.owner && <span className="rw-owner">Owner · {r.owner}</span>}
-              {!!r.amount && r.kind !== "quotations" && <span className="rw-value e-numeric">{money(r.amount, r.currency)}</span>}
-              {pinned && <span className="exec-tag is-accent">Pinned</span>}
-            </div>
+                {r.owner && <span className="rw-owner">Owner · {r.owner}</span>}
+                {!!r.amount && r.kind !== "quotations" && (
+                  <span className="rw-value e-numeric">
+                    {money(r.amount, r.currency)}
+                  </span>
+                )}
+                {pinned && <span className="exec-tag is-accent">Pinned</span>}
+              </div>
             </div>
           </div>
           <div className="rw-actions">
-            {r.kind === "quotations" && <Button className="secondary compact" onClick={() => setShowDocument(true)} aria-haspopup="dialog"><FileText size={15} aria-hidden="true" />View document</Button>}
+            {onProforma && (
+              <Button className="primary compact" onClick={onProforma}>
+                <Plus size={15} aria-hidden="true" />
+                Create proforma
+              </Button>
+            )}
+            {(r.kind === "quotations" || isProforma(r)) && (
+              <Button
+                className="secondary compact"
+                onClick={() => setShowDocument(true)}
+                aria-haspopup="dialog"
+              >
+                <FileText size={15} aria-hidden="true" />
+                View document
+              </Button>
+            )}
             {!narrow && loggable && (
               <Button className="secondary compact" onClick={onLog}>
                 <Phone size={15} aria-hidden="true" /> Log activity
               </Button>
             )}
             {!narrow && printable && (
-              <Button className="secondary compact print-button" onClick={() => window.print()}>
+              <Button
+                className="secondary compact print-button"
+                disabled={printing}
+                onClick={() => void printDocument()}
+              >
                 <Download size={15} aria-hidden="true" /> Print / Save PDF
               </Button>
             )}
             {!narrow && showEdit && (
-              <Button className="secondary compact" disabled={busy} onClick={onEdit}>
+              <Button
+                className="secondary compact"
+                disabled={busy}
+                onClick={onEdit}
+              >
                 Edit record
               </Button>
             )}
             {primary && (
-              <Button className="primary compact rw-primary" disabled={busy} onClick={primary.run}>
+              <Button
+                className="primary compact rw-primary"
+                disabled={busy}
+                onClick={primary.run}
+              >
                 {primary.icon}
                 {primary.label}
               </Button>
             )}
-            <MoreActions label={r.title} actions={more} />
+            {(Number(!!onProforma)+Number(r.kind==="quotations"||isProforma(r))+Number(!narrow&&loggable)+Number(!narrow&&printable)+Number(!narrow&&showEdit)+Number(!!primary)+more.length)>5 ? <MoreActions label={r.title} actions={more}/> : <PageActions label={r.title} actions={more}/>}
           </div>
         </div>
+        {printProblem && (
+          <p className="error" role="alert">
+            {printProblem}
+          </p>
+        )}
       </header>
-      {showDocument && <Dialog title="Quotation document" onClose={() => setShowDocument(false)} className="quotation-preview-dialog">
-        <div className="quotation-dialog-preview"><QuotationDocument record={r} /></div>
-        <DialogActions onCancel={() => setShowDocument(false)} cancel="Close" primary={{ label: "Print / Save PDF", onClick: () => { setShowDocument(false); window.setTimeout(() => window.print(), 200); } }} />
-      </Dialog>}
+      {showDocument && (
+        <Dialog
+          title={
+            isProforma(r) ? "Customer proforma document" : "Quotation document"
+          }
+          description={`${companyName(r.company)} · ${r.attributes?.quoteReference || r.id}`}
+          onClose={() => setShowDocument(false)}
+          className="quotation-preview-dialog"
+        >
+          <DocumentPreview record={r} connected={live} />
+          {printProblem && (
+            <p className="error" role="alert">
+              {printProblem}
+            </p>
+          )}
+          <DialogActions
+            onCancel={() => setShowDocument(false)}
+            cancel="Close"
+            primary={{
+              label: printing ? "Preparing Document…" : "Print / Save PDF",
+              onClick: () => void printDocument(),
+              pending: printing,
+            }}
+          />
+        </Dialog>
+      )}
 
       {live && COMMERCIAL.includes(r.kind) ? (
         <CommercialWorkspace
@@ -233,26 +471,42 @@ export default function RecordWorkspace({
                 key={r.id}
                 recordId={r.id}
                 onLog={loggable ? onLog : undefined}
-                auto={autoAi === "brief" || autoAi === "draft" ? autoAi : undefined}
+                auto={
+                  autoAi === "brief" || autoAi === "draft" ? autoAi : undefined
+                }
                 onApply={onAiApply}
                 onChanged={onAiChanged}
               />
             ) : r.kind === "customers" ? (
-              <CustomerCopilot key={r.id} recordId={r.id} title={r.title} canNote={writable} auto={autoAi === "customer-brief" ? "brief" : undefined} />
+              <CustomerCopilot
+                key={r.id}
+                recordId={r.id}
+                title={r.title}
+                canNote={writable}
+                auto={autoAi === "customer-brief" ? "brief" : undefined}
+              />
             ) : undefined
           }
         />
-      ) : r.kind === "quotations" ? (
-        <QuotationBody record={r} activity={activity} />
+      ) : r.kind === "quotations" || isProforma(r) ? (
+        <QuotationBody record={r} activity={activity} connected={live} />
       ) : (
         <div className="rw-body rw-summary-layout">
-          <section className="rw-main rw-summary-card" aria-label="Record overview">
-            <div className="rw-summary-heading"><h2>Record overview</h2><p>The key information for this {noun.toLowerCase()}.</p></div>
+          <section
+            className="rw-main rw-summary-card"
+            aria-label="Record overview"
+          >
+            <div className="rw-summary-heading">
+              <h2>Details</h2>
+            </div>
             {details}
             <RecordNotes record={r} />
             <RecordLines record={r} />
           </section>
-          <section className="rw-summary-card rw-history-card" aria-label="Updates and activity">
+          <section
+            className="rw-summary-card rw-history-card"
+            aria-label="Updates and activity"
+          >
             {activity}
           </section>
         </div>
@@ -263,10 +517,24 @@ export default function RecordWorkspace({
 
 /** The record's own fields as a quiet definition list. */
 function RecordDetails({ record: r }: { record: RecordItem }) {
-  const fields = detailFields(r);
+  const fields = detailFields(r).map(
+    ([label, value]) =>
+      [
+        isProforma(r)
+          ? label === "Payment due"
+            ? "Valid until"
+            : label === "Invoice amount"
+              ? "Proforma amount"
+              : label
+          : label,
+        value,
+      ] as [string, string],
+  );
   const filled = fields.filter(([, v]) => v.trim() && v !== "—");
   const missing = fields.filter(([, v]) => !v.trim() || v === "—");
-  const extras = [r.email, r.phone, r.destination].filter((v) => v && !filled.some(([, shown]) => shown.includes(v)));
+  const extras = [r.email, r.phone, r.destination].filter(
+    (v) => v && !filled.some(([, shown]) => shown.includes(v)),
+  );
   return (
     <div className="rw-details">
       <dl className="rw-fields">
@@ -286,14 +554,18 @@ function RecordDetails({ record: r }: { record: RecordItem }) {
       {!!missing.length && (
         <details className="missing-record-fields">
           <summary>
-            {missing.length} {missing.length === 1 ? "field" : "fields"} not provided
+            {missing.length} {missing.length === 1 ? "field" : "fields"} not
+            provided
           </summary>
           <p>{missing.map(([label]) => label).join(" · ")}</p>
         </details>
       )}
-      {r.parentId && <p className="rw-footnote">Connected record: {r.parentId}</p>}
+      {r.parentId && (
+        <p className="rw-footnote">Connected record: {r.parentId}</p>
+      )}
       <p className="rw-footnote record-timestamps">
-        Created {new Date(r.createdAt).toLocaleDateString()} · Updated {new Date(r.updatedAt).toLocaleDateString()}
+        Created {new Date(r.createdAt).toLocaleDateString()} · Updated{" "}
+        {new Date(r.updatedAt).toLocaleDateString()}
         <br />
         Reference <span className="record-reference">{r.id}</span>
       </p>
@@ -311,31 +583,86 @@ function RecordNotes({ record: r }: { record: RecordItem }) {
 }
 
 function RecordLines({ record: r }: { record: RecordItem }) {
+  const pagination = usePagination(
+    (r.lines || []).map((l, i) => ({
+      ...l,
+      id: String(i),
+      name: l.description,
+      amount: Math.round(l.quantity * l.unitPriceCents) / 100,
+      currency: r.currency,
+    })),
+    r.id,
+  );
+  const selection = useRowSelection(
+    pagination.matched,
+    JSON.stringify([r.id, pagination.query.search, pagination.query.status]),
+  );
   if (!r.lines?.length) return null;
   return (
     <Section title="Lines">
+      <ListFilters {...pagination} label="line items" sortable={false} />
+      <SelectionActions
+        selected={selection.selected}
+        title="Line items"
+        onClear={selection.clear}
+      />
       <div className="table-scroll">
-        <table>
+        <CrmTable>
           <thead>
             <tr>
-              <th>Product</th>
-              <th>Qty</th>
-              <th>Unit price</th>
-              <th>Total</th>
+              <SelectionHeader
+                selection={selection}
+                rows={pagination.items}
+                label="line items"
+              />
+              {(
+                [
+                  ["name", "Product"],
+                  ["quantity", "Qty"],
+                  ["unitPriceCents", "Unit price"],
+                  ["amount", "Total"],
+                ] as const
+              ).map(([key, label]) => (
+                <SortHeader
+                  key={key}
+                  sortKey={key}
+                  query={pagination.query}
+                  setQuery={pagination.setQuery}
+                >
+                  {label}
+                </SortHeader>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {r.lines.map((l, i) => (
-              <tr key={i}>
+            {pagination.items.map((l, i) => (
+              <tr key={i} data-selected={selection.has(l.id) || undefined}>
+                <SelectionCell
+                  selection={selection}
+                  row={l}
+                  label={l.description}
+                />
                 <td>{l.description}</td>
                 <td>{l.quantity}</td>
                 <td>{money(l.unitPriceCents / 100, r.currency)}</td>
-                <td>{money(Math.round(l.quantity * l.unitPriceCents) / 100, r.currency)}</td>
+                <td>
+                  {money(
+                    Math.round(l.quantity * l.unitPriceCents) / 100,
+                    r.currency,
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
-        </table>
+        </CrmTable>
       </div>
+      <Pagination {...pagination} />
+      {pagination.filtered && (
+        <p className="muted small">
+          View only · The saved line order, document and full total are
+          unchanged.
+        </p>
+      )}
     </Section>
   );
 }
@@ -345,23 +672,48 @@ function RecordLines({ record: r }: { record: RecordItem }) {
  * the document. On a phone the A4 preview is one tap away rather than being
  * the page; print always renders the document unchanged.
  */
-function QuotationBody({ record, activity }: { record: RecordItem; activity: ReactNode }) {
+function QuotationBody({
+  record,
+  activity,
+  connected,
+}: {
+  record: RecordItem;
+  activity: ReactNode;
+  connected: boolean;
+}) {
+  const proforma = isProforma(record);
   return (
     <div className="rw-body">
       <div className="rw-main">
+        {proforma && (
+          <p className="proforma-notice">
+            {record.status === "Draft"
+              ? "Draft for Accounts review. Review the PDF before choosing Issued."
+              : record.status === "Issued"
+                ? `Issued by ${record.attributes?.issuedBy || record.owner}.`
+                : "This proforma has been cancelled."}{" "}
+            No receivable or payment is created. Marking issued does not send an
+            email.
+          </p>
+        )}
         <QuotationSummary record={record} />
         <div className="rw-summary-layout quote-details-grid">
           <section className="rw-summary-card" aria-label="Quotation details">
-            <h2>Quotation details</h2>
+            <h2>{proforma ? "Proforma details" : "Quotation details"}</h2>
             <RecordDetails record={record} />
             <RecordLines record={record} />
             <RecordNotes record={record} />
           </section>
-          <section className="rw-summary-card rw-history-card" aria-label="Quotation activity">{activity}</section>
+          <section
+            className="rw-summary-card rw-history-card"
+            aria-label="Quotation activity"
+          >
+            {activity}
+          </section>
         </div>
         <div className="rw-document quotation-print-only" aria-hidden="true">
           <div className="rw-document-frame">
-            <QuotationDocument record={record} />
+            <QuotationDocument record={record} connected={connected} />
           </div>
         </div>
       </div>

@@ -29,19 +29,27 @@ test("sales representatives cannot access finance or another owner’s leads", (
   assert.equal(canRead(sales, { ...r, kind: "accounts" }), false);
   assert.equal(canRead(sales, { ...r, ownerId: "someone-else" }), false);
 });
-test("MD assistant has read access but no mutation permission", () => {
+test("MD assistant has leadership access within the granted company and modules", () => {
   const r = makePreview().records[0];
   const actor = { ...previewActor, role: "MD Assistant" as const };
   assert.equal(canRead(actor, r), true);
-  assert.equal(canWrite(actor, r), false);
+  assert.equal(canWrite(actor, r), true);
+  assert.equal(canWrite({...actor,moduleAccess:{[r.kind]:"read"}},r),false);
+  assert.equal(canRead({...actor,companies:["Another brand"]},r),false);
 });
-test("IT role does not expose HR or finance records", () => {
+test("IT shares MD record capabilities without changing company boundaries", () => {
   const actor = { ...previewActor, role: "IT Administrator" as const };
   const data = scopedWorkspace(actor, makePreview());
   assert.equal(
     data.records.some((r) => ["hr", "accounts"].includes(r.kind)),
-    false,
+    true,
   );
+  for (const r of makePreview().records) {
+    assert.equal(canRead(actor,r),canRead(previewActor,r));
+    assert.equal(canWrite(actor,r),canWrite(previewActor,r));
+    assert.equal(canApprove(actor,r),canApprove(previewActor,r));
+    assert.equal(canRead({...actor,companies:["Enercore"]},r), r.company === "Enercore" && canRead(actor,r));
+  }
 });
 test("approvers cannot approve their own request", () => {
   const r = makePreview().records.find((r) => r.kind === "quotations")!;

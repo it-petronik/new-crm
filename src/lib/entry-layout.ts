@@ -3,7 +3,7 @@ import type { FieldSpec } from "./record-profiles";
 
 // Presentation only: never relax the API's validation or workflow rules.
 const essentials: Record<Kind, string[]> = {
-  leads: ["product", "due"],
+  leads: ["attributes.leadType", "source", "product", "due"],
   quotations: ["currency", "unit", "due"],
   orders: ["product", "quantity", "unit", "amount", "currency", "due"],
   logistics: ["product", "quantity", "unit", "destination", "due"],

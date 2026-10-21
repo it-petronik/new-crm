@@ -145,7 +145,6 @@ test("customer aggregate SQL filters own records, branches, modules and accounts
     { ...md, companies: ["Afrilube"] },
     { ...md, branches: ["Elsewhere"] },
     { ...md, role: "HR Manager" as const },
-    { ...md, role: "IT Administrator" as const },
     { ...md, moduleAccess: { customers: "none" as const } },
   ])
     await assert.rejects(commercialView(db, actor, "customer"), /not found/);
@@ -352,6 +351,22 @@ test("quick customer and Contact retry; injected failure rolls entire batch back
     /test_failure/,
   );
   assert.equal(count(sqlite, "BusinessRecord"), 1);
+  sqlite.close();
+});
+test("Accounts may quick-create a scoped proforma customer, but not edit customers or bypass read-only access", async () => {
+  const { db, sqlite } = setup();
+  const accountant: Actor = { ...sales, id: "accountant", role: "Accountant" };
+  const input = { company: "Petronik", branch: "Main", title: "Fictional Proforma Buyer", contactName: "Buyer", requestId: "finance-customer-1", forProforma: true };
+  const first = await quickCustomer(db, accountant, input);
+  assert.ok(first.record);
+  assert.equal((await quickCustomer(db, accountant, input)).record?.id, first.record!.id);
+  assert.equal(count(sqlite, "BusinessRecord"), 1);
+  assert.equal(count(sqlite, "Contact"), 1);
+  await assert.rejects(quickCustomer(db, accountant, { ...input, forProforma: false, requestId: "no-purpose" }));
+  for (const override of [{ accounts: "read" }, { customers: "read" }, { customers: "none" }] as const) await assert.rejects(quickCustomer(db, { ...accountant, moduleAccess: override }, { ...input, requestId: crypto.randomUUID() }));
+  await assert.rejects(quickCustomer(db, accountant, { ...input, company: "Afrilube", requestId: "other-company" }));
+  await assert.rejects(quickCustomer(db, accountant, { ...input, branch: "Other", requestId: "other-branch" }));
+  await assert.rejects(changeLinks(db, accountant, { id: first.record!.id, expectedUpdatedAt: first.record!.updatedAt, primaryContactId: null }));
   sqlite.close();
 });
 test("record, audit and downstream writes are atomic; stale updates never append audit", async () => {

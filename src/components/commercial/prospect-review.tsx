@@ -1,4 +1,6 @@
 "use client";
+import { Form } from '@/components/ui/controls';
+
 import { useEffect, useState, useId, useRef } from "react";
 import type { Actor } from "@/lib/domain";
 import { canProspect } from "@/lib/execution/model";
@@ -10,7 +12,7 @@ import {
 } from "@/lib/prospecting/model";
 import type { importReview, enrichmentReview } from "@/lib/prospecting/store";
 import { Button, Dialog, DialogActions, Input, Select } from "../ui/controls";
-import { PageTitle } from "../workspace-pages";
+import { PageTitle } from "../ui/layout";
 import { phase7Call, TextField, Choice, Field } from "./execution-panel";
 import { RecordPicker } from "./relationship-picker";
 import { openReference } from "@/lib/ai/client";
@@ -177,7 +179,7 @@ export function ProspectReview({
           </>
         )}
       </section>
-      <form
+      <Form
         id={formId}
         key={review.stageId}
         onSubmit={async (e) => {
@@ -252,12 +254,12 @@ export function ProspectReview({
         </div>
         {p.kind === "person" && !contactId && (
           <label className="execution-check">
-            <input type="checkbox" checked={createContact} onChange={(e) => setCreateContact(e.target.checked)} />
+            <Input type="checkbox" checked={createContact} onChange={(e) => setCreateContact(e.target.checked)} />
             <span>Add {p.name} as a contact</span>
           </label>
         )}
         <label className="execution-check">
-          <input type="checkbox" checked={createLead} onChange={(e) => setCreateLead(e.target.checked)} />
+          <Input type="checkbox" checked={createLead} onChange={(e) => setCreateLead(e.target.checked)} />
           <span>Also create a lead</span>
         </label>
         {createLead && (
@@ -292,7 +294,7 @@ export function ProspectReview({
                 <p className="prospect-status-title">Different in Apollo</p>
                 {changes.map(([key, value]) => (
                   <label className="execution-check prospect-change" key={key}>
-                    <input
+                    <Input
                       type="checkbox"
                       disabled={busy}
                       checked={fields.includes(key)}
@@ -353,7 +355,7 @@ export function ProspectReview({
           pending={busy}
           onCancel={onClose}
         />
-      </form>
+      </Form>
     </Dialog>
   );
 }

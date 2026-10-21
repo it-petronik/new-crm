@@ -1,4 +1,6 @@
 "use client";
+import { Select } from '@/components/ui/controls';
+
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createLocalAudioTrack, createLocalVideoTrack, type LocalAudioTrack, type LocalVideoTrack } from "livekit-client";
@@ -68,13 +70,13 @@ export function DeviceSelect({
         {state ? (
           <span className="device-select-static">{state}</span>
         ) : (
-          <select value={selected?.id ?? ""} disabled={disabled} onChange={(e) => onChange(e.target.value)} aria-label={label ?? Noun}>
+          <Select value={selected?.id ?? ""} disabled={disabled} onChange={(e) => onChange(e.target.value)} aria-label={label ?? Noun}>
             {options.map((o) => (
               <option key={o.id} value={o.id}>
                 {o.label}
               </option>
             ))}
-          </select>
+          </Select>
         )}
         {!state && <ChevronDown size={15} aria-hidden="true" className="device-select-chevron" />}
       </span>
@@ -329,14 +331,14 @@ export function DeviceChoices({ setup, voice = false }: { setup: DeviceSetup; vo
           <span className="device-select-label">Video quality</span>
           <span className="device-select-control">
             <Video size={16} aria-hidden="true" />
-            <select value={setup.quality} onChange={(e) => setup.setQuality(e.target.value as QualityMode)} aria-label="Video quality">
+            <Select value={setup.quality} onChange={(e) => setup.setQuality(e.target.value as QualityMode)} aria-label="Video quality">
               {(Object.keys(QUALITY_LABELS) as QualityMode[]).map((q) => (
                 <option key={q} value={q}>
                   {QUALITY_LABELS[q].label}
                   {q === "auto" ? " (recommended)" : ""}
                 </option>
               ))}
-            </select>
+            </Select>
             <ChevronDown size={15} aria-hidden="true" className="device-select-chevron" />
           </span>
         </label>

@@ -65,8 +65,8 @@ test("only authorised administrators may issue a reset", () => {
 test("an administrator cannot issue a reset outside their scope", () => {
   // Company the actor does not administer.
   assert.equal(mayIssueReset(itAdmin, target({ companies: ["Petronex"] })), false);
-  // Only an MD may act on another leadership account.
-  assert.equal(mayIssueReset(itAdmin, target({ role: "Group Manager" })), false);
+  // IT has MD-equivalent administrative capability within its scope.
+  assert.equal(mayIssueReset(itAdmin, target({ role: "Group Manager" })), true);
   assert.equal(mayIssueReset(md, target({ role: "Group Manager" })), true);
 });
 
@@ -123,14 +123,12 @@ test("no administrator can act on its own account", () => {
   );
 });
 
-test("a non-MD administrator cannot manufacture an MD", () => {
-  // Creation: role is leadership, actor is not an MD.
-  assert.equal(mayAssign(itAdmin, null, { role: "MD", companies: ["Petronik"], branches: [] }), false);
-  // Promotion of an existing ordinary account is refused for the same reason.
+test("IT may create or promote leadership within its administrative scope", () => {
+  assert.equal(mayAssign(itAdmin, null, { role: "MD", companies: ["Petronik"], branches: [] }), true);
   assert.equal(
     mayAssign(itAdmin, { id: "u-1", role: "Employee", companies: ["Petronik"], branches: [] },
       { role: "MD", companies: ["Petronik"], branches: [] }),
-    false,
+    true,
   );
   // And an MD may do both.
   assert.equal(mayAssign(md, null, { role: "MD", companies: ["Petronik"], branches: [] }), true);

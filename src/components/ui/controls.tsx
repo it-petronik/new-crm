@@ -19,10 +19,12 @@ import { createPortal } from "react-dom";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import * as PopoverPrimitive from "@radix-ui/react-popover";
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
-import { DayPicker } from "react-day-picker";
+import dynamic from "next/dynamic";
 import { fieldHelp } from "@/lib/workspace-help";
 import { capitalizeOption } from "@/lib/shared-options";
 import { TimePicker } from "./time-picker";
+import { MonthPicker } from "./month-picker";
+import { controlFeedback } from "@/lib/form-feedback";
 import {
   CalendarDays,
   Check,
@@ -38,38 +40,182 @@ import {
 
 const cx = (...values: (string | undefined | false)[]) =>
   values.filter(Boolean).join(" ");
+// Calendar code is needed only after a date field is opened, not on every page.
+const DayPicker = dynamic(
+  () => import("react-day-picker").then((m) => m.DayPicker),
+  {
+    loading: () => (
+      <div className="calendar-loading calendar-skeleton" role="status" aria-label="Preparing calendar" aria-busy="true">{Array.from({length:35},(_,i)=><span key={i} className="skeleton" aria-hidden="true"/>)}</div>
+    ),
+  },
+);
 const TooltipContext = createContext(false);
+const FormFeedback = createContext<Record<string, string>>({});
+/** Native browser bubbles are replaced by consistent, accessible inline feedback. */
+export const Form = forwardRef<
+  HTMLFormElement,
+  React.FormHTMLAttributes<HTMLFormElement>
+>(function Form(
+  { children, onSubmit, onInputCapture, onChangeCapture, ...props },
+  ref,
+) {
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [attempted, setAttempted] = useState(false);
+  function inspect(form: HTMLFormElement, focus = false) {
+    const next: Record<string, string> = {};
+    let first: HTMLElement | null = null;
+    for (const control of Array.from(form.elements)) {
+      if (
+        !(
+          control instanceof HTMLInputElement ||
+          control instanceof HTMLSelectElement ||
+          control instanceof HTMLTextAreaElement
+        ) ||
+        control.disabled ||
+        (control instanceof HTMLInputElement &&
+          ["hidden", "submit", "button", "reset"].includes(control.type))
+      )
+        continue;
+      const field = control.closest<HTMLElement>(".ui-field"),
+        visible =
+          field?.querySelector<HTMLElement>(
+            'button[id],input:not([aria-hidden="true"]):not([type="hidden"]),textarea,select:not([aria-hidden="true"])',
+          ) || control;
+      const key = visible.id || control.id || control.name;
+      const label =
+        field?.querySelector(".ui-field-label")?.textContent ||
+        control.getAttribute("aria-label") ||
+        control.labels?.[0]?.textContent ||
+        control.name ||
+        "This field";
+      const message = controlFeedback(label, control.value, control.validity, {
+        min: control.getAttribute("min") || undefined,
+        max: control.getAttribute("max") || undefined,
+        validationMessage: control.validationMessage,
+      });
+      if (message) {
+        next[key] = message;
+        first ||= visible;
+      }
+    }
+    setErrors(next);
+    if (focus && first) {
+      first.focus();
+      first.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+    return !first;
+  }
+  return (
+    <FormFeedback.Provider value={errors}>
+      <form
+        {...props}
+        ref={ref}
+        noValidate
+        onInputCapture={(e) => {
+          onInputCapture?.(e);
+          if (attempted) {
+            const form = e.currentTarget;
+            // Let the controlled field's own onChange commit its value first.
+            // Updating validation during capture can restore the old value
+            // before React delivers the field's change event.
+            setTimeout(() => {if(form.isConnected) inspect(form);}, 0);
+          }
+        }}
+        onChangeCapture={(e) => {
+          onChangeCapture?.(e);
+          if (attempted) {
+            const form = e.currentTarget;
+            setTimeout(() => {if(form.isConnected) inspect(form);}, 0);
+          }
+        }}
+        onSubmit={(e) => {
+          setAttempted(true);
+          if (!inspect(e.currentTarget, true)) {
+            e.preventDefault();
+            return;
+          }
+          onSubmit?.(e);
+        }}
+      >
+        {children}
+        {Object.keys(errors).length > 0 && (
+          <p className="ui-form-feedback" role="alert">
+            Please check the highlighted fields.
+          </p>
+        )}
+      </form>
+    </FormFeedback.Provider>
+  );
+});
 export const Button = forwardRef<
   HTMLButtonElement,
   React.ButtonHTMLAttributes<HTMLButtonElement> & {
     loading?: boolean;
     help?: string;
+    /** Standard, self-explanatory controls can opt out of automatic hints. */
+    tooltip?: boolean;
     variant?: "primary" | "secondary" | "ghost" | "danger";
     size?: "normal" | "small" | "icon";
   }
->(({ className, children, loading, disabled, help, title, variant, size = "normal", ...props }, ref) => {
-  // Preserve existing semantic classes while new consumers use the typed API.
-  // Unstyled controls (navigation, whole cards) deliberately have no variant.
-  const inferred = variant || (className?.split(" ").find(name => ["primary", "secondary", "danger", "danger-button"].includes(name))?.replace("danger-button", "danger"));
-  const alreadyExplained = useContext(TooltipContext);
-  const iconOnly = !Children.toArray(children).some((child) => typeof child === "string" && child.trim());
-  const explanation = help || title || (iconOnly ? props["aria-label"] : undefined);
-  const button = <button
-    {...props}
-    ref={ref}
-    disabled={disabled || loading}
-    className={cx("ui-button", variant, className)}
-    data-variant={inferred}
-    data-size={size}
-    aria-busy={loading || undefined}
-    title={alreadyExplained ? title : undefined}
-  >
-    {loading && <LoaderCircle className="ui-spinner" size={16} />} {children}
-  </button>;
-  return explanation && !alreadyExplained && !disabled && !loading
-    ? <Tooltip label={explanation}>{button}</Tooltip>
-    : button;
-});
+>(
+  (
+    {
+      className,
+      children,
+      loading,
+      disabled,
+      help,
+      tooltip = true,
+      title,
+      variant,
+      size = "normal",
+      ...props
+    },
+    ref,
+  ) => {
+    // Preserve existing semantic classes while new consumers use the typed API.
+    // Unstyled controls (navigation, whole cards) deliberately have no variant.
+    const inferred =
+      variant ||
+      className
+        ?.split(" ")
+        .find((name) =>
+          ["primary", "secondary", "danger", "danger-button"].includes(name),
+        )
+        ?.replace("danger-button", "danger");
+    const alreadyExplained = useContext(TooltipContext);
+    const iconOnly = !Children.toArray(children).some(
+      (child) => typeof child === "string" && child.trim(),
+    );
+    const explanation =
+      help || title || (iconOnly ? props["aria-label"] : undefined);
+    const button = (
+      <button
+        type="button"
+        {...props}
+        ref={ref}
+        disabled={disabled || loading}
+        className={cx("ui-button", variant, className)}
+        data-variant={inferred}
+        data-size={size}
+        aria-busy={loading || undefined}
+        title={alreadyExplained ? title : undefined}
+      >
+        {loading && <LoaderCircle className="ui-spinner" size={16} />}{" "}
+        {children}
+      </button>
+    );
+    return tooltip &&
+      explanation &&
+      !alreadyExplained &&
+      !disabled &&
+      !loading ? (
+      <Tooltip label={explanation}>{button}</Tooltip>
+    ) : (
+      button
+    );
+  },
+);
 Button.displayName = "Button";
 
 export const Input = forwardRef<
@@ -78,7 +224,19 @@ export const Input = forwardRef<
 >(({ className, type, ...props }, ref) => {
   const [revealed, setRevealed] = useState(false);
   if (type === "date") return <DatePicker {...props} className={className} />;
-  if (type === "time") return <TimePicker {...props} ref={ref} className={className} />;
+  if (type === "time")
+    return <TimePicker {...props} ref={ref} className={className} />;
+  if (type === "month")
+    return <MonthPicker {...props} ref={ref} className={className} />;
+  if (type === "checkbox" || type === "radio" || type === "range")
+    return (
+      <input
+        {...props}
+        ref={ref}
+        type={type}
+        className={cx(`ui-${type}`, className)}
+      />
+    );
   if (type === "password")
     return (
       <div className="ui-password">
@@ -102,6 +260,7 @@ export const Input = forwardRef<
     <input
       {...props}
       type={type}
+      step={type === "number" ? (props.step ?? "any") : props.step}
       ref={ref}
       className={cx("ui-input", className)}
     />
@@ -117,6 +276,7 @@ export const Textarea = forwardRef<
 Textarea.displayName = "Textarea";
 
 type Option = { value: string; label: ReactNode; disabled?: boolean };
+const EMPTY_CHOICE = "__enercore_empty_choice__";
 export function Select({
   children,
   value,
@@ -146,14 +306,23 @@ export function Select({
         return;
       }
       const value = String(p.value ?? p.children ?? "");
-      // Radix rejects an empty item value; such an option cannot be selected.
-      if (!value) return;
-      into.push({ value, label: typeof p.children === "string" ? capitalizeOption(p.children) : p.children, disabled: p.disabled });
+      // A sentinel makes an explicit "assign later / none" choice selectable.
+      // Only the UI item uses it: the form and caller still receive "".
+      into.push({
+        value: value || EMPTY_CHOICE,
+        label:
+          typeof p.children === "string"
+            ? capitalizeOption(p.children)
+            : p.children,
+        disabled: p.disabled,
+      });
     });
   };
   const options: Option[] = [];
   collect(children, options);
-  const initial = String(defaultValue ?? options[0]?.value ?? "");
+  const firstValue =
+    options[0]?.value === EMPTY_CHOICE ? "" : options[0]?.value;
+  const initial = String(defaultValue ?? firstValue ?? "");
   const [internal, setInternal] = useState(initial);
   const trigger = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -170,10 +339,13 @@ export function Select({
       disabled={disabled}
       required={required}
       onValueChange={(next) => {
-        setInternal(next);
+        // Ignore bridge-only empty events; clear only an explicit choice.
+        if (!next) return;
+        const resolved = next === EMPTY_CHOICE ? "" : next;
+        setInternal(resolved);
         onChange?.({
-          target: { value: next, name },
-          currentTarget: { value: next, name },
+          target: { value: resolved, name },
+          currentTarget: { value: resolved, name },
         } as React.ChangeEvent<HTMLSelectElement>);
       }}
     >
@@ -186,7 +358,14 @@ export function Select({
         aria-invalid={props["aria-invalid"]}
         className={cx("ui-select-trigger", className)}
       >
-        <SelectPrimitive.Value placeholder="Select an option" />
+        <span className="ui-select-value">
+          <SelectPrimitive.Value
+            placeholder={
+              options.find((o) => o.value === EMPTY_CHOICE)?.label ||
+              "Select an option"
+            }
+          />
+        </span>
         <SelectPrimitive.Icon className="ui-select-chevron">
           <ChevronDown size={16} />
         </SelectPrimitive.Icon>
@@ -242,13 +421,21 @@ export function Field({
   hint,
   help,
   ...props
-}: React.LabelHTMLAttributes<HTMLLabelElement> & { error?: string; hint?: string; help?: string }) {
+}: React.LabelHTMLAttributes<HTMLLabelElement> & {
+  error?: string;
+  hint?: string;
+  help?: string;
+}) {
   const autoId = useId();
+  const formErrors = useContext(FormFeedback);
   const items = Children.toArray(children);
   const controls = items.filter(
     (child) =>
       isValidElement(child) &&
-      ([Input, Select, Textarea].includes(child.type as typeof Input) || Boolean((child.props as Record<string, unknown>)["data-field-control"])),
+      ([Input, Select, Textarea].includes(child.type as typeof Input) ||
+        Boolean(
+          (child.props as Record<string, unknown>)["data-field-control"],
+        )),
   );
   const control = controls[0] as
     | React.ReactElement<{
@@ -269,21 +456,33 @@ export function Field({
       </label>
     );
   const id = control.props.id || autoId;
+  error ||= formErrors[id];
   const labelId = id + "-label";
   const messageId = id + "-message";
   const message = error || hint;
   const explanation = help || fieldHelp[labelText.join("").trim()];
   return (
-    <div className={cx("ui-field", error && "has-error", className)} style={props.style}>
+    <div
+      className={cx("ui-field", error && "has-error", className)}
+      style={props.style}
+    >
       {labelText.length > 0 && (
-        <div className="ui-field-heading"><label className="ui-field-label" htmlFor={id} id={labelId}>
-          {labelText}
-          {control.props.required && (
-            <span className="ui-required" aria-hidden="true">
-              *
-            </span>
+        <div className="ui-field-heading">
+          <label className="ui-field-label" htmlFor={id} id={labelId}>
+            {labelText}
+            {control.props.required && (
+              <span className="ui-required" aria-hidden="true">
+                *
+              </span>
+            )}
+          </label>
+          {explanation && (
+            <HelpTip
+              label={`About ${labelText.join("").trim()}`}
+              text={explanation}
+            />
           )}
-        </label>{explanation && <HelpTip label={`About ${labelText.join("").trim()}`} text={explanation} />}</div>
+        </div>
       )}
       {labelText.length === 0 && content.filter(isValidElement).slice(0, 1)}
       {cloneElement(control, {
@@ -533,7 +732,10 @@ export function PrimaryAction({ action }: { action: DialogPrimaryAction }) {
     <Button
       type={action.type ?? "button"}
       form={action.form}
-      className={cx(action.tone === "danger" ? "danger-button" : "primary", "ui-primary-action")}
+      className={cx(
+        action.tone === "danger" ? "danger-button" : "primary",
+        "ui-primary-action",
+      )}
       disabled={action.disabled || busy}
       aria-busy={busy || undefined}
       onClick={
@@ -541,7 +743,10 @@ export function PrimaryAction({ action }: { action: DialogPrimaryAction }) {
           ? async () => {
               if (busy) return;
               const result = action.onClick!();
-              if (result && typeof (result as Promise<unknown>).then === "function") {
+              if (
+                result &&
+                typeof (result as Promise<unknown>).then === "function"
+              ) {
                 setRunning(true);
                 try {
                   await result;
@@ -556,7 +761,9 @@ export function PrimaryAction({ action }: { action: DialogPrimaryAction }) {
       {action.icon}
       <span className="ui-action-label" data-pending={busy || undefined}>
         <span aria-hidden={busy || undefined}>{action.label}</span>
-        {action.pendingLabel && <span aria-hidden={!busy || undefined}>{action.pendingLabel}</span>}
+        {action.pendingLabel && (
+          <span aria-hidden={!busy || undefined}>{action.pendingLabel}</span>
+        )}
       </span>
     </Button>
   );
@@ -587,7 +794,8 @@ export function DialogActions({
   const register = footer?.register;
   useEffect(() => register?.(), [register]);
   if (!footer?.target) return null;
-  const cancelLabel = cancel === false ? null : (cancel ?? (primary ? "Cancel" : "Close"));
+  const cancelLabel =
+    cancel === false ? null : (cancel ?? (primary ? "Cancel" : "Close"));
   return createPortal(
     <>
       <div className="ui-dialog-actions-start">{start}</div>
@@ -622,6 +830,7 @@ export function Dialog({
   dismissOnOutside = true,
   variant = "dialog",
   description,
+  modal = true,
 }: {
   title: string;
   children: ReactNode;
@@ -635,6 +844,8 @@ export function Dialog({
   variant?: "dialog" | "drawer";
   /** One quiet line under the title, e.g. what the drawer edits. */
   description?: ReactNode;
+  /** Non-modal help panels can stay open while the person uses the page. */
+  modal?: boolean;
   /**
    * Whether a click outside closes the dialog. Pass false while a submission
    * is pending or unsaved input would be lost; Escape, the X and Cancel
@@ -660,72 +871,100 @@ export function Dialog({
   const contentRef = useRef<HTMLDivElement>(null);
   return (
     <DialogLayerContext.Provider value={layer + 1}>
-    <DialogPrimitive.Root
-      open={present}
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-    >
-      <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="ui-dialog-overlay" style={{ zIndex: `calc(var(--dialog-layer-base, 100) + ${layer * 4})` }} />
-        <DialogPrimitive.Content
-          ref={contentRef}
-          style={{ zIndex: `calc(var(--dialog-layer-base, 100) + ${1 + layer * 4})` }}
-          onOpenAutoFocus={(event) => {
-            if (className?.includes("quotation-preview-dialog")) {
-              event.preventDefault();
-              contentRef.current?.focus({ preventScroll: true });
-              return;
-            }
-            if (!className?.includes("simple-entry-dialog")) return;
-            const input = contentRef.current?.querySelector<HTMLElement>('input:not([type="hidden"]):not([disabled]):not([readonly]), textarea:not([disabled])');
-            if (input) { event.preventDefault(); input.focus({ preventScroll: true }); }
-          }}
-          className={cx("modal ui-dialog studio-dialog", variant === "drawer" && "ui-drawer", className)}
-          aria-describedby={undefined}
-          onInteractOutside={(event) => {
-            if (!dismissOnOutside) event.preventDefault();
-          }}
-          onCloseAutoFocus={(event) => {
-            if (opener.current?.isConnected) {
-              event.preventDefault();
-              opener.current.focus({ preventScroll: true });
-            }
-          }}
-        >
-          <div className="dialog-heading studio-dialog-heading">
-            <span className="studio-dialog-mark" aria-hidden="true"><PanelsTopLeft size={18} /></span>
-            <div className="dialog-heading-text">
-              <DialogPrimitive.Title>{title}</DialogPrimitive.Title>
-              {description && <p className="dialog-heading-description">{description}</p>}
-            </div>
-            <Button
-              type="button"
-              className="icon-button"
-              aria-label="Close dialog"
-              onClick={onClose}
-            >
-              <X size={18} />
-            </Button>
-          </div>
-          <DialogFooterContext.Provider value={{ target: footer, onClose, register }}>
-            <div className="dialog-body">{children}</div>
-          </DialogFooterContext.Provider>
-          <div className="ui-dialog-footer" ref={setFooter}>
-            {actions === 0 && (
-              <>
-                <div className="ui-dialog-actions-start" />
-                <div className="ui-dialog-actions-end">
-                  <Button type="button" className="secondary" onClick={onClose}>
-                    Close
-                  </Button>
-                </div>
-              </>
+      <DialogPrimitive.Root
+        open={present}
+        modal={modal}
+        onOpenChange={(open) => {
+          if (!open) onClose();
+        }}
+      >
+        <DialogPrimitive.Portal>
+          <DialogPrimitive.Overlay
+            className="ui-dialog-overlay"
+            style={{
+              zIndex: `calc(var(--dialog-layer-base, 100) + ${layer * 4})`,
+            }}
+          />
+          <DialogPrimitive.Content
+            ref={contentRef}
+            style={{
+              zIndex: `calc(var(--dialog-layer-base, 100) + ${1 + layer * 4})`,
+            }}
+            onOpenAutoFocus={(event) => {
+              if (className?.includes("quotation-preview-dialog")) {
+                event.preventDefault();
+                contentRef.current?.focus({ preventScroll: true });
+                return;
+              }
+              if (!className?.includes("simple-entry-dialog")) return;
+              const input = contentRef.current?.querySelector<HTMLElement>(
+                'input:not([type="hidden"]):not([disabled]):not([readonly]), textarea:not([disabled])',
+              );
+              if (input) {
+                event.preventDefault();
+                input.focus({ preventScroll: true });
+              }
+            }}
+            className={cx(
+              "modal ui-dialog studio-dialog",
+              variant === "drawer" && "ui-drawer",
+              className,
             )}
-          </div>
-        </DialogPrimitive.Content>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
+            aria-describedby={undefined}
+            onInteractOutside={(event) => {
+              if (!dismissOnOutside) event.preventDefault();
+            }}
+            onCloseAutoFocus={(event) => {
+              if (opener.current?.isConnected) {
+                event.preventDefault();
+                opener.current.focus({ preventScroll: true });
+              }
+            }}
+          >
+            <div className="dialog-heading studio-dialog-heading">
+              <span className="studio-dialog-mark" aria-hidden="true">
+                <PanelsTopLeft size={18} />
+              </span>
+              <div className="dialog-heading-text">
+                <DialogPrimitive.Title>{title}</DialogPrimitive.Title>
+                {description && (
+                  <p className="dialog-heading-description">{description}</p>
+                )}
+              </div>
+              <Button
+                type="button"
+                className="icon-button"
+                aria-label="Close dialog"
+                tooltip={false}
+                onClick={onClose}
+              >
+                <X size={18} />
+              </Button>
+            </div>
+            <DialogFooterContext.Provider
+              value={{ target: footer, onClose, register }}
+            >
+              <div className="dialog-body">{children}</div>
+            </DialogFooterContext.Provider>
+            <div className="ui-dialog-footer" ref={setFooter}>
+              {actions === 0 && (
+                <>
+                  <div className="ui-dialog-actions-start" />
+                  <div className="ui-dialog-actions-end">
+                    <Button
+                      type="button"
+                      className="secondary"
+                      onClick={onClose}
+                    >
+                      Close
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          </DialogPrimitive.Content>
+        </DialogPrimitive.Portal>
+      </DialogPrimitive.Root>
     </DialogLayerContext.Provider>
   );
 }
@@ -740,40 +979,75 @@ export function Tooltip({
 }) {
   if (!enabled) return children;
   return (
-    <TooltipContext.Provider value={true}><TooltipPrimitive.Provider delayDuration={400}>
-      <TooltipPrimitive.Root>
-        <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
-        <TooltipPrimitive.Portal>
-          <TooltipPrimitive.Content
-            side="top"
-            sideOffset={8}
-            className="ui-tooltip"
-            collisionPadding={12}
-          >
-            {label}
-            <TooltipPrimitive.Arrow />
-          </TooltipPrimitive.Content>
-        </TooltipPrimitive.Portal>
-      </TooltipPrimitive.Root>
-    </TooltipPrimitive.Provider></TooltipContext.Provider>
+    <TooltipContext.Provider value={true}>
+      <TooltipPrimitive.Provider delayDuration={400}>
+        <TooltipPrimitive.Root>
+          <TooltipPrimitive.Trigger asChild>
+            {children}
+          </TooltipPrimitive.Trigger>
+          <TooltipPrimitive.Portal>
+            <TooltipPrimitive.Content
+              side="top"
+              sideOffset={8}
+              className="ui-tooltip"
+              collisionPadding={12}
+            >
+              {label}
+              <TooltipPrimitive.Arrow />
+            </TooltipPrimitive.Content>
+          </TooltipPrimitive.Portal>
+        </TooltipPrimitive.Root>
+      </TooltipPrimitive.Provider>
+    </TooltipContext.Provider>
   );
 }
 
 /** Hover/focus for a quick hint; click/tap for a persistent explanation. */
 export function HelpTip({ label, text }: { label: string; text: string }) {
   const [open, setOpen] = useState(false);
-  return <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
-    <TooltipPrimitive.Provider delayDuration={400}>
-      <TooltipPrimitive.Root open={open ? false : undefined}>
-        <TooltipPrimitive.Trigger asChild><PopoverPrimitive.Trigger asChild>
-          <button type="button" className="ui-help-button" aria-label={label}><CircleHelp size={14} aria-hidden="true" /></button>
-        </PopoverPrimitive.Trigger></TooltipPrimitive.Trigger>
-        <TooltipPrimitive.Portal><TooltipPrimitive.Content className="ui-tooltip" side="top" sideOffset={6} collisionPadding={12}>{text}</TooltipPrimitive.Content></TooltipPrimitive.Portal>
-      </TooltipPrimitive.Root>
-    </TooltipPrimitive.Provider>
-    <PopoverPrimitive.Portal><PopoverPrimitive.Content className="ui-help-popover" sideOffset={8} collisionPadding={12} aria-label={label}>
-      <p>{text}</p>
-      <PopoverPrimitive.Close className="ui-help-dismiss" aria-label="Close explanation">Got it</PopoverPrimitive.Close>
-    </PopoverPrimitive.Content></PopoverPrimitive.Portal>
-  </PopoverPrimitive.Root>;
+  return (
+    <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
+      <TooltipPrimitive.Provider delayDuration={400}>
+        <TooltipPrimitive.Root open={open ? false : undefined}>
+          <TooltipPrimitive.Trigger asChild>
+            <PopoverPrimitive.Trigger asChild>
+              <button
+                type="button"
+                className="ui-help-button"
+                aria-label={label}
+              >
+                <CircleHelp size={14} aria-hidden="true" />
+              </button>
+            </PopoverPrimitive.Trigger>
+          </TooltipPrimitive.Trigger>
+          <TooltipPrimitive.Portal>
+            <TooltipPrimitive.Content
+              className="ui-tooltip"
+              side="top"
+              sideOffset={6}
+              collisionPadding={12}
+            >
+              {text}
+            </TooltipPrimitive.Content>
+          </TooltipPrimitive.Portal>
+        </TooltipPrimitive.Root>
+      </TooltipPrimitive.Provider>
+      <PopoverPrimitive.Portal>
+        <PopoverPrimitive.Content
+          className="ui-help-popover"
+          sideOffset={8}
+          collisionPadding={12}
+          aria-label={label}
+        >
+          <p>{text}</p>
+          <PopoverPrimitive.Close
+            className="ui-help-dismiss"
+            aria-label="Close explanation"
+          >
+            Got it
+          </PopoverPrimitive.Close>
+        </PopoverPrimitive.Content>
+      </PopoverPrimitive.Portal>
+    </PopoverPrimitive.Root>
+  );
 }

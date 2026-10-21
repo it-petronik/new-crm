@@ -1,21 +1,17 @@
 /**
- * Enercore AI — central configuration. Cloudflare Workers AI only: no other
- * provider is ever called, and nothing here is configurable from a request.
+ * Enercore AI — provider selection is server-owned, never request-controlled.
  */
 
 export const AI_MODELS = {
-  /**
-   * Primary: strong instruction-following and JSON-schema output on Workers
-   * AI, which every Enercore AI answer is constrained to.
-   */
-  primary: "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
-  /** Used only if the primary fails or is unavailable. Also JSON-schema capable. */
-  fallback: "@cf/meta/llama-4-scout-17b-16e-instruct",
+  /** Hosted by Groq; no inference server is needed on the office Mac. */
+  primary: "openai/gpt-oss-120b",
+  /** A second Groq model, never a different provider. */
+  fallback: "openai/gpt-oss-20b",
   /**
    * Fast: short, bounded tasks (drafts, explaining deterministic priorities,
    * meeting preparation). Falls back to the primary.
    */
-  fast: "@cf/meta/llama-3.1-8b-instruct-fast",
+  fast: "openai/gpt-oss-20b",
 } as const;
 
 /** Which models a task tier tries, in order (each once). */
@@ -59,20 +55,30 @@ export const FEATURE_LABELS: Record<AiFeature, string> = {
 };
 
 type AiRun = (model: string, input: unknown, options?: unknown) => Promise<unknown>;
-export type AiBinding = { run: AiRun };
+export type AiBinding = { run: AiRun; provider?: "groq"; models?: Record<AiTier, readonly string[]> };
+export const modelsFor = (ai: AiBinding, tier: AiTier) => ai.models?.[tier] ?? TIER_MODELS[tier];
+
+export async function configuredAi(env: { APP_MODE?: string; AI_PROVIDER?: string; GROQ_API_KEY?: string }): Promise<AiBinding | null> {
+  if (env.APP_MODE === "preview") return null;
+  if (!env.AI_PROVIDER || env.AI_PROVIDER === "groq") {
+    if (!env.GROQ_API_KEY?.trim()) return null;
+    const { createGroqBinding } = await import("./groq");
+    return createGroqBinding(env.GROQ_API_KEY.trim());
+  }
+  // Workers AI and all other providers are removed, not fallbacks.
+  return null;
+}
 
 /**
- * The Workers AI binding inside a request, or null: preview mode, no binding,
- * or no Cloudflare context (local Next dev) all mean AI is off.
+ * A Groq adapter using a private server secret. Preview never calls a model.
  */
 export async function aiBinding(): Promise<AiBinding | null> {
   if (process.env.APP_MODE === "preview") return null;
   try {
     const { getCloudflareContext } = await import("@opennextjs/cloudflare");
-    const env = (await getCloudflareContext({ async: true })).env as unknown as { AI?: AiBinding; APP_MODE?: string };
-    if (env.APP_MODE === "preview") return null;
-    return env.AI && typeof env.AI.run === "function" ? env.AI : null;
+    const env = (await getCloudflareContext({ async: true })).env as unknown as Parameters<typeof configuredAi>[0];
+    return configuredAi(env);
   } catch {
-    return null;
+    return configuredAi(process.env as Parameters<typeof configuredAi>[0]);
   }
 }

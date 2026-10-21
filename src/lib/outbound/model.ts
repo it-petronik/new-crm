@@ -54,7 +54,7 @@ export function canManageTemplates(actor: Actor, company: string) {
   return (
     actor.companies.includes(company) &&
     !actor.branches.length &&
-    ["MD", "Group Manager", "Sales Manager", "Marketing Manager"].includes(
+    ["MD", "MD Assistant", "IT Administrator", "Group Manager", "Sales Manager", "Marketing Manager"].includes(
       actor.role,
     ) &&
     ["leads", "customers", "marketing"].some(

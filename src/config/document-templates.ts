@@ -24,10 +24,13 @@ export interface DocumentTypeConfig {
   showTerms: boolean;
   /** Default footer website shown when a document doesn't supply its own. */
   footerWebsite: string;
+  /** Reference sales offer: a signing area only, no named/client signature fields. */
+  referenceFieldsOnly?: boolean;
 }
 
 export const documentConfig: Record<DocumentType, DocumentTypeConfig> = {
   quotation: {
+    referenceFieldsOnly: true,
     title: "QUOTATION",
     refLabel: "",
     dateFields: [
@@ -40,11 +43,11 @@ export const documentConfig: Record<DocumentType, DocumentTypeConfig> = {
     footerWebsite: "www.petronik.ae",
   },
   proforma: {
-    title: "PRO-FORMA INVOICE",
-    refLabel: "Invoice#",
+    referenceFieldsOnly: true,
+    title: "PROFORMA INVOICE",
+    refLabel: "PI No #:",
     dateFields: [
       { key: "invoiceDate", label: "Invoice Date" },
-      { key: "expiryDate", label: "Invoice Expiry" },
     ],
     showVat: true,
     showBankDetails: true,

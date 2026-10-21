@@ -242,7 +242,7 @@ export function SuggestionChecklist({ suggestions, onApply, onApplied }: { sugge
         {suggestions.map((s) => (
           <li key={s.id}>
             <label>
-              <input
+              <Input
                 type="checkbox"
                 checked={selected.includes(s.id)}
                 disabled={busy || done[s.id] === "applied"}

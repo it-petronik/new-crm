@@ -30,7 +30,7 @@ test("chart series and compatibility aliases resolve from the same foundation", 
 
 test("typed components have active consumers, not just a disconnected library", () => {
   assert.match(read("src/components/workspace.tsx"), /<Surface padding="none" className=\{`record-list-surface \$\{recordStyles\.surface\}`\}>/);
-  assert.match(read("src/components/pagination.tsx"), /<Toolbar className="list-query-controls"/);
+  assert.match(read("src/components/pagination.tsx"), /<Toolbar className="list-query-controls(?: [^"]*)?"/);
   assert.match(read("src/components/content-calendar.tsx"), /<FormGrid>/);
   assert.match(read("src/components/mail-hub.tsx"), /<PageHeader title="Email"/);
 });
@@ -39,7 +39,7 @@ test("Studio owns the new frame, navigation and tables without legacy geometry c
   const workspace = read("src/components/workspace.tsx");
   assert.match(workspace, /data-design="studio"/);
   assert.match(workspace, /<StudioDashboard /);
-  assert.match(workspace, /<table className=\{recordStyles.table\}>/);
+  assert.match(workspace, /<CrmTable className=\{recordStyles.table\}[^>]*>/);
   assert.doesNotMatch(workspace, /className="(?:main-shell|topbar|e-record-table e-table-balanced)"/);
   const sidebar = read("src/components/sidebar.tsx");
   assert.match(sidebar, /\.\/studio\/navigation.module.css/);
@@ -52,7 +52,7 @@ test("Studio charts retain currency scope, permission gates and real zero baseli
   assert.match(source, /filter\(\(r\) => r.currency === currency\)/);
   assert.match(source, /allowed.includes\("orders"\)/);
   assert.match(source, /allowed.includes\("leads"\)/);
-  assert.match(source, /attentionItems\(actor, currentRecords\)/);
+  assert.match(source, /attentionItems\(\s*actor,\s*\(completeRecords \|\| currentRecords\)\.filter/);
   assert.match(read("src/components/studio/dashboard.module.css"), /min-height: 0/);
   assert.match(read("src/components/studio/dashboard.module.css"), /prefers-reduced-motion: reduce/);
 });
@@ -83,4 +83,15 @@ test("motion has explicit durations and preserves reduced-motion and theme-chang
   assert.match(css, /prefers-reduced-motion:reduce/);
   assert.match(read("src/app/foundation.css"), /data-appearance-changing/);
   for (const token of ["--motion-fast", "--motion-enter", "--motion-layout", "--motion-chart"]) assert.ok(read("src/app/foundation.css").includes(`${token}:`));
+});
+
+test("field height and visible typography use shared responsive tokens without a period-only override", () => {
+  const css=read("src/app/calm-workspace.css");
+  assert.match(css,/--crm-control-font:13px/);
+  assert.match(css,/--crm-control-font:16px/);
+  assert.match(css,/--f-font:var\(--crm-control-font\)/);
+  assert.match(css,/font-size:var\(--crm-control-font\)/);
+  assert.match(css,/\.ui-select-value[\s\S]*?font:inherit/);
+  assert.match(read("src/components/ui/controls.tsx"),/<span className="ui-select-value">\s*<SelectPrimitive\.Value/);
+  assert.doesNotMatch(read("src/app/shell.css"),/\.period-switch :is\(span, button\)/);
 });

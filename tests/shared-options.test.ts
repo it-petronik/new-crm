@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { capitalizeOption, optionCatalog, optionKey, canUseCatalog, canManageOption } from "../src/lib/shared-options";
+import { capitalizeOption, catalogDefaults, optionCatalog, optionKey, canUseCatalog, canManageOption } from "../src/lib/shared-options";
 import type { Actor } from "../src/lib/domain";
 const actor: Actor = { id: "seller", name: "Seller", role: "Sales Executive", companies: ["Petronik"], branches: ["Main"] };
 test("business choices allow customization but protected enums do not", () => {
@@ -23,4 +23,11 @@ test("labels capitalize words without changing acronyms or deduplication semanti
   assert.equal(capitalizeOption("  partner   referral "), "Partner Referral");
   assert.equal(capitalizeOption("USD / IT"), "USD / IT");
   assert.equal(optionKey(" Partner   REFERRAL "), optionKey("partner referral"));
+});
+test("document catalogs share canonical defaults with server duplicate checks", () => {
+  assert.deepEqual(catalogDefaults("accounts:unit"), catalogDefaults("quotations:unit"));
+  assert.ok(catalogDefaults("accounts:attributes.packaging").includes("Flexi Bags"));
+  assert.deepEqual(catalogDefaults("accounts:attributes.partialShipment"), ["Allowed", "Not Allowed"]);
+  assert.deepEqual(catalogDefaults("accounts:status"), []);
+  assert.equal(optionCatalog("accounts", "attributes.paymentTerms"), "accounts:attributes.paymentTerms");
 });

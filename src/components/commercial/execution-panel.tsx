@@ -1,4 +1,7 @@
 "use client";
+import { CrmTable } from "@/components/ui/crm-table";
+import { Form } from '@/components/ui/controls';
+
 import { useCallback, useEffect, useState, useId } from "react";
 import { ChevronRight } from "lucide-react";
 import { useUnsavedChanges } from "../use-unsaved";
@@ -24,6 +27,8 @@ import { openReference } from "@/lib/ai/client";
 import { statusTone } from "@/lib/status";
 import { MoreActions } from "../ui/row-actions";
 import { EmptyState, Section } from "../ui/layout";
+import { ListFilters, Pagination, SortHeader, usePagination } from "../pagination";
+import { emptyQuery, queryList, type ListQuery } from "@/lib/list-query";
 
 /* ---------------------------------------------------------------------------
    Deal sourcing and commercial review — the building blocks.
@@ -563,10 +568,13 @@ export function RfqSection({ x, limit = 200 }: { x: Execution; limit?: number })
  */
 export function OfferComparison({ x }: { x: Execution }) {
   const { v, busy, run, setEditor } = x;
+  const [query,setQuery]=useState<ListQuery>(emptyQuery);
   if (!v || !v.canSeeCosts) return null;
   const s = sourcingState(v);
+  const candidates=s.liveOffers.map(o=>({...o,name:o.supplier,amount:Number(o.details.price),currency:o.details.currency,payment:o.details.paymentTerms,delivery:o.details.leadTime,origin:o.details.origin}));
+  const matching=queryList(candidates,query);
   const previous = v.offers.filter((o) => o.status === "Superseded");
-  const groups = [...new Set(s.liveOffers.map((o) => o.comparisonGroup))];
+  const groups = [...new Set(matching.map((o) => o.comparisonGroup))];
   return (
     <Section
       title="Supplier offers"
@@ -575,28 +583,30 @@ export function OfferComparison({ x }: { x: Execution }) {
       {!s.liveOffers.length && (
         <EmptyState title="No supplier offers yet." detail="Record an offer after receiving supplier terms." />
       )}
+      {!!candidates.length && <div className="list-query-controls"><Input type="search" aria-label="Search supplier offers" placeholder="Find a supplier or term…" value={query.search} onChange={e=>setQuery(q=>({...q,search:e.target.value}))}/><Select aria-label="Supplier offer status" value={query.status} onChange={e=>setQuery(q=>({...q,status:e.target.value}))}><option value="all">All statuses</option>{[...new Set(candidates.map(o=>o.status))].map(st=><option key={st}>{st}</option>)}</Select></div>}
+      {!!candidates.length && !matching.length && <p>No offers match these filters.</p>}
       {groups.map((group) => {
         const [currency, unit, ...incoterm] = group.split("/");
-        const offers = s.liveOffers.filter((o) => o.comparisonGroup === group);
+        const offers = matching.filter((o) => o.comparisonGroup === group);
         return (
           <div className="offer-group" key={group}>
             <p className="offer-group-label">
               {currency} per {unit} · {incoterm.join("/")}
               <span> · {offers.length} {offers.length === 1 ? "offer" : "offers"}</span>
             </p>
-            <table className="rtable offer-table">
+            <CrmTable className="rtable offer-table">
               <caption className="sr-only">
                 Offers priced in {currency} per {unit}, {incoterm.join("/")}
               </caption>
               <thead>
                 <tr>
-                  <th scope="col">Supplier</th>
-                  <th scope="col" className="is-num">BUY price</th>
+                  <SortHeader sortKey="name" query={query} setQuery={setQuery}>Supplier</SortHeader>
+                  <SortHeader sortKey="amount" query={query} setQuery={setQuery} className="is-num">BUY price</SortHeader>
                   <th scope="col">Quantity · MOQ</th>
-                  <th scope="col">Payment</th>
-                  <th scope="col">Lead time</th>
-                  <th scope="col">Validity</th>
-                  <th scope="col">Origin</th>
+                  <SortHeader sortKey="payment" query={query} setQuery={setQuery}>Payment</SortHeader>
+                  <SortHeader sortKey="delivery" query={query} setQuery={setQuery}>Lead time</SortHeader>
+                  <SortHeader sortKey="validity" query={query} setQuery={setQuery}>Validity</SortHeader>
+                  <SortHeader sortKey="origin" query={query} setQuery={setQuery}>Origin</SortHeader>
                 </tr>
               </thead>
               <tbody>
@@ -688,7 +698,7 @@ export function OfferComparison({ x }: { x: Execution }) {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </CrmTable>
             {offers.some((o) => o.details.notes || o.details.packaging || o.details.availability) && (
               <details className="exec-disclosure">
                 <summary>Packaging, availability and notes</summary>
@@ -1088,7 +1098,7 @@ function ExecutionEditor({
             ? "Supplier-stated terms. Offer prices are BUY prices, not customer selling prices."
             : "Built from the Lead requirement. Review before saving."}
       </p>
-      <form
+      <Form
         id={formId}
         onChange={(event) => {
           setPreview(null);
@@ -1353,7 +1363,7 @@ function ExecutionEditor({
           pending={busy}
           onCancel={close}
         />
-      </form>
+      </Form>
       {unsaved.confirm}
     </Dialog>
   );
@@ -1405,6 +1415,7 @@ export function useExecutionHistory(recordId: string, enabled: boolean) {
 
 /** Offers a supplier made (or were made for a product), newest first. */
 export function OfferHistorySection({ data, error }: { data: ExecutionHistoryData | null; error: string }) {
+  const pagination=usePagination((data?.offers||[]).map(o=>({...o,name:`${o.supplier} · ${o.product}`,amount:Number(o.details.price),currency:o.details.currency,incoterm:o.details.incoterm,status:o.validity})),data?.label||"");
   return (
     <Section title="Offers received" description={data?.label}>
       {error && <p role="alert" className="form-error">{error}</p>}
@@ -1414,18 +1425,19 @@ export function OfferHistorySection({ data, error }: { data: ExecutionHistoryDat
         <EmptyState title="No supplier offers you can access yet." />
       ) : (
         <div className="rtable-frame">
-        <table className="rtable offer-history">
+        <ListFilters {...pagination} label="offer history" sortable={false}/>
+        <CrmTable className="rtable offer-history">
           <thead>
             <tr>
-              <th scope="col">Offer</th>
-              <th scope="col" className="is-num">BUY price</th>
-              <th scope="col">Incoterm</th>
-              <th scope="col">Validity</th>
+              <SortHeader sortKey="name" query={pagination.query} setQuery={pagination.setQuery}>Offer</SortHeader>
+              <SortHeader sortKey="amount" query={pagination.query} setQuery={pagination.setQuery} className="is-num">BUY price</SortHeader>
+              <SortHeader sortKey="incoterm" query={pagination.query} setQuery={pagination.setQuery}>Incoterm</SortHeader>
+              <SortHeader sortKey="validity" query={pagination.query} setQuery={pagination.setQuery}>Validity</SortHeader>
               <th scope="col"><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>
-            {data.offers.map((o) => (
+            {pagination.items.map((o) => (
               <tr key={o.id}>
                 <th scope="row" className="rtable-title">
                   <span className="offer-supplier">
@@ -1448,7 +1460,7 @@ export function OfferHistorySection({ data, error }: { data: ExecutionHistoryDat
               </tr>
             ))}
           </tbody>
-        </table>
+        </CrmTable><Pagination {...pagination}/>
         </div>
       )}
     </Section>
@@ -1487,4 +1499,3 @@ export function RfqHistorySection({ data }: { data: ExecutionHistoryData | null 
     </Section>
   );
 }
-

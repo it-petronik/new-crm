@@ -47,20 +47,27 @@ export function PageHeader({
       <div className={styles.heading}>
         {kicker && <p className="ui-page-kicker">{kicker}</p>}
         <div className={styles.titleRow}><h1>{title}</h1>
-        {pageGuide && <Popover.Root>
-          <Popover.Trigger className={cx("ui-page-guide", styles.guide)} aria-label="How this page works"><CircleHelp size={15} aria-hidden="true"/><span>Guide</span></Popover.Trigger>
+        {(pageGuide || description) && <Popover.Root>
+          <Popover.Trigger className={cx("ui-page-guide", styles.guide)} aria-label="How this page works" title="Page help"><CircleHelp size={15} aria-hidden="true"/></Popover.Trigger>
           <Popover.Portal><Popover.Content className={cx("ui-guide-popover", styles.guideContent)} align="start" sideOffset={10} collisionPadding={16} aria-label="How this page works">
             <div className={styles.guideHeading}><span><CircleHelp size={17} aria-hidden="true"/><strong>How this page works</strong></span><Popover.Close aria-label="Close guide"><X size={16}/></Popover.Close></div>
-            <p>{pageGuide.purpose}</p><ol>{pageGuide.steps.map((step) => <li key={step}>{step}</li>)}</ol>
-            <p className={styles.guideTip}>Open a name for details. A question mark explains an unfamiliar field.</p>
+            <p>{pageGuide?.purpose || description}</p>
+            {pageGuide && <ol>{pageGuide.steps.map((step) => <li key={step}>{step}</li>)}</ol>}
+            {pageGuide && description && <p>{description}</p>}
+            {pageGuide && <p className={styles.guideTip}>Open a name for details. A question mark explains an unfamiliar field.</p>}
           </Popover.Content></Popover.Portal>
         </Popover.Root>}
         </div>
-        {description && <p className={styles.description}>{description}</p>}
       </div>
       {actions && <div className={cx("ui-page-actions", styles.actions)}>{actions}</div>}
     </header>
   );
+}
+
+/** Lightweight title alias shared by utility pages, without loading profile
+ * editing and appearance settings into every workspace page. */
+export function PageTitle({ title, subtitle, actions }: { title: string; subtitle: string; actions?: ReactNode }) {
+  return <PageHeader className="page-heading" title={title} description={subtitle} actions={actions} />;
 }
 
 /** Shared boundaries: pages compose these, rather than adding another panel style. */

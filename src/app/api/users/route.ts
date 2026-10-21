@@ -34,7 +34,7 @@ const safeUser = (u: {
 });
 const accessFields = {
   role: z.enum(roles),
-  companies: z.array(z.enum(companies)).min(1).max(4),
+  companies: z.array(z.enum(companies)).min(1).max(companies.length),
   branches: z.array(z.string().trim().min(1).max(80)).max(50),
   moduleAccess: z
     .partialRecord(z.enum(modules), z.enum(["none", "read", "write"]))

@@ -1,4 +1,6 @@
 "use client";
+import { Form } from '@/components/ui/controls';
+
 import {LoadingState} from "../ui/async-state";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Eye, History, Settings2 } from "lucide-react";
@@ -176,7 +178,7 @@ function RuleDialog({ view, actor, onClose, onSaved }: { view: RuleView; actor: 
   return (
     <>
       <Dialog title={rule ? `Edit ${view.label.toLowerCase()}` : `Set up ${view.label.toLowerCase()}`} description={`${view.company} · ${view.trigger}`} onClose={unsaved.guard(onClose)} dismissOnOutside={!unsaved.dirty && !busy}>
-        <form id={formId} onSubmit={submit} onInput={unsaved.markDirty} onChange={unsaved.markDirty} noValidate>
+        <Form id={formId} onSubmit={submit} onInput={unsaved.markDirty} onChange={unsaved.markDirty} noValidate>
           {error && (
             <p className="form-error" role="alert">
               {error}
@@ -188,7 +190,7 @@ function RuleDialog({ view, actor, onClose, onSaved }: { view: RuleView; actor: 
               <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} required />
             </Field>
             <label className={`${styles.wide} ${styles.choices}`}>
-              <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+              <Input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
               Enabled — create tasks when this happens
             </label>
             {ownerAssigned ? (
@@ -249,7 +251,7 @@ function RuleDialog({ view, actor, onClose, onSaved }: { view: RuleView; actor: 
                 <div className={styles.choices}>
                   {LEAD_OPEN_STAGES.map((s) => (
                     <label key={s}>
-                      <input type="checkbox" checked={statuses.includes(s)} onChange={() => toggle(statuses, s, setStatuses)} /> {s}
+                      <Input type="checkbox" checked={statuses.includes(s)} onChange={() => toggle(statuses, s, setStatuses)} /> {s}
                     </label>
                   ))}
                 </div>
@@ -261,7 +263,7 @@ function RuleDialog({ view, actor, onClose, onSaved }: { view: RuleView; actor: 
                 <div className={styles.choices}>
                   {TICKET_PRIORITIES.map((p) => (
                     <label key={p}>
-                      <input type="checkbox" checked={priorities.includes(p)} onChange={() => toggle(priorities, p, setPriorities)} /> {p}
+                      <Input type="checkbox" checked={priorities.includes(p)} onChange={() => toggle(priorities, p, setPriorities)} /> {p}
                     </label>
                   ))}
                 </div>
@@ -273,7 +275,7 @@ function RuleDialog({ view, actor, onClose, onSaved }: { view: RuleView; actor: 
             </Field>
           </FormGrid>
           <p className="muted small">Saved as {actor.name}. Changes apply to events from now on; existing tasks are not changed.</p>
-        </form>
+        </Form>
         <DialogActions pending={busy} onCancel={unsaved.guard(onClose)} primary={{ label: rule ? "Save rule" : "Save", pendingLabel: "Saving…", type: "submit", form: formId, pending: busy }} />
       </Dialog>
       {unsaved.confirm}

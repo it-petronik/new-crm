@@ -1,8 +1,19 @@
 import type { DocumentData } from "@/types/document";
 import { formatPdfDate } from "@/lib/pdf/format-pdf-date";
+import { ApprovedSeal } from "./ApprovedSeal";
 
-export function Signature({ doc }: { doc: DocumentData }) {
+export function Signature({ doc, referenceFieldsOnly = false }: { doc: DocumentData; referenceFieldsOnly?: boolean }) {
   const { signatory } = doc;
+
+  if (referenceFieldsOnly) return <div className="pdf-reference-signature">
+    <h2 className="mb-3 text-base font-bold" style={{ color: "var(--pdf-heading)" }}>Authorized Signatory</h2>
+    <div className="pdf-signing-space" aria-label="Authorized signature and company stamp area">
+      {signatory.approvedSealUrl ? <ApprovedSeal key={signatory.approvedSealUrl} url={signatory.approvedSealUrl} /> : <>
+        {signatory.stampUrl && <img src={signatory.stampUrl} alt="Company stamp" className="h-28 w-28 object-contain" />}
+        {signatory.signatureUrl && <img src={signatory.signatureUrl} alt="Authorized signature" className="h-16 w-40 object-contain" />}
+      </>}
+    </div>
+  </div>;
 
   return (
     <div>

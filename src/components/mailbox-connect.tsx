@@ -1,4 +1,6 @@
 "use client";
+import { Form } from '@/components/ui/controls';
+
 import { useEffect, useRef, useState } from "react";
 import {
   LockKeyhole,
@@ -193,7 +195,7 @@ export default function MailboxConnect({
           }}
           dismissOnOutside={false}
         >
-          <form
+          <Form
             id="mailbox-connect"
             className={styles.form}
             onSubmit={async (e) => {
@@ -247,7 +249,7 @@ export default function MailboxConnect({
               <span>Outgoing: SMTP · 465 · SSL/TLS</span>
             </div>
             <label className={styles.consent}>
-              <input type="checkbox" required />I own or am authorised to use
+              <Input type="checkbox" required />I own or am authorised to use
               this mailbox and allow Enercore to fetch and privately cache its
               messages.
             </label>
@@ -271,7 +273,7 @@ export default function MailboxConnect({
                 disabled: busy,
               }}
             />
-          </form>
+          </Form>
         </Dialog>
       )}
       {disconnect && (

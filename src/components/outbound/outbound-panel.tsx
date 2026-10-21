@@ -1,4 +1,6 @@
 "use client";
+import { Form } from '@/components/ui/controls';
+
 import {LoadingState} from "../ui/async-state";
 import {requestJson,readJsonResponse} from "@/lib/client-request";
 import { useCallback, useEffect, useState } from "react";
@@ -453,7 +455,7 @@ export default function OutboundPanel({
           }}
           dismissOnOutside={false}
         >
-          <form
+          <Form
             id="outbound-form"
             className={styles.form}
             onSubmit={(e) => {
@@ -641,7 +643,7 @@ export default function OutboundPanel({
                 disabled: busy,
               }}
             />
-          </form>
+          </Form>
         </Dialog>
       )}
       {selected && (
@@ -757,7 +759,7 @@ export default function OutboundPanel({
                         />
                       </Field>
                       <label className={styles.check}>
-                        <input
+                        <Input
                           type="checkbox"
                           checked={confirmed}
                           onChange={(e) => setConfirmed(e.target.checked)}

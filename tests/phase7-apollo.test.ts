@@ -66,7 +66,7 @@ test("stages cannot be opened by another employee, branch, role or after expiry"
     md,
     { ...sales, branches: ["Elsewhere"] },
     { ...sales, companies: ["Other"] },
-    { ...sales, role: "IT Administrator" as const },
+    { ...sales, role: "HR Manager" as const },
   ])
     await assert.rejects(importReview(f.db, actor, f.page.stageId, f.p.id));
   await f.db.update(apolloStages).set({ expiresAt: new Date(0) });
@@ -98,6 +98,9 @@ test("Apollo import is atomic, idempotent and linked to the existing Deal archit
   assert.equal(lead.contactId, r.contactId);
   assert.equal(lead.ownerId, sales.id);
   assert.equal(lead.status, "New");
+  assert.equal(lead.attributes?.leadCapturedById, sales.id);
+  assert.equal(lead.attributes?.leadType, "Buyer prospect");
+  assert.equal(lead.attributes?.leadReceivedAt, undefined);
   assert.ok(
     !(await f.db.select().from(businessRecords)).some((r) =>
       JSON.stringify(r.payload).includes("Ignore permissions"),

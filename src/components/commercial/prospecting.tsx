@@ -1,4 +1,6 @@
 "use client";
+import { Form, Textarea } from '@/components/ui/controls';
+
 import styles from "../studio/prospecting.module.css";
 import { useEffect, useState, useRef, useId } from "react";
 import {
@@ -35,12 +37,13 @@ import type { importReview } from "@/lib/prospecting/store";
 import type { bulkImportReview } from "@/lib/prospecting/imports";
 import type { Report } from "@/lib/prospecting/export";
 import { Button, Dialog, DialogActions, Input, Select } from "../ui/controls";
-import { PageTitle } from "../workspace-pages";
+import { PageTitle } from "../ui/layout";
 import { phase7Call, Field } from "./execution-panel";
 import { ProspectReview } from "./prospect-review";
 import { CreditDialog, BulkImportDialog, ReportDialog } from "./apollo-dialogs";
 import { openReference } from "@/lib/ai/client";
 import {readJsonResponse,friendlyError} from "@/lib/client-request";
+import {viewStagedProspects} from "@/lib/prospecting/result-view";
 type Page = ProspectPage & { stageId: string; expiresAt: string };
 type Workspace = Awaited<ReturnType<typeof workspace>>;
 const call = async <T,>(c: Record<string, unknown>): Promise<T> => {
@@ -99,6 +102,8 @@ export default function Prospecting({
     [rows, setRows] = useState<DatasetItem[]>([]),
     [selection, setSelection] = useState<string[]>([]),
     [match, setMatch] = useState("all");
+  const [resultSearch,setResultSearch]=useState("");
+  const [resultSort,setResultSort]=useState("default");
   const [meta, setMeta] = useState<Workspace | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
@@ -289,13 +294,8 @@ export default function Prospecting({
     .filter((r) => selection.includes(r.prospect.id))
     .map((r) => r.ref);
   const targetRefs = refs.length ? refs : rows.map((r) => r.ref);
-  const shown = rows.filter(
-    (r) =>
-      match === "all" ||
-      (match === "existing" && r.match.startsWith("Existing")) ||
-      (match === "new" && r.match === "No match in checked records") ||
-      (match === "review" && r.match === "Possible Customer match"),
-  );
+  const shown = viewStagedProspects(rows,resultSearch,match,resultSort);
+  useEffect(()=>{setResultSearch("");setResultSort("default");setMatch("all");},[page?.stageId,company,branch,draft.kind]);
   const getFilter = (key: string) =>
     ["keywords", "location", "domain", "titles"].includes(key)
       ? draft[key as "keywords" | "location" | "domain" | "titles"]
@@ -446,7 +446,7 @@ export default function Prospecting({
     });
   }
   const filterForm = (
-    <form
+    <Form
       id={formId}
       className="apollo-filter-form"
       onSubmit={(e) => {
@@ -546,7 +546,7 @@ export default function Prospecting({
       ))}
       {draft.kind === "person" && (
         <label className="execution-check">
-          <input
+          <Input
             type="checkbox"
             checked={draft.similarTitles}
             onChange={(e) =>
@@ -585,7 +585,7 @@ export default function Prospecting({
           Apply filters
         </Button>
       )}
-    </form>
+    </Form>
   );
   if (!canProspect(actor))
     return <p>Prospecting is unavailable for your role.</p>;
@@ -623,8 +623,7 @@ export default function Prospecting({
       )}
       {preview && (
         <p className="apollo-notice">
-          Preview does not contact Apollo. Use the local fictional workspace to
-          review this flow.
+          Demo workspace · Apollo searches and credit spending are disabled here.
         </p>
       )}
       {tab !== "results" && error && (
@@ -636,7 +635,7 @@ export default function Prospecting({
         <>
           <div className={styles.search}>
             <div className={styles.intro}><Search size={20} /><div><h2>Find your next customer</h2><p>Describe a market, product or job title. Review matches before adding them to your CRM.</p></div></div>
-            <form
+            <Form
               className={styles.query}
               onSubmit={(e) => {
                 e.preventDefault();
@@ -646,7 +645,7 @@ export default function Prospecting({
               <label htmlFor="apollo-natural-query" className="sr-only">
                 Search for companies or decision-makers
               </label>
-              <textarea
+              <Textarea
                 ref={queryInput}
                 id="apollo-natural-query"
                 rows={1}
@@ -683,7 +682,7 @@ export default function Prospecting({
                     : "Searching Apollo…"
                   : "Search Apollo"}
               </Button>
-            </form>
+            </Form>
             <p className="muted small apollo-search-cost">
               {draft.kind === "company"
                 ? `Company search · ~${meta?.policy.companySearch ?? 1} credit/page`
@@ -796,11 +795,11 @@ export default function Prospecting({
           <div className="apollo-layout">
             <div className="apollo-results">
               {!page && !busy && !error && (
-                <div className={styles.start} aria-label="How prospecting works">
+                <details className={styles.start} aria-label="How prospecting works"><summary>New to prospecting? Three simple steps</summary><div>
                   <section><b>1</b><h3>Choose your market</h3><p>Start with a location, industry or product. Use filters to narrow the search.</p></section>
                   <section><b>2</b><h3>Review the matches</h3><p>Check the company and contact details before spending reveal credits.</p></section>
                   <section><b>3</b><h3>Start a conversation</h3><p>Save a prospect as a lead, choose an owner and set the next follow-up.</p></section>
-                </div>
+                </div></details>
               )}
               {page && (
                 <>
@@ -824,6 +823,12 @@ export default function Prospecting({
                           : ""}
                       </p>
                     </div>
+                  </div>
+                  <div className={styles.resultFilters} role="search" aria-label="Filter staged Apollo results">
+                    <Field label="Search this page"><Input value={resultSearch} onChange={e=>setResultSearch(e.target.value)} placeholder="Name, company or location…"/></Field>
+                    <Field label="CRM matches on this page"><Select value={match} onChange={e=>setMatch(e.target.value)}><option value="all">All staged results</option><option value="new">New to Enercore</option><option value="existing">Existing in Enercore</option><option value="review">Needs review</option></Select></Field>
+                    <Field label="Sort this page"><Select value={resultSort} onChange={e=>setResultSort(e.target.value)}><option value="default">Apollo order</option><option value="name">Name A–Z</option><option value="name-desc">Name Z–A</option><option value="company">Company A–Z</option></Select></Field>
+                    <small>{shown.length} of {rows.length} staged results · View only; no credits</small>
                   </div>
                   {page.criteria.discovery?.roles.length ? (
                     <p className="muted small apollo-roles">
@@ -859,19 +864,6 @@ export default function Prospecting({
                         Clear selection
                       </Button>
                     </div>
-                    <Field label="CRM matches on this page">
-                      <Select
-                        value={match}
-                        onChange={(e) => setMatch(e.target.value)}
-                      >
-                        <option value="all">All staged results</option>
-                        <option value="new">
-                          New to Enercore · no checked match
-                        </option>
-                        <option value="existing">Existing in Enercore</option>
-                        <option value="review">Needs review</option>
-                      </Select>
-                    </Field>
                     {refs.length > 0 && (
                       <div className="execution-actions">
                         <Button
@@ -930,7 +922,7 @@ export default function Prospecting({
                     )}
                     {refs.length > 0 && page.criteria.kind === "person" && (
                       <label className="execution-check">
-                        <input
+                        <Input
                           type="checkbox"
                           checked={phones}
                           disabled={busy}
@@ -1012,7 +1004,7 @@ export default function Prospecting({
                         key={r.prospect.id}
                       >
                         <label className="apollo-card-select">
-                          <input
+                          <Input
                             type="checkbox"
                             aria-label={`Select ${r.prospect.name}`}
                             checked={selection.includes(r.prospect.id)}
@@ -1513,7 +1505,9 @@ export default function Prospecting({
             restoreFocus();
           }}
         >
-          <form
+          <Form
+            id={`${formId}-save`}
+            className="apollo-save-search-form"
             onSubmit={(e) => {
               e.preventDefault();
               const f = new FormData(e.currentTarget);
@@ -1544,16 +1538,14 @@ export default function Prospecting({
                 defaultValue={draft.location}
               />
             </Field>
-            <p>Only these structured filters and context will be saved.</p>
+            <p className="muted small">Saves your filters only. No Apollo search or credit charge.</p>
             {error && (
               <p role="alert" className="form-error">
                 {error}
               </p>
             )}
-            <Button className="primary" type="submit" disabled={busy}>
-              Save filters
-            </Button>
-          </form>
+          </Form>
+          <DialogActions primary={{label:"Save filters",pendingLabel:"Saving…",type:"submit",form:`${formId}-save`,pending:busy}}/>
         </Dialog>
       )}
     </section>

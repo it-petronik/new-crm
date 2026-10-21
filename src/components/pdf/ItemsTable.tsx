@@ -12,17 +12,20 @@ function fmt(n: number) {
  * print pagination repeats the header on every page the table spans, and every
  * `tr` is `break-inside-avoid` so a row is never split across a page boundary.
  */
-export function ItemsTable({ doc }: { doc: DocumentData }) {
+export function ItemsTable({ doc, referenceFieldsOnly = false }: { doc: DocumentData; referenceFieldsOnly?: boolean }) {
+  const separateItem = referenceFieldsOnly || doc.items.some(item => item.description);
   return (
-    <table className="w-full border-collapse">
+    <table className="pdf-items w-full border-collapse">
+      <colgroup>{(separateItem ? [6,20,12,12,12,18,20] : [6,28,14,14,18,20]).map((width,index) => <col key={index} style={{width:`${width}%`}} />)}</colgroup>
       <thead className="table-header-group">
         <tr
           className="break-inside-avoid text-[11px] text-white"
           style={{ backgroundColor: "var(--pdf-table-header)" }}
         >
           <th className="px-3 py-3 text-center font-semibold whitespace-nowrap">
-            Sr. #
+            {referenceFieldsOnly ? "SI NO" : "Sr. #"}
           </th>
+          {separateItem && <th className="px-3 py-3 text-left font-semibold">{referenceFieldsOnly ? "Item #" : "Item / category"}</th>}
           <th className="px-3 py-3 text-left font-semibold whitespace-nowrap">
             Description
           </th>
@@ -30,13 +33,13 @@ export function ItemsTable({ doc }: { doc: DocumentData }) {
             Packaging
           </th>
           <th className="px-3 py-3 text-center font-semibold whitespace-nowrap">
-            Quantity
+            {referenceFieldsOnly ? `QTY ${doc.items[0]?.unit || ""}`.trim() : "Quantity"}
           </th>
           <th className="px-3 py-3 text-center font-semibold whitespace-nowrap">
             Unit Price ({doc.totals.currency})
           </th>
           <th className="px-3 py-3 text-center font-semibold whitespace-nowrap">
-            Total Amount
+            {referenceFieldsOnly ? "Total" : "Total Amount"}
           </th>
         </tr>
       </thead>
@@ -48,15 +51,13 @@ export function ItemsTable({ doc }: { doc: DocumentData }) {
             className="break-inside-avoid border-b border-slate-200"
           >
             <td className="px-4 py-4 text-center">{index + 1}</td>
+            {separateItem && <td className="px-4 py-4 font-medium">{item.description ? item.name : ""}</td>}
             <td className="px-4 py-4">
-              <span className="font-medium">{item.name}</span>
-              {item.description && (
-                <span className="block text-slate-500">{item.description}</span>
-              )}
+              <span className="font-medium">{separateItem ? item.description || item.name : item.name}</span>
             </td>
             <td className="px-4 py-4 text-center">{item.packaging || "—"}</td>
             <td className="px-4 py-4 text-center">
-              {item.quantity} {item.unit || ""}
+              {fmt(item.quantity)} {item.unit || ""}
             </td>
             <td className="px-4 py-4 text-center tabular-nums">
               {fmt(item.unitPrice)}

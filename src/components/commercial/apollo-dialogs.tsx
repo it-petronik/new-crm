@@ -299,7 +299,7 @@ export function BulkImportDialog({
     return (
       <li key={r.prospect.id} className="bulk-row">
         {toggle && (
-          <input
+          <Input
             type="checkbox"
             aria-label={`Include ${r.prospect.name}`}
             checked={!items[i].skip}
@@ -391,7 +391,7 @@ export function BulkImportDialog({
             </details>
           )}
           <label className="execution-check">
-            <input
+            <Input
               type="checkbox"
               checked={allLeads}
               disabled={busy || !included.length}

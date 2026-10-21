@@ -5,6 +5,7 @@ import { FollowUpMenu } from "./follow-up-control";
 import { myDay, type AttentionItem } from "@/lib/attention";
 import { companyName } from "@/lib/company-name";
 import { allowedModules, money, type Actor, type Kind, type RecordItem } from "@/lib/domain";
+import { quickCreateKinds } from "@/lib/workspace-experience";
 
 /**
  * The employee home.
@@ -30,7 +31,6 @@ export default function MyDay({
 }) {
   const day = myDay(actor, records);
   const permitted = allowedModules(actor);
-  const first = actor.name.split(" ")[0];
 
   const recent = records
     .filter((r) => r.ownerId === actor.id && !r.deletedAt)
@@ -44,21 +44,14 @@ export default function MyDay({
       { kind: "suppliers" as const, label: "Add supplier" },
       { kind: "products" as const, label: "Add product" },
     ] as const
-  ).filter((a) => permitted.includes(a.kind));
+  ).filter((a) => quickCreateKinds(actor, company === "All companies" ? actor.companies[0] : company).includes(a.kind)).slice(0, 2);
 
   return (
     <div className="my-day">
       <header className="my-day-head">
         <div>
-          <span className="eyebrow">MY DAY</span>
-          <h1>
-            {day.clear ? `You're caught up, ${first}.` : `Good to see you, ${first}.`}
-          </h1>
-          <p className="muted">
-            {day.clear
-              ? "Nothing is overdue or due today. Anything you add now will come back to you when it's due."
-              : `${day.overdue.length + day.today.length + day.approvals.length} things need you today · ${companyName(company)}`}
-          </p>
+          <h2>Today</h2>
+          {!day.clear && <p className="muted">{day.overdue.length + day.today.length + day.approvals.length} items need attention</p>}
         </div>
         {quickActions.length > 0 && (
           <div className="my-day-actions">
@@ -116,18 +109,13 @@ export default function MyDay({
         <section className="panel my-day-clear">
           <CheckCircle2 size={22} aria-hidden="true" />
           <div>
-            <b>Nothing needs you right now.</b>
+            <b>You’re caught up.</b>
             <p className="muted">
               {day.soon.length
                 ? `${day.soon.length} follow-up${day.soon.length === 1 ? "" : "s"} coming up this week.`
-                : "No follow-ups scheduled this week either — a good moment to add one."}
+                : "No follow-ups due today."}
             </p>
           </div>
-          {quickActions[0] && (
-            <Button className="primary" onClick={() => onQuickAdd(quickActions[0].kind)}>
-              <Plus size={16} /> {quickActions[0].label}
-            </Button>
-          )}
         </section>
       )}
 

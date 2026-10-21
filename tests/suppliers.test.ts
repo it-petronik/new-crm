@@ -30,7 +30,7 @@ test("suppliers respect company boundaries, read-only restrictions and existing 
   );
   assert.equal(
     canWrite({ ...previewActor, role: "MD Assistant" }, supplier),
-    false,
+    true,
   );
 });
 test("supplier status changes remain audited and do not create financial records", () => {

@@ -23,7 +23,7 @@ export function Totals({
   const cur = totals.currency;
 
   return (
-    <div className="flex break-inside-avoid justify-end">
+    <div className="pdf-totals flex break-inside-avoid justify-end">
       <div className="w-82.5">
         <div className="flex justify-between border-b py-2.5">
           <span className="font-medium">Subtotal</span>
@@ -42,8 +42,8 @@ export function Totals({
         )}
 
         <div
-          className="mt-2.5 flex justify-between rounded px-4 py-3 text-base font-bold text-white"
-          style={{ backgroundColor: "var(--pdf-accent)" }}
+          className="pdf-grand-total mt-2.5 flex justify-between rounded px-4 py-3 text-base font-bold text-white"
+          style={{ backgroundColor: "var(--pdf-heading)" }}
         >
           <span>Total Amount</span>
           <span>

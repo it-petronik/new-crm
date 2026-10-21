@@ -1,4 +1,6 @@
 "use client";
+import { Form } from '@/components/ui/controls';
+
 import { StatusBadge } from "./ui/status-badge";
 import { companyName } from "@/lib/company-name";
 import { PageHeader } from "./ui/layout";
@@ -91,7 +93,7 @@ export default function MyRequests({
         </div>
       </div>
       {formOpen && <Dialog title="New request" description="Choose what you need. We’ll send it to the right team." onClose={() => { if (!busy) setFormOpen(false); }} dismissOnOutside={false} className="request-create-dialog">
-          <form
+          <Form
             id="self-service-request"
             noValidate
             className="request-form"
@@ -251,7 +253,7 @@ export default function MyRequests({
               </p>
             )}
             <DialogActions pending={busy} onCancel={() => setFormOpen(false)} start={<span className="muted small">{kind === "leave" ? "Sent for approval after you submit." : "Sent to IT after you submit."}</span>} primary={{label:busy ? "Submitting…" : kind === "leave" ? "Request leave" : "Send to IT",type:"submit",form:"self-service-request",disabled:busy || !loaded}}/>
-          </form>
+          </Form>
         </Dialog>}
         <section className="panel request-history-panel">
           <div className="panel-heading">

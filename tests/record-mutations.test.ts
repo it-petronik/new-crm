@@ -18,7 +18,7 @@ test("deletion retains audit payload, hides record and checks scope and linked r
   const deleted = mutateRecord(data, previewActor, r.id, r.updatedAt);
   assert.ok(deleted.records.find(v => v.id === r.id)?.deletedAt);
   assert.ok(!scopedWorkspace(previewActor, deleted).records.some(v => v.id === r.id));
-  assert.throws(() => mutateRecord(data, { ...previewActor, role: "MD Assistant" }, r.id, r.updatedAt), /permission/);
+  assert.ok(mutateRecord(data, { ...previewActor, role: "MD Assistant" }, r.id, r.updatedAt).records.find(v=>v.id===r.id)?.deletedAt);
   assert.throws(() => mutateRecord(data, { ...previewActor, companies: ["Afrilube"] }, r.id, r.updatedAt), /permission/);
   data.records.push({ ...r, id: "child", parentId: r.id });
   assert.throws(() => mutateRecord(data, previewActor, r.id, r.updatedAt), /linked/);

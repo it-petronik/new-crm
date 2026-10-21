@@ -1,9 +1,14 @@
 import { isCashEntry } from "./cashbook";
+import { proformaError } from "./proforma";
+import { qualificationMissing, buyerInquiry } from "./lead-desk";
 import {
   canWrite,
+  isFullAdmin,
   canApprove,
   stages,
   outstanding,
+  isProforma,
+  recordStages,
   type Actor,
   type RecordItem,
   type Workspace,
@@ -15,10 +20,30 @@ export function transition(
   status: string,
 ): Workspace {
   const record = workspace.records.find((r) => r.id === id);
-  if (!record || !canWrite(actor, record))
-    throw new Error("You do not have permission to change this record.");
-  if (!(isCashEntry(record) ? ["Recorded", "Cancelled"] : stages[record.kind]).includes(status)) throw new Error("Invalid status.");
+  if (!record) throw new Error("This record is no longer available.");
+  assertTransition(actor, record, status);
   if (record.status === status) return workspace;
+  return applyTransition(workspace, actor, record, status);
+}
+
+/** Shared with the UI: do not offer a transition which these rules reject.
+ * APIs still independently authorise and validate every submitted change. */
+function assertTransition(actor: Actor, record: RecordItem, status: string) {
+  if (!canWrite(actor, record))
+    throw new Error("You do not have permission to change this record.");
+  if (isProforma(record) && status !== record.status && (record.status === "Cancelled" || (record.status === "Issued" && status === "Draft"))) throw new Error("An issued proforma cannot be reopened. Create a new document for a revision.");
+  if (!(isCashEntry(record) ? ["Recorded", "Cancelled"] : recordStages(record)).includes(status)) throw new Error("Invalid status. Choose an available status for this document.");
+  if (record.status === status) return;
+  if (record.kind === "leads" && record.attributes?.leadTracking === "1" && ["Qualified", "Quote Sent", "Negotiation", "Won"].includes(status)) {
+    if (!buyerInquiry(record)) throw new Error("Only a confirmed buyer inquiry can move into the sales pipeline. Update its lead type first.");
+    const missing = qualificationMissing(record);
+    if (missing.length) throw new Error(`Complete these qualification details first: ${missing.join(", ")}.`);
+  }
+  if (isProforma(record)) {
+    if (record.status === "Cancelled" || (record.status === "Issued" && status !== "Cancelled")) throw new Error("An issued proforma cannot be reopened. Create a new document for a revision.");
+    const problem = proformaError(record);
+    if (status === "Issued" && problem) throw new Error(problem);
+  }
   if (record.kind === "accounts" && ["Paid", "Partially Paid"].includes(status))
     throw new Error("Record a payment to update the invoice balance.");
   if (
@@ -70,9 +95,20 @@ export function transition(
     ["Draft", "Pending Approval"].includes(status)
   )
     throw new Error("Create a new quotation revision instead.");
+}
+
+export function availableStatuses(actor: Actor, record: RecordItem): string[] {
+  if (!canWrite(actor, record)) return [];
+  return (isCashEntry(record) ? ["Recorded", "Cancelled"] : recordStages(record)).filter(status => {
+    try { assertTransition(actor, record, status); return true; } catch { return false; }
+  });
+}
+
+function applyTransition(workspace: Workspace, actor: Actor, record: RecordItem, status: string): Workspace {
+  const id = record.id;
   const now = new Date().toISOString();
   let records = workspace.records.map((r) =>
-    r.id === id ? { ...r, status, updatedAt: now } : r,
+    r.id === id ? { ...r, status, updatedAt: now, ...(r.kind === "leads" && status === "Qualified" && !r.attributes?.leadQualifiedAt ? { attributes: { ...r.attributes, leadQualifiedAt: now } } : {}), ...(isProforma(r) && status === "Issued" ? { attributes: { ...r.attributes, issuedBy: actor.name, issuedById: actor.id, issuedAt: now } } : {}) } : r,
   );
   if (record.kind === "quotations" && status === "Accepted") {
     const orderId = `${id}-SO`;
@@ -115,6 +151,7 @@ export function addNote(
 ): Workspace {
   const record = workspace.records.find((r) => r.id === id);
   if (!record || !canWrite(actor, record)) throw new Error("Access denied.");
+  if (isProforma(record) && due) throw new Error("A proforma's validity date can only be changed while editing its draft.");
   if (!text.trim() || text.length > 5000)
     throw new Error("Enter a note of 1–5000 characters.");
   if (due && !/^\d{4}-\d{2}-\d{2}$/.test(due))
@@ -160,6 +197,7 @@ export function recordPayment(
   const record = workspace.records.find((r) => r.id === id);
   if (!record || !canWrite(actor, record) || record.kind !== "accounts")
     throw new Error("Access denied.");
+  if (isProforma(record)) throw new Error("A proforma is not a payment invoice. Record payments against the issued receivable instead.");
   if (["Draft", "Cancelled", "Paid"].includes(record.status))
     throw new Error("Only issued, unpaid invoices can receive payments.");
   if (
@@ -227,7 +265,8 @@ const LEADS_BY_ROLE: Partial<Record<Actor["role"], readonly string[]>> = {
 export function canAssign(actor: Actor, record: RecordItem) {
   if (!(ASSIGNABLE_KINDS as readonly string[]).includes(record.kind) || isCashEntry(record)) return false;
   if (!canWrite(actor, record)) return false;
-  if (["MD", "Group Manager", "Branch Manager"].includes(actor.role)) return true;
+  if (record.kind === "leads") return isFullAdmin(actor) || record.attributes?.leadCapturedById === actor.id || ["Sales Manager", "Marketing Manager"].includes(actor.role);
+  if (isFullAdmin(actor) || ["Group Manager", "Branch Manager"].includes(actor.role)) return true;
   return !!LEADS_BY_ROLE[actor.role]?.includes(record.kind);
 }
 
@@ -239,7 +278,7 @@ export function assign(
   workspace: Workspace,
   actor: Actor,
   id: string,
-  assignee: { id: string; name: string },
+  assignee: { id: string; name: string; role?: string },
 ): Workspace {
   const record = workspace.records.find((r) => r.id === id);
   if (!record || !canAssign(actor, record))
@@ -248,7 +287,7 @@ export function assign(
   const now = new Date().toISOString();
   return {
     records: workspace.records.map((r) =>
-      r.id === id ? { ...r, ownerId: assignee.id, owner: assignee.name, updatedAt: now } : r,
+      r.id === id ? { ...r, ownerId: assignee.id, owner: assignee.name, updatedAt: now, ...(r.kind === "leads" ? { attributes: { ...r.attributes, leadAssignedAt: now, leadAssignedBy: actor.name, leadOwnerRole: assignee.role || "", leadAcknowledgedAt: "", leadAcknowledgedOwnerId: "" } } : {}) } : r,
     ),
     audit: [
       {

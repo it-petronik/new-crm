@@ -91,7 +91,7 @@ test("model output: JSON is parsed from fences, validated, and unknown reference
 });
 
 test("management tools follow module access", () => {
-  assert.deepEqual(toolsFor(as("HR Executive")), []);
+  assert.deepEqual(toolsFor(as("HR Executive")), ["status_breakdown"]);
   assert.deepEqual(toolsFor(as("Accountant")).sort(), ["receivables", "search", "status_breakdown"]);
   assert.ok(toolsFor(as("MD")).includes("pipeline_summary"));
   // A module switched off for this person removes its tools.

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import {
   allowedModules,
+  canWrite,
   money,
   outstanding,
   type Actor,
@@ -26,20 +27,30 @@ import { attentionItems } from "@/lib/attention";
 import { companyName } from "@/lib/company-name";
 import { formatMoneyCompact } from "@/lib/money-format";
 import { isCashEntry } from "@/lib/cashbook";
+import { isProforma } from "@/lib/domain";
 import { businessStampShort } from "@/lib/gst";
-import { Button, Select } from "../ui/controls";
+import { Button, Select, Dialog, DialogActions } from "../ui/controls";
 import { StatusBadge } from "../ui/status-badge";
 import { Avatar } from "../avatar";
 import styles from "./dashboard.module.css";
+import ManagementOverview, {
+  type ManagementReportState,
+} from "./management-overview";
+import { canViewManagement, managementScope } from "@/lib/management-dashboard";
 
 export default function StudioDashboard({
   actor,
-  records,
+  records: initialRecords,
   currentRecords,
   onSelect,
   go,
   onQuickAdd,
   events,
+  live = false,
+  company = "All companies",
+  from = "",
+  to = "",
+  currency = "USD",
 }: {
   actor: Actor;
   records: RecordItem[];
@@ -48,16 +59,31 @@ export default function StudioDashboard({
   go: (m: Module) => void;
   onQuickAdd: (kind?: Kind) => void;
   events: Audit[];
+  live?: boolean;
+  company?: string;
+  from?: string;
+  to?: string;
+  currency?: string;
 }) {
-  const currencies = [
-    ...new Set(records.map((r) => r.currency).filter(Boolean)),
-  ].sort();
-  const [choice, setChoice] = useState("USD");
-  const currency = currencies.includes(choice)
-    ? choice
-    : currencies[0] || "USD";
+  const [management, setManagement] = useState<ManagementReportState | null>(
+    null,
+  );
+  const managementAllowed = canViewManagement(actor);
+  const completeRecords =
+    managementAllowed && management?.scope === managementScope(actor)
+      ? management.records
+      : null;
+  // The executive figures use the same complete, permission-checked data as
+  // the department report, not the ordinary 1000-row display window.
+  const records = (completeRecords || initialRecords).filter(
+    (r) =>
+      (company === "All companies" || r.company === company) &&
+      (!from || r.createdAt.slice(0, 10) >= from) &&
+      (!to || r.createdAt.slice(0, 10) <= to),
+  );
+  const pendingTotals = managementAllowed && !completeRecords;
   const [chartCompany, setChartCompany] = useState<string | null>(null);
-  const [tab, setTab] = useState<"performance" | "priorities">("performance");
+  const [prioritiesOpen, setPrioritiesOpen] = useState(false);
   const allowed = allowedModules(actor);
   const leads = records.filter((r) => r.kind === "leads");
   const open = leads.filter((r) => !["Won", "Lost"].includes(r.status));
@@ -75,13 +101,19 @@ export default function StudioDashboard({
     (r) =>
       r.kind === "accounts" &&
       !isCashEntry(r) &&
+      !isProforma(r) &&
       !["Paid", "Cancelled"].includes(r.status),
   );
   const sum = (rows: RecordItem[]) =>
     rows
       .filter((r) => r.currency === currency)
       .reduce((s, r) => s + r.amount, 0);
-  const priority = attentionItems(actor, currentRecords);
+  const priority = attentionItems(
+    actor,
+    (completeRecords || currentRecords).filter(
+      (r) => company === "All companies" || r.company === company,
+    ),
+  );
   const metrics = [
     {
       title: "Confirmed sales",
@@ -133,31 +165,6 @@ export default function StudioDashboard({
     .slice(0, 5);
   return (
     <div className={styles.dashboard} data-ui="studio-dashboard">
-      <div className={styles.toolbar}>
-        <div className={styles.tabs} aria-label="Dashboard view">
-          <button
-            aria-pressed={tab === "performance"}
-            onClick={() => setTab("performance")}
-          >
-            Performance
-          </button>
-          <button
-            aria-pressed={tab === "priorities"}
-            onClick={() => setTab("priorities")}
-          >
-            My priorities <span>{priority.length}</span>
-          </button>
-        </div>
-        <Select
-          aria-label="Dashboard currency"
-          value={currency}
-          onChange={(e) => setChoice(e.target.value)}
-        >
-          {(currencies.length ? currencies : ["USD"]).map((c) => (
-            <option key={c}>{c}</option>
-          ))}
-        </Select>
-      </div>
       <div className={styles.metrics}>
         {metrics.map((m) => (
           <button
@@ -169,247 +176,283 @@ export default function StudioDashboard({
               {m.title}
               <m.icon size={17} />
             </span>
-            <strong>{m.value}</strong>
+            <span className={styles.metricValue}>
+              <strong>{pendingTotals ? "—" : m.value}</strong>
+            </span>
             <span className={styles.metricNote}>
-              {m.note}
+              {pendingTotals
+                ? management?.error
+                  ? "Complete totals unavailable"
+                  : "Loading complete totals…"
+                : `${m.note}${management?.error ? " · Last successful update" : ""}`}
               <ArrowUpRight size={15} />
             </span>
           </button>
         ))}
       </div>
-      <div className={styles.grid}>
-        {tab === "performance" ? (
-          <section className={`${styles.card} ${styles.performance}`}>
-            <div className={styles.cardHead}>
-              <div>
-                <h2>Sales overview</h2>
-                <p>Confirmed orders and future opportunities</p>
-              </div>
-              <span className={styles.unit}>{currency}</span>
-            </div>
-            <div className={styles.chartTotal}>
-              <strong>{formatMoneyCompact(salesTotal, currency)}</strong>
-              <span>
-                Confirmed order value
-                <br />
-                <small>Not collected revenue</small>
-              </span>
-            </div>
-            {series.some((r) => r.sales || r.pipeline) ? (
-              <>
-                <div
-                  className={styles.chart}
-                  aria-label={`Sales and pipeline by company in ${currency}`}
-                >
-                  <div className={styles.axis}>
-                    {[1, 0.75, 0.5, 0.25, 0].map((t) => (
-                      <span key={t}>
-                        {formatMoneyCompact(max * t, currency)}
-                      </span>
-                    ))}
-                  </div>
-                  <div className={styles.plot}>
-                    {series.map((r) => (
-                      <div className={styles.barGroup} key={r.name} onMouseEnter={() => setChartCompany(r.name)} onMouseLeave={() => setChartCompany(null)} onFocus={() => setChartCompany(r.name)} onBlur={() => setChartCompany(null)}>
-                        <div className={styles.bars}>
-                          <button
-                            style={{ height: `${(r.sales / max) * 100}%` }}
-                            disabled={
-                              r.sales === 0 || !allowed.includes("orders")
-                            }
-                            aria-label={`${r.name} confirmed sales ${money(r.sales, currency)}. View orders`}
-                            title={`${r.name} · Confirmed sales ${money(r.sales, currency)}`}
-                            onClick={() => go("orders")}
-                          />
-                          <button
-                            style={{ height: `${(r.pipeline / max) * 100}%` }}
-                            disabled={
-                              r.pipeline === 0 || !allowed.includes("leads")
-                            }
-                            aria-label={`${r.name} open pipeline ${money(r.pipeline, currency)}. View leads`}
-                            title={`${r.name} · Open pipeline ${money(r.pipeline, currency)}`}
-                            onClick={() => go("leads")}
-                          />
-                        </div>
-                        <span>{r.name}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className={styles.chartReadout}>
-                  {chartCompany ? <><strong>{chartCompany}</strong><span>Orders <b>{money(series.find(r => r.name === chartCompany)?.sales || 0, currency)}</b></span><span>Pipeline <b>{money(series.find(r => r.name === chartCompany)?.pipeline || 0, currency)}</b></span></> : <span>Hover or focus a bar to inspect · Select to open records</span>}
-                </div>
-                <div className={styles.legend}>
-                  <span>
-                    <i />
-                    Confirmed orders
-                  </span>
-                  <span>
-                    <i />
-                    Open pipeline
-                  </span>
-                </div>
-              </>
-            ) : (
-              <div className={styles.empty}>
-                <Activity size={28} />
-                <strong>Your sales story starts here</strong>
-                <p>
-                  Confirmed orders and open leads will appear here. Choose a
-                  wider date range to include older records.
-                </p>
-                {allowed.includes("leads") && (
-                  <Button
-                    variant="secondary"
-                    onClick={() => onQuickAdd("leads")}
-                  >
-                    <Plus size={14} />
-                    Add a lead
-                  </Button>
-                )}
-              </div>
-            )}
-          </section>
-        ) : (
-          <section className={styles.card}>
-            <div className={styles.cardHead}>
-              <div>
-                <h2>Your next moves</h2>
-                <p>Current work, regardless of the reporting period</p>
-              </div>
-              <span className={styles.unit}>{priority.length} open</span>
-            </div>
-            <div className={styles.priorities} role="region" aria-label="Your next moves" tabIndex={0}>
-              {priority.map((item) => (
-                <button key={item.id} onClick={() => onSelect(item.record)}>
-                  <span className={styles.priorityDot} />
-                  <span>
-                    <strong>{item.record.title}</strong>
-                    <small>{item.reason}</small>
-                  </span>
-                  <ArrowUpRight size={15} />
-                </button>
-              ))}
-              {!priority.length && (
-                <div className={styles.empty}>
-                  <CheckCheck size={28} />
-                  <strong>You’re all caught up</strong>
-                  <p>No overdue work or approvals within your access.</p>
-                </div>
-              )}
-            </div>
-            {priority.length > 5 && <p className={styles.scrollHint}>Scroll the list to review all {priority.length} priorities.</p>}
-          </section>
-        )}
-        <section className={`${styles.card} ${styles.focus}`}>
-          <div className={styles.cardHead}>
-            <div>
-              <span className={styles.eyebrow}>TODAY’S FOCUS</span>
-              <h2>Make the next move.</h2>
-            </div>
-            <span className={styles.focusIcon}>
-              <Target size={21} />
-            </span>
+      {managementAllowed && (
+        <ManagementOverview
+          actor={actor}
+          records={currentRecords}
+          live={live}
+          company={company}
+          from={from}
+          to={to}
+          go={go}
+          onSelect={onSelect}
+          onReport={setManagement}
+        />
+      )}
+      {!pendingTotals && (
+        <section className={styles.attentionBar} aria-label="Needs attention">
+          <div>
+            <h2>
+              Needs attention <span>{priority.length}</span>
+            </h2>
+            <small>Current overdue work and approvals</small>
           </div>
-          <p className={styles.focusDescription}>
-            A clear view of what needs you, so nothing important slips through.
-          </p>
-          <div className={styles.focusCount}>
-            <strong>{priority.length.toString().padStart(2, "0")}</strong>
-            <span>
-              items need
-              <br />
-              your attention
-            </span>
-          </div>
-          <div className={styles.focusList}>
+          <div className={styles.attentionItems}>
             {priority.slice(0, 3).map((item) => (
               <button key={item.id} onClick={() => onSelect(item.record)}>
-                <span>
-                  <strong>{item.record.title}</strong>
-                  <small>{item.category}</small>
-                </span>
-                <ArrowRight size={16} />
+                <strong>{item.record.title}</strong>
+                <small>{item.reason}</small>
               </button>
             ))}
-            {!priority.length && (
-              <p className={styles.caughtUp}>
-                <CheckCheck size={17} />
-                Nothing urgent right now.
-              </p>
-            )}
+            {!priority.length && <span>Nothing urgent right now.</span>}
           </div>
-          <button
-            className={styles.focusAction}
-            onClick={() =>
-              setTab(tab === "priorities" ? "performance" : "priorities")
-            }
+          <Button
+            variant="secondary"
+            size="small"
+            onClick={() => setPrioritiesOpen(true)}
           >
-            {tab === "priorities" ? "Back to performance" : "Review priorities"}
-            <ArrowRight size={16} />
-          </button>
+            Review all
+          </Button>
         </section>
-        <section className={styles.card}>
-          <div className={styles.cardHead}>
-            <div>
-              <h2>Recent records</h2>
-              <p>Your latest work, in one place</p>
-            </div>
-            <span className={styles.unit}>{records.length} in period</span>
-          </div>
-          <div className={styles.recent}>
-            {recent.map((r) => (
-              <button key={r.id} onClick={() => onSelect(r)}>
-                <Avatar name={r.title} size={32} />
+      )}
+      {!pendingTotals && (
+        <details className={styles.report}>
+          <summary>Sales & activity details</summary>
+          <div className={styles.grid}>
+            <section className={`${styles.card} ${styles.performance}`}>
+              <div className={styles.cardHead}>
+                <div>
+                  <h2>Sales overview</h2>
+                  <p>Confirmed orders and future opportunities</p>
+                </div>
+                <span className={styles.unit}>{currency}</span>
+              </div>
+              <div className={styles.chartTotal}>
+                <strong>{formatMoneyCompact(salesTotal, currency)}</strong>
                 <span>
-                  <strong>{r.title}</strong>
-                  <small>
-                    {companyName(r.company)} · {r.product || r.kind}
-                  </small>
+                  Confirmed order value
+                  <br />
+                  <small>Not collected revenue</small>
                 </span>
-                <StatusBadge status={r.status} />
+              </div>
+              {series.some((r) => r.sales || r.pipeline) ? (
+                <>
+                  <div
+                    className={styles.chart}
+                    aria-label={`Sales and pipeline by company in ${currency}`}
+                  >
+                    <div className={styles.axis}>
+                      {[1, 0.75, 0.5, 0.25, 0].map((t) => (
+                        <span key={t}>
+                          {formatMoneyCompact(max * t, currency)}
+                        </span>
+                      ))}
+                    </div>
+                    <div className={styles.plot}>
+                      {series.map((r) => (
+                        <div
+                          className={styles.barGroup}
+                          key={r.name}
+                          onMouseEnter={() => setChartCompany(r.name)}
+                          onMouseLeave={() => setChartCompany(null)}
+                          onFocus={() => setChartCompany(r.name)}
+                          onBlur={() => setChartCompany(null)}
+                        >
+                          <div className={styles.bars}>
+                            <button
+                              style={{ height: `${(r.sales / max) * 100}%` }}
+                              disabled={
+                                r.sales === 0 || !allowed.includes("orders")
+                              }
+                              aria-label={`${r.name} confirmed sales ${money(r.sales, currency)}. View orders`}
+                              title={`${r.name} · Confirmed sales ${money(r.sales, currency)}`}
+                              onClick={() => go("orders")}
+                            />
+                            <button
+                              style={{ height: `${(r.pipeline / max) * 100}%` }}
+                              disabled={
+                                r.pipeline === 0 || !allowed.includes("leads")
+                              }
+                              aria-label={`${r.name} open pipeline ${money(r.pipeline, currency)}. View leads`}
+                              title={`${r.name} · Open pipeline ${money(r.pipeline, currency)}`}
+                              onClick={() => go("leads")}
+                            />
+                          </div>
+                          <span>{r.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className={styles.chartReadout}>
+                    {chartCompany ? (
+                      <>
+                        <strong>{chartCompany}</strong>
+                        <span>
+                          Orders{" "}
+                          <b>
+                            {money(
+                              series.find((r) => r.name === chartCompany)
+                                ?.sales || 0,
+                              currency,
+                            )}
+                          </b>
+                        </span>
+                        <span>
+                          Pipeline{" "}
+                          <b>
+                            {money(
+                              series.find((r) => r.name === chartCompany)
+                                ?.pipeline || 0,
+                              currency,
+                            )}
+                          </b>
+                        </span>
+                      </>
+                    ) : (
+                      <span>
+                        Hover or focus a bar to inspect · Select to open records
+                      </span>
+                    )}
+                  </div>
+                  <div className={styles.legend}>
+                    <span>
+                      <i />
+                      Confirmed orders
+                    </span>
+                    <span>
+                      <i />
+                      Open pipeline
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <div className={styles.empty}>
+                  <Activity size={28} />
+                  <strong>Your sales story starts here</strong>
+                  <p>
+                    Confirmed orders and open leads will appear here. Choose a
+                    wider date range to include older records.
+                  </p>
+                  {canWrite(actor, {
+                    kind: "leads",
+                    company: actor.companies[0],
+                    branch: actor.branches[0] || "Main",
+                    ownerId: actor.id,
+                  } as RecordItem) && (
+                    <Button
+                      variant="secondary"
+                      onClick={() => onQuickAdd("leads")}
+                    >
+                      <Plus size={14} />
+                      Add a lead
+                    </Button>
+                  )}
+                </div>
+              )}
+            </section>
+            <section className={styles.card}>
+              <div className={styles.cardHead}>
+                <div>
+                  <h2>Recent records</h2>
+                  <p>Your latest work, in one place</p>
+                </div>
+                <span className={styles.unit}>{records.length} in period</span>
+              </div>
+              <div className={styles.recent}>
+                {recent.map((r) => (
+                  <button key={r.id} onClick={() => onSelect(r)}>
+                    <Avatar name={r.title} size={32} />
+                    <span>
+                      <strong>{r.title}</strong>
+                      <small>
+                        {companyName(r.company)} · {r.product || r.kind}
+                      </small>
+                    </span>
+                    <StatusBadge status={r.status} />
+                    <ArrowUpRight size={15} />
+                  </button>
+                ))}
+                {!recent.length && (
+                  <div className={styles.empty}>
+                    <FileText size={26} />
+                    <strong>No records in this period</strong>
+                    <p>Try another date range or create your first record.</p>
+                  </div>
+                )}
+              </div>
+            </section>
+            <section className={styles.card}>
+              <div className={styles.cardHead}>
+                <div>
+                  <h2>Workspace activity</h2>
+                  <p>Latest changes across your scope</p>
+                </div>
+                <Activity size={17} />
+              </div>
+              <div className={styles.timeline}>
+                {events.slice(0, 4).map((e) => (
+                  <div key={e.id}>
+                    <Circle size={9} />
+                    <span>
+                      <strong>{e.action}</strong>
+                      <small>
+                        {e.actor} · {businessStampShort(e.at)}
+                      </small>
+                    </span>
+                  </div>
+                ))}
+                {!events.length && (
+                  <div className={styles.empty}>
+                    <Activity size={26} />
+                    <strong>No updates yet</strong>
+                    <p>Changes made by your team will appear here.</p>
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+        </details>
+      )}
+      {prioritiesOpen && (
+        <Dialog
+          title="Needs attention"
+          onClose={() => setPrioritiesOpen(false)}
+        >
+          <div className={styles.priorities}>
+            {priority.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => {
+                  setPrioritiesOpen(false);
+                  onSelect(item.record);
+                }}
+              >
+                <span>
+                  <strong>{item.record.title}</strong>
+                  <small>{item.reason}</small>
+                </span>
                 <ArrowUpRight size={15} />
               </button>
             ))}
-            {!recent.length && (
-              <div className={styles.empty}>
-                <FileText size={26} />
-                <strong>No records in this period</strong>
-                <p>Try another date range or create your first record.</p>
-              </div>
-            )}
+            {!priority.length && <p>Nothing urgent right now.</p>}
           </div>
-        </section>
-        <section className={styles.card}>
-          <div className={styles.cardHead}>
-            <div>
-              <h2>Workspace activity</h2>
-              <p>Latest changes across your scope</p>
-            </div>
-            <Activity size={17} />
-          </div>
-          <div className={styles.timeline}>
-            {events.slice(0, 4).map((e) => (
-              <div key={e.id}>
-                <Circle size={9} />
-                <span>
-                  <strong>{e.action}</strong>
-                  <small>
-                    {e.actor} · {businessStampShort(e.at)}
-                  </small>
-                </span>
-              </div>
-            ))}
-            {!events.length && (
-              <div className={styles.empty}>
-                <Activity size={26} />
-                <strong>No updates yet</strong>
-                <p>Changes made by your team will appear here.</p>
-              </div>
-            )}
-          </div>
-        </section>
-      </div>
+          <DialogActions onCancel={() => setPrioritiesOpen(false)} />
+        </Dialog>
+      )}
     </div>
   );
 }

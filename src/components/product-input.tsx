@@ -11,6 +11,8 @@ export function ProductInput({
   unit,
   onChange,
   onSelect,
+  id: controlId,
+  "aria-describedby": describedBy,
 }: {
   value: string;
   products: RecordItem[];
@@ -19,6 +21,8 @@ export function ProductInput({
   unit: string;
   onChange: (value: string) => void;
   onSelect: (product: RecordItem) => void;
+  id?: string;
+  "aria-describedby"?: string;
 }) {
   const id = useId();
   const [open, setOpen] = useState(false);
@@ -38,6 +42,8 @@ export function ProductInput({
   return (
     <div className="product-combobox">
       <Input
+        id={controlId}
+        aria-describedby={describedBy}
         aria-label={label}
         role="combobox"
         aria-autocomplete="list"

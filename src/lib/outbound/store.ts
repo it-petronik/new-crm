@@ -155,6 +155,7 @@ export async function outboundView(
         "Group Manager",
         "Branch Manager",
         "MD",
+        "IT Administrator",
         "Marketing Manager",
         "Marketing Executive",
       ].includes(actor.role),

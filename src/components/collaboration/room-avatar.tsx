@@ -1,4 +1,6 @@
 "use client";
+import { Input } from '@/components/ui/controls';
+
 
 import { useRef, useState } from "react";
 import { Hash, ImagePlus, Lock, Trash2 } from "lucide-react";
@@ -102,7 +104,7 @@ export function RoomAvatarEditor({ room, onChanged }: { room: RoomLike; onChange
         <small>Square images work best. JPEG, PNG, WebP or GIF.</small>
         {error && <small className="is-error" role="alert">{error}</small>}
       </div>
-      <input
+      <Input
         ref={input}
         type="file"
         accept="image/jpeg,image/png,image/webp,image/gif"

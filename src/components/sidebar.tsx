@@ -3,7 +3,7 @@
 import styles from "./studio/navigation.module.css";
 import { BrandLogo } from "./brand";
 import Link from "next/link";
-import { useLayoutEffect } from "react";
+import { useEffect, useId, useLayoutEffect, useState } from "react";
 import * as Drawer from "@radix-ui/react-dialog";
 import {
   Activity,
@@ -30,6 +30,7 @@ import {
   ListChecks,
   Radar,
   SquareCheckBig,
+  ChevronDown,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -41,7 +42,8 @@ import {
 } from "@/lib/domain";
 import { canProspect } from "@/lib/execution/model";
 import { operationsAccess } from "@/lib/operations/model";
-import { type WorkspaceView } from "./workspace-pages";
+import { type WorkspaceView } from "@/lib/workspace-experience";
+import { roleHome } from "@/lib/role-home";
 import { Button, Tooltip } from "./ui/controls";
 import { moduleHelp, viewHelp } from "@/lib/workspace-help";
 import { Avatar } from "./avatar";
@@ -113,11 +115,11 @@ const groups: [string, NavEntry[]][] = [
       { module: "quotations" },
       { module: "orders" },
       { module: "customers" },
-      { module: "suppliers" },
       { module: "products" },
       { view: "prospecting", label: "Prospecting", icon: Radar },
     ],
   ],
+  ["Procurement", [{ module: "suppliers" }]],
   [
     "Team",
     [
@@ -137,6 +139,7 @@ const groups: [string, NavEntry[]][] = [
       { module: "approvals" },
       { module: "activity" },
       { module: "settings" },
+      { view: "catalogs", label: "Option Catalogs", icon: Settings2 },
       { view: "access", label: "Access control", icon: ShieldCheck },
     ],
   ],
@@ -173,6 +176,28 @@ export default function Sidebar({
   onView: (view: WorkspaceView) => void;
 }) {
   const photo = useAvatar(actor.id);
+  const groupId = useId();
+  const navStorage = `enercore-nav-groups:${actor.id}`;
+  const leadership = ["MD", "MD Assistant", "IT Administrator", "Group Manager", "Branch Manager"].includes(actor.role);
+  const defaults = () => Object.fromEntries(groups.map(([title, entries]) => [title,
+    title !== "" && title !== "Team" && !entries.some(e => "module" in e &&
+      ((!leadership && roleHome(actor).modules.includes(e.module)) || (leadership && title === "Sales") || (actor.role === "IT Administrator" && title === "People & support")))
+  ]));
+  const [closed, setClosed] = useState<Record<string, boolean>>(defaults);
+  useEffect(() => {
+    try { setClosed({ ...defaults(), ...JSON.parse(localStorage.getItem(navStorage) || "{}") }); } catch { setClosed(defaults()); }
+  }, [navStorage]);
+  useEffect(() => {
+    const active = groups.find(([, entries]) => entries.some(e => ("module" in e ? e.module : e.view) === module));
+    if (active) setClosed(previous => ({ ...previous, [active[0]]: false }));
+  }, [module]);
+  function toggleGroup(title: string) {
+    setClosed(previous => {
+      const next = { ...previous, [title]: !previous[title] };
+      try { localStorage.setItem(navStorage, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }
   const entryAllowed = (e: NavEntry) =>
     "module" in e
       ? allowedModules(actor).includes(e.module)
@@ -190,17 +215,19 @@ export default function Sidebar({
       <div className={styles.panel}>
         <div className={styles.header}>
           {compact ? <Button className={styles.expand} aria-label="Expand sidebar" onClick={onCollapse}><PanelLeftOpen size={20}/></Button> : <>
-            <Link href="/" className="brand" aria-label="Enercore workspace"><BrandLogo company="Enercore"/><span><strong>Enercore</strong><small>Business workspace</small></span></Link>
+            <Link href="/workspace/all-companies/overview" onClick={e => { if (!e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && e.button === 0) { e.preventDefault(); onNavigate("overview"); if (isMobile) onMobileChange(false); } }} className="brand" aria-label="Enercore workspace"><BrandLogo company="Enercore"/><span><strong>Enercore</strong><small>Business workspace</small></span></Link>
             <Button className={styles.toggle} aria-label={isMobile ? "Close navigation" : "Collapse sidebar"} onClick={isMobile ? () => onMobileChange(false) : onCollapse}>{isMobile ? <X size={18}/> : <PanelLeftClose size={17}/>}</Button>
           </>}
         </div>
-        <FadingNav storageKey={`enercore-nav:${actor.id}:${preview?"preview":"live"}:${isMobile?"mobile":"desktop"}`} activeKey={module} className={styles.nav} aria-label={isMobile ? "Mobile navigation" : "Main navigation"}>
+        <FadingNav storageKey={`enercore-nav:${actor.id}:${preview?"preview":"live"}:${isMobile?"mobile":"desktop"}`} activeKey={`${module}:${JSON.stringify(closed)}`} className={styles.nav} aria-label={isMobile ? "Mobile navigation" : "Main navigation"}>
           {groups.map(([title, entries]) => {
             const visible = entries.filter(entryAllowed);
             if (!visible.length) return null;
+            const expanded = compact || !title || !closed[title];
+            const contentId = `${groupId}-${isMobile ? "mobile" : "desktop"}-${title.replaceAll(/[^a-z]/gi, "")}`;
             return <section className={styles.group} key={title || "workspace"} aria-label={title || "Workspace"}>
-              {!compact && <h2 className={styles.groupTitle}>{title || "Workspace"}</h2>}
-              {visible.map(e => {
+              {!compact && (title ? <h2 className={styles.groupTitle}><button type="button" className={styles.groupToggle} aria-expanded={expanded} aria-controls={contentId} onClick={() => toggleGroup(title)}><span>{title}</span><ChevronDown size={13}/></button></h2> : <h2 className={styles.groupTitle}>Your workspace</h2>)}
+              <div id={contentId} hidden={!expanded}>{visible.map(e => {
                 const key = "module" in e ? e.module : e.view;
                 const Icon = "module" in e ? icons[e.module] : e.icon;
                 const label = "module" in e ? labels[e.module] : e.label;
@@ -211,7 +238,7 @@ export default function Sidebar({
                     {!!count && <b className="nav-count">{typeof count === "number" && count > 99 ? "99+" : count}</b>}
                   </Button>
                 </Tooltip>;
-              })}
+              })}</div>
             </section>;
           })}
         </FadingNav>
